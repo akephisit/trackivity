@@ -35,7 +35,7 @@ export interface RegisterResponse {
 	message: string;
 }
 
-export interface ApiError {
+export interface ApiErrorResponse {
 	message: string;
 	status: number;
 }

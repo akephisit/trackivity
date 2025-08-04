@@ -13,8 +13,8 @@ pub struct User {
     pub last_name: String,
     pub qr_secret: String,
     pub department_id: Option<Uuid>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,8 +49,8 @@ pub struct UserResponse {
     pub first_name: String,
     pub last_name: String,
     pub department_id: Option<Uuid>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl From<User> for UserResponse {
