@@ -49,8 +49,13 @@ A comprehensive university activity tracking system built with Rust (Axum) backe
 
 3. **Set up environment variables**
    ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
+   # Backend environment
+   cp backend/.env.example backend/.env
+   # Edit backend/.env with your configuration
+   
+   # Frontend environment
+   cp frontend/.env.example frontend/.env
+   # Edit frontend/.env if needed
    ```
 
 4. **Run database migrations**
@@ -137,15 +142,18 @@ trackivity/
 │   │   └── main.rs       # Application entry point
 │   ├── migrations/       # Database migrations
 │   ├── Cargo.toml       # Rust dependencies
-│   └── Dockerfile       # Backend container image
+│   ├── Dockerfile       # Backend container image
+│   ├── .env.example     # Backend environment template
+│   └── .env             # Backend environment config
 ├── frontend/             # SvelteKit frontend
 │   ├── src/
 │   │   ├── lib/          # Shared components and utilities
 │   │   ├── routes/       # SvelteKit routes
 │   │   └── app.html      # HTML template
-│   └── package.json      # Frontend dependencies
+│   ├── package.json      # Frontend dependencies
+│   ├── .env.example     # Frontend environment template
+│   └── .env             # Frontend environment config
 ├── docker-compose.yml    # Development environment
-├── .env.example        # Environment configuration template
 └── README.md           # This file
 ```
 
