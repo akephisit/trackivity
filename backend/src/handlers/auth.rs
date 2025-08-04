@@ -1,108 +1,548 @@
+use std::collections::HashMap;
 use axum::{
-    extract::State,
-    http::StatusCode,
+    extract::{State, Query, Path},
+    http::{StatusCode, HeaderMap},
     response::Json,
 };
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tower_cookies::Cookies;
+use uuid::Uuid;
 
-use crate::handlers::AppState;
-use crate::models::{LoginRequest, CreateUser, UserResponse};
-use crate::services::{AuthService, SessionService};
-use crate::middleware::session::{create_session_cookie, delete_session_cookie};
-use crate::utils::get_client_info;
+use crate::models::{
+    session::{
+        SessionLoginRequest, SessionResponse, SessionUser, 
+        CreateSession, DeviceInfo, AdminSessionInfo,
+        SessionRevocationRequest
+    },
+    user::User,
+    admin_role::AdminRole,
+};
+use crate::middleware::session::{
+    create_session_cookie, delete_session_cookie, 
+    SessionState, AdminUser, SuperAdminUser
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
-    pub user: UserResponse,
-    pub session_id: String,
+    pub success: bool,
+    pub session: Option<SessionResponse>,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RegisterRequest {
+    pub student_id: String,
+    pub email: String,
+    pub password: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub department_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterResponse {
-    pub user: UserResponse,
+    pub success: bool,
+    pub user_id: Option<Uuid>,
     pub message: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionListResponse {
+    pub sessions: Vec<AdminSessionInfo>,
+    pub total_count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserSessionsResponse {
+    pub sessions: Vec<SessionInfo>,
+    pub active_count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub session_id: String,
+    pub device_info: HashMap<String, Value>,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub created_at: chrono::DateTime<Utc>,
+    pub last_accessed: chrono::DateTime<Utc>,
+    pub expires_at: chrono::DateTime<Utc>,
+}
+
+// Enhanced login with multi-device support
 pub async fn login(
-    State(state): State<AppState>,
+    State(session_state): State<SessionState>,
     cookies: Cookies,
-    Json(credentials): Json<LoginRequest>,
+    headers: HeaderMap,
+    Json(login_req): Json<SessionLoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    let auth_service = AuthService::new(state.database.clone(), state.config.bcrypt_cost);
+    // Extract device info from headers
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("Unknown");
     
-    match auth_service.authenticate_user(credentials).await {
-        Ok(Some(user)) => {
-            let mut session_service = SessionService::new(state.redis.clone());
-            let (ip_address, user_agent) = get_client_info();
-            
-            let session_id = auth_service
-                .create_session(
-                    &mut session_service,
-                    user.id,
-                    state.config.session_max_age,
-                    ip_address,
-                    user_agent,
-                )
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-            // Set session cookie
-            let cookie = create_session_cookie(&session_id, state.config.session_max_age);
-            cookies.add(cookie);
-
-            let response = LoginResponse {
-                user: user.into(),
-                session_id,
-            };
-
-            Ok(Json(response))
+    let device_info = match login_req.device_info {
+        Some(info) => info,
+        None => DeviceInfo::from_user_agent(user_agent).to_json(),
+    };
+    
+    // Get IP address from headers
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+    
+    // Authenticate user
+    let user = match authenticate_user(&session_state, &login_req.email, &login_req.password).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            return Ok(Json(LoginResponse {
+                success: false,
+                session: None,
+                message: "Invalid email or password".to_string(),
+            }));
         }
-        Ok(None) => Err(StatusCode::UNAUTHORIZED),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // Check existing sessions and enforce limits
+    let existing_sessions = session_state.redis_store.get_user_sessions(user.id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if existing_sessions.len() >= session_state.config.max_sessions_per_user {
+        // Remove oldest session
+        if let Some(oldest_session) = existing_sessions.iter().min_by_key(|s| s.created_at) {
+            let _ = session_state.redis_store.delete_session(&oldest_session.id).await;
+        }
     }
+    
+    // Create new session
+    let remember_me = login_req.remember_me.unwrap_or(false);
+    let expires_at = session_state.config.get_session_expiry(remember_me);
+    
+    let create_session = CreateSession {
+        user_id: user.id,
+        expires_at,
+        ip_address,
+        user_agent: Some(user_agent.to_string()),
+        device_info,
+    };
+    
+    let session = session_state.redis_store.create_session(create_session).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Store session metadata in database
+    let _ = store_session_metadata(&session_state, &session).await;
+    
+    // Get admin role for user
+    let admin_role = get_user_admin_role(&session_state, user.id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Build session user
+    let session_user = build_session_user(&user, &admin_role, &session.id);
+    
+    // Set session cookie
+    let max_age_seconds = (expires_at - Utc::now()).num_seconds();
+    let cookie = create_session_cookie(&session.id, max_age_seconds);
+    cookies.add(cookie);
+    
+    let response = SessionResponse {
+        session_id: session.id,
+        user: session_user,
+        expires_at,
+    };
+    
+    Ok(Json(LoginResponse {
+        success: true,
+        session: Some(response),
+        message: "Login successful".to_string(),
+    }))
 }
 
+// Register new user
 pub async fn register(
-    State(state): State<AppState>,
-    Json(user_data): Json<CreateUser>,
+    State(session_state): State<SessionState>,
+    Json(register_req): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, StatusCode> {
-    let auth_service = AuthService::new(state.database.clone(), state.config.bcrypt_cost);
+    // Check if user already exists
+    let existing_user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE email = $1 OR student_id = $2"
+    )
+    .bind(&register_req.email)
+    .bind(&register_req.student_id)
+    .fetch_optional(&session_state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     
-    match auth_service.register_user(user_data).await {
-        Ok(user) => {
-            let response = RegisterResponse {
-                user: user.into(),
-                message: "User registered successfully".to_string(),
-            };
-            Ok(Json(response))
-        }
-        Err(_) => Err(StatusCode::BAD_REQUEST),
+    if existing_user.is_some() {
+        return Ok(Json(RegisterResponse {
+            success: false,
+            user_id: None,
+            message: "User with this email or student ID already exists".to_string(),
+        }));
     }
+    
+    // Hash password
+    let password_hash = bcrypt::hash(&register_req.password, bcrypt::DEFAULT_COST)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Generate QR secret
+    let qr_secret = Uuid::new_v4().to_string();
+    
+    // Create user
+    let user_id = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+        "#
+    )
+    .bind(&register_req.student_id)
+    .bind(&register_req.email)
+    .bind(&password_hash)
+    .bind(&register_req.first_name)
+    .bind(&register_req.last_name)
+    .bind(&qr_secret)
+    .bind(register_req.department_id)
+    .fetch_one(&session_state.db_pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    Ok(Json(RegisterResponse {
+        success: true,
+        user_id: Some(user_id),
+        message: "User registered successfully".to_string(),
+    }))
 }
 
+// Logout - revoke current session
 pub async fn logout(
-    State(state): State<AppState>,
+    State(session_state): State<SessionState>,
+    session_user: SessionUser,
     cookies: Cookies,
-) -> Result<StatusCode, StatusCode> {
-    if let Some(cookie) = cookies.get("session_id") {
-        let mut session_service = SessionService::new(state.redis.clone());
-        let _ = session_service.delete_session(cookie.value()).await;
-    }
-
-    // Remove session cookie
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Delete session from Redis
+    session_state.redis_store.delete_session(&session_user.session_id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Clear session cookie
     let cookie = delete_session_cookie();
     cookies.add(cookie);
-
-    Ok(StatusCode::OK)
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": "Logged out successfully"
+    })))
 }
 
+// Get current user session info
 pub async fn me(
-    State(state): State<AppState>,
-    cookies: Cookies,
-) -> Result<Json<UserResponse>, StatusCode> {
-    // This endpoint requires authentication middleware
-    // The user info will be available in request extensions
-    // For now, we'll return a placeholder
-    Err(StatusCode::NOT_IMPLEMENTED)
+    session_user: SessionUser,
+) -> Result<Json<SessionUser>, StatusCode> {
+    Ok(Json(session_user))
+}
+
+// Get user's active sessions
+pub async fn get_my_sessions(
+    State(session_state): State<SessionState>,
+    session_user: SessionUser,
+) -> Result<Json<UserSessionsResponse>, StatusCode> {
+    let sessions = session_state.redis_store.get_user_sessions(session_user.user_id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let session_infos: Vec<SessionInfo> = sessions.into_iter().map(|s| SessionInfo {
+        session_id: s.id,
+        device_info: s.device_info,
+        ip_address: s.ip_address,
+        user_agent: s.user_agent,
+        created_at: s.created_at,
+        last_accessed: s.last_accessed,
+        expires_at: s.expires_at,
+    }).collect();
+    
+    let active_count = session_infos.len();
+    
+    Ok(Json(UserSessionsResponse {
+        sessions: session_infos,
+        active_count,
+    }))
+}
+
+// Revoke a specific session (user can revoke their own sessions)
+pub async fn revoke_my_session(
+    State(session_state): State<SessionState>,
+    session_user: SessionUser,
+    Path(target_session_id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Verify the session belongs to the user
+    let user_sessions = session_state.redis_store.get_user_sessions(session_user.user_id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let session_exists = user_sessions.iter().any(|s| s.id == target_session_id);
+    
+    if !session_exists {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    
+    // Revoke the session
+    let success = session_state.redis_store.revoke_session(&target_session_id, Some("User revoked".to_string())).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if success {
+        Ok(Json(serde_json::json!({
+            "success": true,
+            "message": "Session revoked successfully"
+        })))
+    } else {
+        Ok(Json(serde_json::json!({
+            "success": false,
+            "message": "Session not found"
+        })))
+    }
+}
+
+// Admin: Get all active sessions
+pub async fn get_all_sessions(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<SessionListResponse>, StatusCode> {
+    let limit = params.get("limit")
+        .and_then(|l| l.parse::<usize>().ok())
+        .unwrap_or(50);
+    
+    let session_ids = session_state.redis_store.get_active_sessions(Some(limit)).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let mut sessions = Vec::new();
+    
+    for session_id in &session_ids {
+        if let Ok(Some(session)) = session_state.redis_store.get_session(session_id).await {
+            // Get user info
+            if let Ok(Some(user)) = get_user_by_id(&session_state, session.user_id).await {
+                // Get admin role
+                let admin_role = get_user_admin_role(&session_state, user.id).await.ok().flatten();
+                
+                let session_info = AdminSessionInfo {
+                    session_id: session.id,
+                    user_id: user.id,
+                    user_name: format!("{} {}", user.first_name, user.last_name),
+                    admin_level: admin_role.as_ref().map(|r| r.admin_level.clone()),
+                    faculty_name: None, // TODO: Join with faculty table
+                    device_info: session.device_info,
+                    ip_address: session.ip_address,
+                    user_agent: session.user_agent,
+                    created_at: session.created_at,
+                    last_accessed: session.last_accessed,
+                    expires_at: session.expires_at,
+                };
+                
+                sessions.push(session_info);
+            }
+        }
+    }
+    
+    let total_count = session_state.redis_store.get_session_count().await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    Ok(Json(SessionListResponse {
+        sessions,
+        total_count,
+    }))
+}
+
+// Admin: Force logout user
+pub async fn admin_revoke_session(
+    State(session_state): State<SessionState>,
+    _admin: AdminUser,
+    Path(session_id): Path<String>,
+    Json(req): Json<SessionRevocationRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let reason = req.reason.unwrap_or_else(|| "Revoked by admin".to_string());
+    
+    let success = session_state.redis_store.revoke_session(&session_id, Some(reason)).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if success {
+        Ok(Json(serde_json::json!({
+            "success": true,
+            "message": "Session revoked successfully"
+        })))
+    } else {
+        Ok(Json(serde_json::json!({
+            "success": false,
+            "message": "Session not found"
+        })))
+    }
+}
+
+// Admin: Force logout all user sessions
+pub async fn admin_revoke_user_sessions(
+    State(session_state): State<SessionState>,
+    _admin: AdminUser,
+    Path(user_id): Path<Uuid>,
+    Json(req): Json<SessionRevocationRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let reason = req.reason.unwrap_or_else(|| "All sessions revoked by admin".to_string());
+    
+    let user_sessions = session_state.redis_store.get_user_sessions(user_id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let mut revoked_count = 0;
+    for session in user_sessions {
+        if session_state.redis_store.revoke_session(&session.id, Some(reason.clone())).await.unwrap_or(false) {
+            revoked_count += 1;
+        }
+    }
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Revoked {} sessions", revoked_count),
+        "revoked_count": revoked_count
+    })))
+}
+
+// Extend current session
+pub async fn extend_session(
+    State(session_state): State<SessionState>,
+    session_user: SessionUser,
+    Json(params): Json<HashMap<String, Value>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let hours = params.get("hours")
+        .and_then(|h| h.as_i64())
+        .unwrap_or(24);
+    
+    let new_expiry = Utc::now() + chrono::Duration::hours(hours);
+    
+    let success = session_state.redis_store.extend_session(&session_user.session_id, new_expiry).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if success {
+        Ok(Json(serde_json::json!({
+            "success": true,
+            "message": "Session extended successfully",
+            "expires_at": new_expiry
+        })))
+    } else {
+        Ok(Json(serde_json::json!({
+            "success": false,
+            "message": "Failed to extend session"
+        })))
+    }
+}
+
+// Helper functions
+async fn authenticate_user(
+    session_state: &SessionState,
+    email: &str,
+    password: &str,
+) -> Result<Option<User>, anyhow::Error> {
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE email = $1"
+    )
+    .bind(email)
+    .fetch_optional(&session_state.db_pool)
+    .await?;
+    
+    match user {
+        Some(user) => {
+            if bcrypt::verify(password, &user.password_hash)? {
+                Ok(Some(user))
+            } else {
+                Ok(None)
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+async fn get_user_by_id(
+    session_state: &SessionState,
+    user_id: Uuid,
+) -> Result<Option<User>, anyhow::Error> {
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE id = $1"
+    )
+    .bind(user_id)
+    .fetch_optional(&session_state.db_pool)
+    .await?;
+    
+    Ok(user)
+}
+
+async fn get_user_admin_role(
+    session_state: &SessionState,
+    user_id: Uuid,
+) -> Result<Option<AdminRole>, anyhow::Error> {
+    let admin_role = sqlx::query_as::<_, AdminRole>(
+        "SELECT * FROM admin_roles WHERE user_id = $1"
+    )
+    .bind(user_id)
+    .fetch_optional(&session_state.db_pool)
+    .await?;
+    
+    Ok(admin_role)
+}
+
+async fn store_session_metadata(
+    session_state: &SessionState,
+    session: &crate::models::session::Session,
+) -> Result<(), anyhow::Error> {
+    let device_info_json = serde_json::to_value(&session.device_info)?;
+    let ip_addr_str: Option<String> = session.ip_address.clone();
+    
+    sqlx::query(
+        r#"
+        INSERT INTO sessions (id, user_id, device_info, ip_address, user_agent, created_at, last_accessed, expires_at, is_active)
+        VALUES ($1, $2, $3, $4::inet, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+            last_accessed = $7,
+            expires_at = $8,
+            is_active = $9
+        "#
+    )
+    .bind(&session.id)
+    .bind(session.user_id)
+    .bind(device_info_json)
+    .bind(ip_addr_str)
+    .bind(&session.user_agent)
+    .bind(session.created_at)
+    .bind(session.last_accessed)
+    .bind(session.expires_at)
+    .bind(session.is_active)
+    .execute(&session_state.db_pool)
+    .await?;
+    
+    Ok(())
+}
+
+fn build_session_user(user: &User, admin_role: &Option<AdminRole>, session_id: &str) -> SessionUser {
+    let permissions = match admin_role {
+        Some(role) => {
+            let perms = crate::models::session::Permission::from_admin_level(&role.admin_level, role.faculty_id);
+            let mut perm_strings: Vec<String> = perms.into_iter().map(|p| format!("{:?}", p)).collect();
+            perm_strings.extend(role.permissions.iter().cloned());
+            perm_strings
+        }
+        None => vec!["ViewProfile".to_string(), "UpdateProfile".to_string()],
+    };
+    
+    SessionUser {
+        user_id: user.id,
+        student_id: user.student_id.clone(),
+        email: user.email.clone(),
+        first_name: user.first_name.clone(),
+        last_name: user.last_name.clone(),
+        department_id: user.department_id,
+        admin_role: admin_role.clone(),
+        session_id: session_id.to_string(),
+        permissions,
+        faculty_id: admin_role.as_ref().and_then(|r| r.faculty_id),
+    }
 }

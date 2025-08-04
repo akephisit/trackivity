@@ -25,6 +25,8 @@ impl SessionService {
             last_accessed: Utc::now(),
             ip_address: data.ip_address,
             user_agent: data.user_agent,
+            device_info: data.device_info,
+            is_active: true,
         };
 
         let session_json = serde_json::to_string(&session)?;

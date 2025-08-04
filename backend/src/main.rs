@@ -42,11 +42,14 @@ async fn main() -> anyhow::Result<()> {
     let redis_client = redis::Client::open(config.redis_url.clone())?;
     let redis_manager = redis::aio::ConnectionManager::new(redis_client).await?;
 
-    // Build application state
-    let app_state = crate::handlers::AppState {
-        database,
-        redis: redis_manager,
-        config: config.clone(),
+    // Build Redis session store
+    let redis_store = std::sync::Arc::new(crate::services::RedisSessionStore::new(&config.redis_url)?);
+    
+    // Build session state
+    let session_state = crate::middleware::session::SessionState {
+        redis_store,
+        db_pool: database.pool.clone(),
+        config: crate::services::SessionConfig::default(),
     };
 
     // Build the application
@@ -63,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .into_inner(),
         )
-        .with_state(app_state);
+        .with_state(session_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!("Starting server on {}", addr);

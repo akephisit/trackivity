@@ -5,7 +5,6 @@ use axum::{
     response::Response,
 };
 use tower_cookies::Cookies;
-use uuid::Uuid;
 
 use crate::handlers::AppState;
 use crate::models::{User, AdminRole};
@@ -63,7 +62,7 @@ pub async fn auth_middleware(
 }
 
 pub async fn admin_middleware(
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     let auth_context = request
@@ -78,7 +77,7 @@ pub async fn admin_middleware(
 }
 
 pub async fn super_admin_middleware(
-    mut request: Request,
+    request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     let auth_context = request

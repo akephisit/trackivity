@@ -8,10 +8,5 @@ pub mod subscription;
 pub mod user;
 
 pub use admin_role::*;
-pub use activity::*;
-pub use department::*;
-pub use faculty::*;
-pub use participation::*;
 pub use session::*;
-pub use subscription::*;
 pub use user::*;

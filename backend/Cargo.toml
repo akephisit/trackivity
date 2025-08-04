@@ -55,6 +55,8 @@ base64 = "0.21"
 
 # Regular expressions
 regex = "1.0"
+futures = "0.3.31"
+tokio-stream = { version = "0.1.17", features = ["sync"] }
 
 [dev-dependencies]
 tower-test = "0.4"

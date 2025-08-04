@@ -1,5 +1,4 @@
 use anyhow::Result;
-use base64::{Engine as _, engine::general_purpose};
 use qrcode::QrCode;
 
 pub fn generate_qr_code(data: &str) -> Result<String> {

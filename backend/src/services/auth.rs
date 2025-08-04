@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bcrypt::{hash, verify, DEFAULT_COST};
+use bcrypt::{hash, verify};
 use chrono::{Duration, Utc};
 use uuid::Uuid;
 
@@ -81,6 +81,7 @@ impl AuthService {
             expires_at,
             ip_address,
             user_agent,
+            device_info: std::collections::HashMap::new(),
         };
 
         let session = session_service.create_session(session_data).await?;

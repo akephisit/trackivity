@@ -3,9 +3,10 @@ use axum::{
     Router,
 };
 
-use crate::handlers::{AppState, auth};
+use crate::handlers::auth;
+use crate::middleware::session::SessionState;
 
-pub fn create_routes() -> Router<AppState> {
+pub fn create_routes() -> Router<SessionState> {
     Router::new()
         // Authentication routes
         .route("/api/auth/login", post(auth::login))
