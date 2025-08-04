@@ -2,6 +2,22 @@
 	import { Button } from "$lib/components/ui/button/index.js";
 	import { Separator } from "$lib/components/ui/separator/index.js";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+	import { authStore } from '$lib/stores/auth';
+	import { apiClient } from '$lib/api/client';
+	import { goto } from '$app/navigation';
+
+	async function handleLogout() {
+		try {
+			await apiClient.logout();
+			authStore.logout();
+			goto('/auth/login');
+		} catch (error) {
+			console.error('Logout error:', error);
+			// Force logout even if API call fails
+			authStore.logout();
+			goto('/auth/login');
+		}
+	}
 </script>
 
 <header
@@ -10,18 +26,16 @@
 	<div class="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
 		<Sidebar.Trigger class="-ml-1" />
 		<Separator orientation="vertical" class="mx-2 data-[orientation=vertical]:h-4" />
-		<h1 class="text-base font-medium">Documents</h1>
+		<h1 class="text-base font-medium">ระบบเก็บกิจกรรมมหาวิทยาลัย</h1>
 		<div class="ml-auto flex items-center gap-2">
-			<Button
-				href="https://github.com/shadcn-ui/ui/tree/main/apps/v4/app/(examples)/dashboard"
-				variant="ghost"
-				size="sm"
-				class="dark:text-foreground hidden sm:flex"
-				target="_blank"
-				rel="noopener noreferrer"
-			>
-				GitHub
-			</Button>
+			{#if $authStore.user}
+				<span class="text-sm text-muted-foreground hidden sm:inline">
+					สวัสดี, {$authStore.user.first_name} {$authStore.user.last_name}
+				</span>
+				<Button variant="outline" size="sm" onclick={handleLogout}>
+					ออกจากระบบ
+				</Button>
+			{/if}
 		</div>
 	</div>
 </header>
