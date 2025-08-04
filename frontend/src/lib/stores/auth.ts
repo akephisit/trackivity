@@ -1,9 +1,24 @@
 import { writable, derived, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
+import type { User as AdminUser, AdminRole, AuthSession } from '$lib/types/admin';
+import type { LoginCredentials as AdminLoginCredentials, RegisterData as AdminRegisterData } from '$lib/types/admin';
 
-// Types for session management
-export interface User {
+// Current User interface for the app (extends AdminUser with additional fields)
+export interface User extends AdminUser {
+    user_id?: string;
+    student_id?: string;
+    first_name?: string;
+    last_name?: string;
+    department_id?: string;
+    admin_role?: AdminRole;
+    permissions?: string[];
+    faculty_id?: string;
+    session_id?: string;
+}
+
+// Legacy interfaces for backward compatibility
+export interface LegacyUser {
     user_id: string;
     student_id: string;
     email: string;
@@ -16,11 +31,16 @@ export interface User {
     session_id: string;
 }
 
-export interface AdminRole {
-    id: string;
-    admin_level: 'SuperAdmin' | 'FacultyAdmin' | 'RegularAdmin';
-    faculty_id?: string;
-    permissions: string[];
+export interface LoginCredentials extends AdminLoginCredentials {
+    remember_me?: boolean;
+    device_info?: Record<string, any>;
+}
+
+export interface RegisterData extends AdminRegisterData {
+    student_id?: string;
+    first_name?: string;
+    last_name?: string;
+    department_id?: string;
 }
 
 export interface SessionInfo {
