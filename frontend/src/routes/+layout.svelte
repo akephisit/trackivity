@@ -1,12 +1,12 @@
 <script lang="ts">
 	import '../app.css';
-	import { ModeWatcher } from 'mode-watcher';
-	import { Toaster } from 'svelte-sonner';
+	import favicon from '$lib/assets/favicon.svg';
+	
+	let { children } = $props();
 </script>
 
-<ModeWatcher />
-<Toaster richColors />
+<svelte:head>
+	<link rel="icon" href={favicon} />
+</svelte:head>
 
-<main class="min-h-screen bg-background">
-	<slot />
-</main>
+{@render children?.()}
