@@ -5,10 +5,22 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import {
+		Card,
+		CardContent,
+		CardDescription,
+		CardHeader,
+		CardTitle
+	} from '$lib/components/ui/card';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
-	import { IconLoader, IconEye, IconEyeOff, IconUser, IconSchool } from '@tabler/icons-svelte/icons';
+	import {
+		IconLoader,
+		IconEye,
+		IconEyeOff,
+		IconUser,
+		IconSchool
+	} from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
@@ -36,29 +48,27 @@
 	<meta name="description" content="เข้าสู่ระบบสำหรับนักเรียน" />
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-	<div class="max-w-md w-full space-y-8">
+<div
+	class="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8 dark:bg-gray-900"
+>
+	<div class="w-full max-w-md space-y-8">
 		<div class="text-center">
-			<div class="mx-auto h-16 w-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
+			<div
+				class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-600"
+			>
 				<IconSchool class="h-8 w-8 text-white" />
 			</div>
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-				Trackivity
-			</h1>
-			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-				เข้าสู่ระบบสำหรับนักเรียน
-			</p>
+			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Trackivity</h1>
+			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">เข้าสู่ระบบสำหรับนักเรียน</p>
 		</div>
 
 		<Card class="w-full">
 			<CardHeader class="space-y-1">
-				<CardTitle class="text-2xl text-center flex items-center justify-center gap-2">
+				<CardTitle class="flex items-center justify-center gap-2 text-center text-2xl">
 					<IconUser class="h-5 w-5" />
 					เข้าสู่ระบบ
 				</CardTitle>
-				<CardDescription class="text-center">
-					สำหรับนักเรียนและผู้เข้าร่วมกิจกรรม
-				</CardDescription>
+				<CardDescription class="text-center">สำหรับนักเรียนและผู้เข้าร่วมกิจกรรม</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
 				<form method="POST" use:enhance class="space-y-4">
@@ -73,7 +83,7 @@
 									placeholder="64123456789"
 									disabled={$submitting}
 									class="w-full"
-									maxlength="12"
+									maxlength={12}
 								/>
 							{/snippet}
 						</Form.Control>
@@ -96,7 +106,7 @@
 									<button
 										type="button"
 										onclick={togglePasswordVisibility}
-										class="absolute inset-y-0 right-0 pr-3 flex items-center"
+										class="absolute inset-y-0 right-0 flex items-center pr-3"
 										tabindex="-1"
 									>
 										{#if showPassword}
@@ -132,22 +142,22 @@
 				<div class="space-y-3">
 					<div class="relative">
 						<div class="absolute inset-0 flex items-center">
-							<span class="w-full border-t" />
+							<span class="w-full border-t"></span>
 						</div>
 						<div class="relative flex justify-center text-xs uppercase">
-							<span class="bg-background px-2 text-muted-foreground">หรือ</span>
+							<span class="bg-background text-muted-foreground px-2">หรือ</span>
 						</div>
 					</div>
-					
-					<div class="text-center space-y-2">
+
+					<div class="space-y-2 text-center">
 						<p class="text-sm text-gray-600 dark:text-gray-400">
-							ยังไม่มีบัญชี? 
+							ยังไม่มีบัญชี?
 							<a href="/register" class="font-medium text-green-600 hover:text-green-500">
 								สมัครสมาชิก
 							</a>
 						</p>
 						<p class="text-sm text-gray-600 dark:text-gray-400">
-							ผู้ดูแลระบบ? 
+							ผู้ดูแลระบบ?
 							<a href="/admin/login" class="font-medium text-blue-600 hover:text-blue-500">
 								เข้าสู่ระบบ Admin
 							</a>
