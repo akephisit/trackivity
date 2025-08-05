@@ -61,7 +61,7 @@
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-	<div class="max-w-md w-full space-y-8 overflow-y-auto">
+	<div class="max-w-2xl w-full space-y-8 overflow-y-auto">
 		<div class="text-center">
 			<div class="mx-auto h-16 w-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
 				<IconUser class="h-8 w-8 text-white" />
@@ -135,6 +135,7 @@
 						</Alert>
 					{/if}
 
+					<!-- รหัสนักศึกษา - เต็มแถว -->
 					<Form.Field {form} name="student_id">
 						<Form.Control>
 							{#snippet children({ props })}
@@ -149,53 +150,57 @@
 									placeholder="64123456789"
 									disabled={$submitting}
 									class="w-full"
-									maxlength="12"
+									maxlength={12}
 								/>
 							{/snippet}
 						</Form.Control>
 						<Form.FieldErrors />
 					</Form.Field>
 
-					<Form.Field {form} name="first_name">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconUser class="h-4 w-4" />
-									ชื่อจริง
-								</Label>
-								<Input
-									{...props}
-									type="text"
-									bind:value={$formData.first_name}
-									placeholder="ชื่อจริงของคุณ"
-									disabled={$submitting}
-									class="w-full"
-								/>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
+					<!-- ชื่อจริงและนามสกุล - 2 คอลัมน์ -->
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<Form.Field {form} name="first_name">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconUser class="h-4 w-4" />
+										ชื่อจริง
+									</Label>
+									<Input
+										{...props}
+										type="text"
+										bind:value={$formData.first_name}
+										placeholder="ชื่อจริงของคุณ"
+										disabled={$submitting}
+										class="w-full"
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
 
-					<Form.Field {form} name="last_name">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconUser class="h-4 w-4" />
-									นามสกุล
-								</Label>
-								<Input
-									{...props}
-									type="text"
-									bind:value={$formData.last_name}
-									placeholder="นามสกุลของคุณ"
-									disabled={$submitting}
-									class="w-full"
-								/>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
+						<Form.Field {form} name="last_name">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconUser class="h-4 w-4" />
+										นามสกุล
+									</Label>
+									<Input
+										{...props}
+										type="text"
+										bind:value={$formData.last_name}
+										placeholder="นามสกุลของคุณ"
+										disabled={$submitting}
+										class="w-full"
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
 
+					<!-- อีเมล - เต็มแถว -->
 					<Form.Field {form} name="email">
 						<Form.Control>
 							{#snippet children({ props })}
@@ -216,74 +221,78 @@
 						<Form.FieldErrors />
 					</Form.Field>
 
-					<Form.Field {form} name="password">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconLock class="h-4 w-4" />
-									รหัสผ่าน
-								</Label>
-								<div class="relative">
-									<Input
-										{...props}
-										type={showPassword ? 'text' : 'password'}
-										bind:value={$formData.password}
-										placeholder="รหัสผ่านของคุณ"
-										disabled={$submitting}
-										class="w-full pr-10"
-									/>
-									<button
-										type="button"
-										onclick={togglePasswordVisibility}
-										class="absolute inset-y-0 right-0 pr-3 flex items-center"
-										tabindex="-1"
-									>
-										{#if showPassword}
-											<IconEyeOff class="h-4 w-4 text-gray-400" />
-										{:else}
-											<IconEye class="h-4 w-4 text-gray-400" />
-										{/if}
-									</button>
-								</div>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
+					<!-- รหัสผ่านและยืนยันรหัสผ่าน - 2 คอลัมน์ -->
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<Form.Field {form} name="password">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconLock class="h-4 w-4" />
+										รหัสผ่าน
+									</Label>
+									<div class="relative">
+										<Input
+											{...props}
+											type={showPassword ? 'text' : 'password'}
+											bind:value={$formData.password}
+											placeholder="รหัสผ่านของคุณ"
+											disabled={$submitting}
+											class="w-full pr-10"
+										/>
+										<button
+											type="button"
+											onclick={togglePasswordVisibility}
+											class="absolute inset-y-0 right-0 pr-3 flex items-center"
+											tabindex="-1"
+										>
+											{#if showPassword}
+												<IconEyeOff class="h-4 w-4 text-gray-400" />
+											{:else}
+												<IconEye class="h-4 w-4 text-gray-400" />
+											{/if}
+										</button>
+									</div>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
 
-					<Form.Field {form} name="confirmPassword">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconLock class="h-4 w-4" />
-									ยืนยันรหัสผ่าน
-								</Label>
-								<div class="relative">
-									<Input
-										{...props}
-										type={showConfirmPassword ? 'text' : 'password'}
-										bind:value={$formData.confirmPassword}
-										placeholder="ยืนยันรหัสผ่านของคุณ"
-										disabled={$submitting}
-										class="w-full pr-10"
-									/>
-									<button
-										type="button"
-										onclick={toggleConfirmPasswordVisibility}
-										class="absolute inset-y-0 right-0 pr-3 flex items-center"
-										tabindex="-1"
-									>
-										{#if showConfirmPassword}
-											<IconEyeOff class="h-4 w-4 text-gray-400" />
-										{:else}
-											<IconEye class="h-4 w-4 text-gray-400" />
-										{/if}
-									</button>
-								</div>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
+						<Form.Field {form} name="confirmPassword">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconLock class="h-4 w-4" />
+										ยืนยันรหัสผ่าน
+									</Label>
+									<div class="relative">
+										<Input
+											{...props}
+											type={showConfirmPassword ? 'text' : 'password'}
+											bind:value={$formData.confirmPassword}
+											placeholder="ยืนยันรหัสผ่านของคุณ"
+											disabled={$submitting}
+											class="w-full pr-10"
+										/>
+										<button
+											type="button"
+											onclick={toggleConfirmPasswordVisibility}
+											class="absolute inset-y-0 right-0 pr-3 flex items-center"
+											tabindex="-1"
+										>
+											{#if showConfirmPassword}
+												<IconEyeOff class="h-4 w-4 text-gray-400" />
+											{:else}
+												<IconEye class="h-4 w-4 text-gray-400" />
+											{/if}
+										</button>
+									</div>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
 
+					<!-- สาขาวิชา - เต็มแถว -->
 					<Form.Field {form} name="department_id">
 						<Form.Control>
 							{#snippet children({ props })}
