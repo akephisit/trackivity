@@ -7,8 +7,8 @@ use axum::{
 use tower_cookies::Cookies;
 
 use crate::handlers::AppState;
-use crate::models::{User, AdminRole};
-use crate::services::{SessionService, AuthService};
+use crate::models::{AdminRole, User};
+use crate::services::{AuthService, SessionService};
 
 #[derive(Debug, Clone)]
 pub struct AuthContext {
@@ -24,7 +24,7 @@ pub async fn auth_middleware(
 ) -> Result<Response, StatusCode> {
     // Get session ID from cookie or header
     let session_id = get_session_id(&cookies, &request)?;
-    
+
     // Get session from Redis
     let mut session_service = SessionService::new(state.redis.clone());
     let session = session_service
@@ -51,7 +51,7 @@ pub async fn auth_middleware(
 
                     let auth_context = AuthContext { user, admin_role };
                     request.extensions_mut().insert(auth_context);
-                    
+
                     Ok(next.run(request).await)
                 }
                 None => Err(StatusCode::UNAUTHORIZED),
@@ -61,10 +61,7 @@ pub async fn auth_middleware(
     }
 }
 
-pub async fn admin_middleware(
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
+pub async fn admin_middleware(request: Request, next: Next) -> Result<Response, StatusCode> {
     let auth_context = request
         .extensions()
         .get::<AuthContext>()
@@ -76,22 +73,17 @@ pub async fn admin_middleware(
     }
 }
 
-pub async fn super_admin_middleware(
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
+pub async fn super_admin_middleware(request: Request, next: Next) -> Result<Response, StatusCode> {
     let auth_context = request
         .extensions()
         .get::<AuthContext>()
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
     match &auth_context.admin_role {
-        Some(admin_role) => {
-            match admin_role.admin_level {
-                crate::models::AdminLevel::SuperAdmin => Ok(next.run(request).await),
-                _ => Err(StatusCode::FORBIDDEN),
-            }
-        }
+        Some(admin_role) => match admin_role.admin_level {
+            crate::models::AdminLevel::SuperAdmin => Ok(next.run(request).await),
+            _ => Err(StatusCode::FORBIDDEN),
+        },
         None => Err(StatusCode::FORBIDDEN),
     }
 }

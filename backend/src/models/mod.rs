@@ -1,5 +1,5 @@
-pub mod admin_role;
 pub mod activity;
+pub mod admin_role;
 pub mod department;
 pub mod faculty;
 pub mod participation;

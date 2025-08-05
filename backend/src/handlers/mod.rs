@@ -1,10 +1,11 @@
-pub mod auth;
-pub mod user;
 pub mod activity;
 pub mod admin;
 pub mod admin_session;
-pub mod sse;
+pub mod admin_session_mgmt;
+pub mod auth;
 pub mod faculty;
+pub mod sse;
+pub mod user;
 
 // pub use user::*;
 // pub use activity::*;

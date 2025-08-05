@@ -4,7 +4,7 @@ use redis::AsyncCommands;
 use serde_json;
 use uuid::Uuid;
 
-use crate::models::{Session, CreateSession};
+use crate::models::{CreateSession, Session};
 
 pub struct SessionService {
     redis: redis::aio::ConnectionManager,
@@ -23,21 +23,34 @@ impl SessionService {
             expires_at: data.expires_at,
             created_at: Utc::now(),
             last_accessed: Utc::now(),
-            ip_address: data.ip_address,
-            user_agent: data.user_agent,
+            ip_address: data.ip_address.clone(),
+            user_agent: data.user_agent.clone(),
             device_info: data.device_info,
             is_active: true,
+            // Initialize new fields with defaults
+            session_type: crate::models::session::SessionType::Student,
+            admin_level: None,
+            faculty_id: None,
+            permissions: Vec::new(),
+            revoked_by: None,
+            revoked_at: None,
+            revocation_reason: None,
+            login_method: crate::models::session::LoginMethod::StudentId,
+            sse_connections: Vec::new(),
+            activity_log: vec![crate::models::session::SessionActivity {
+                timestamp: Utc::now(),
+                activity_type: crate::models::session::SessionActivityType::Login,
+                details: Some("Session created".to_string()),
+                ip_address: data.ip_address.clone(),
+                user_agent: data.user_agent.clone(),
+            }],
         };
 
         let session_json = serde_json::to_string(&session)?;
         let ttl = (data.expires_at - Utc::now()).num_seconds() as u64;
 
         self.redis
-            .set_ex::<String, String, String>(
-                format!("session:{}", session_id),
-                session_json,
-                ttl,
-            )
+            .set_ex::<String, String, String>(format!("session:{}", session_id), session_json, ttl)
             .await?;
 
         // Also store user sessions for cleanup
@@ -49,29 +62,24 @@ impl SessionService {
             .await?;
 
         self.redis
-            .expire::<String, i64>(
-                format!("user_sessions:{}", session.user_id),
-                ttl as i64,
-            )
+            .expire::<String, i64>(format!("user_sessions:{}", session.user_id), ttl as i64)
             .await?;
 
         Ok(session)
     }
 
     pub async fn get_session(&mut self, session_id: &str) -> Result<Option<Session>> {
-        let session_data: Option<String> = self
-            .redis
-            .get(format!("session:{}", session_id))
-            .await?;
+        let session_data: Option<String> =
+            self.redis.get(format!("session:{}", session_id)).await?;
 
         match session_data {
             Some(data) => {
                 let mut session: Session = serde_json::from_str(&data)?;
-                
+
                 // Update last accessed time
                 session.last_accessed = Utc::now();
                 let updated_json = serde_json::to_string(&session)?;
-                
+
                 // Get current TTL and update the session
                 let ttl: i32 = self.redis.ttl(format!("session:{}", session_id)).await?;
                 if ttl > 0 {
@@ -129,16 +137,16 @@ impl SessionService {
 
     pub async fn extend_session(&mut self, session_id: &str, duration: Duration) -> Result<bool> {
         let exists: bool = self.redis.exists(format!("session:{}", session_id)).await?;
-        
+
         if exists {
             let additional_seconds = duration.num_seconds() as u64;
             self.redis
                 .expire::<String, i64>(format!("session:{}", session_id), additional_seconds as i64)
                 .await?;
-            
+
             return Ok(true);
         }
-        
+
         Ok(false)
     }
 

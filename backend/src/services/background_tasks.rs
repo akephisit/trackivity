@@ -1,12 +1,11 @@
+use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
 use tokio::time::interval;
 use uuid::Uuid;
 
-use crate::middleware::session::SessionState;
-use crate::services::RedisSessionStore;
 use crate::handlers::sse::SseConnectionManager;
+use crate::middleware::session::SessionState;
 
 // Background task manager
 pub struct BackgroundTaskManager {
@@ -50,7 +49,8 @@ impl BackgroundTaskManager {
         let notification_session_state = session_state.clone();
         let notification_sse_manager = sse_manager.clone();
         tokio::spawn(async move {
-            session_expiry_notification_task(notification_session_state, notification_sse_manager).await;
+            session_expiry_notification_task(notification_session_state, notification_sse_manager)
+                .await;
         });
 
         // Session activity monitoring task
@@ -72,12 +72,12 @@ impl BackgroundTaskManager {
 // Task 1: Clean up expired sessions from Redis
 async fn session_cleanup_task(session_state: SessionState) {
     let mut interval = interval(Duration::from_secs(300)); // Every 5 minutes
-    
+
     tracing::info!("Started session cleanup task");
-    
+
     loop {
         interval.tick().await;
-        
+
         match session_state.redis_store.cleanup_expired_sessions().await {
             Ok(cleaned_count) => {
                 if cleaned_count > 0 {
@@ -94,12 +94,12 @@ async fn session_cleanup_task(session_state: SessionState) {
 // Task 2: Sync session metadata between Redis and Database
 async fn database_session_sync_task(session_state: SessionState) {
     let mut interval = interval(Duration::from_secs(600)); // Every 10 minutes
-    
+
     tracing::info!("Started database session sync task");
-    
+
     loop {
         interval.tick().await;
-        
+
         match sync_database_sessions(&session_state).await {
             Ok(synced_count) => {
                 if synced_count > 0 {
@@ -115,18 +115,20 @@ async fn database_session_sync_task(session_state: SessionState) {
 
 // Task 3: Clean up inactive SSE connections
 async fn sse_connection_cleanup_task(
-    session_state: SessionState, 
-    sse_manager: Arc<SseConnectionManager>
+    session_state: SessionState,
+    sse_manager: Arc<SseConnectionManager>,
 ) {
     let mut interval = interval(Duration::from_secs(300)); // Every 5 minutes
-    
+
     tracing::info!("Started SSE connection cleanup task");
-    
+
     loop {
         interval.tick().await;
-        
-        sse_manager.cleanup_inactive_connections(&session_state).await;
-        
+
+        sse_manager
+            .cleanup_inactive_connections(&session_state)
+            .await;
+
         let connection_count = sse_manager.connection_count().await;
         tracing::debug!("Active SSE connections: {}", connection_count);
     }
@@ -135,15 +137,15 @@ async fn sse_connection_cleanup_task(
 // Task 4: Send notifications for expiring sessions
 async fn session_expiry_notification_task(
     session_state: SessionState,
-    sse_manager: Arc<SseConnectionManager>
+    sse_manager: Arc<SseConnectionManager>,
 ) {
     let mut interval = interval(Duration::from_secs(1800)); // Every 30 minutes
-    
+
     tracing::info!("Started session expiry notification task");
-    
+
     loop {
         interval.tick().await;
-        
+
         match notify_expiring_sessions(&session_state, &sse_manager).await {
             Ok(notified_count) => {
                 if notified_count > 0 {
@@ -160,12 +162,12 @@ async fn session_expiry_notification_task(
 // Task 5: Monitor session activity patterns
 async fn session_activity_monitoring_task(session_state: SessionState) {
     let mut interval = interval(Duration::from_secs(3600)); // Every hour
-    
+
     tracing::info!("Started session activity monitoring task");
-    
+
     loop {
         interval.tick().await;
-        
+
         match monitor_session_activity(&session_state).await {
             Ok(stats) => {
                 tracing::info!(
@@ -185,12 +187,12 @@ async fn session_activity_monitoring_task(session_state: SessionState) {
 // Task 6: Audit admin session activities
 async fn admin_session_audit_task(session_state: SessionState) {
     let mut interval = interval(Duration::from_secs(1800)); // Every 30 minutes
-    
+
     tracing::info!("Started admin session audit task");
-    
+
     loop {
         interval.tick().await;
-        
+
         match audit_admin_sessions(&session_state).await {
             Ok(audit_count) => {
                 if audit_count > 0 {
@@ -209,20 +211,18 @@ async fn admin_session_audit_task(session_state: SessionState) {
 async fn sync_database_sessions(session_state: &SessionState) -> Result<usize, anyhow::Error> {
     // Get active sessions from Redis
     let active_session_ids = session_state.redis_store.get_active_sessions(None).await?;
-    
+
     let mut synced_count = 0;
-    
-    for session_id in active_session_ids {
-        if let Some(session) = session_state.redis_store.get_session(&session_id).await? {
+
+    for session_id in &active_session_ids {
+        if let Some(session) = session_state.redis_store.get_session(session_id).await? {
             // Update database record
-            let device_info_json = serde_json::to_value(&session.device_info)?;
-            
             let result = sqlx::query(
                 r#"
                 UPDATE sessions 
                 SET last_accessed = $1, expires_at = $2, is_active = $3
                 WHERE id = $4
-                "#
+                "#,
             )
             .bind(session.last_accessed)
             .bind(session.expires_at)
@@ -230,13 +230,13 @@ async fn sync_database_sessions(session_state: &SessionState) -> Result<usize, a
             .bind(&session.id)
             .execute(&session_state.db_pool)
             .await?;
-            
+
             if result.rows_affected() > 0 {
                 synced_count += 1;
             }
         }
     }
-    
+
     // Mark inactive sessions in database
     sqlx::query(
         r#"
@@ -245,26 +245,26 @@ async fn sync_database_sessions(session_state: &SessionState) -> Result<usize, a
         WHERE id NOT IN (
             SELECT UNNEST($1::text[])
         ) AND is_active = true
-        "#
+        "#,
     )
     .bind(&active_session_ids)
     .execute(&session_state.db_pool)
     .await?;
-    
+
     Ok(synced_count)
 }
 
 async fn notify_expiring_sessions(
     session_state: &SessionState,
-    sse_manager: &SseConnectionManager
+    sse_manager: &SseConnectionManager,
 ) -> Result<usize, anyhow::Error> {
     let session_ids = session_state.redis_store.get_active_sessions(None).await?;
     let mut notified_count = 0;
-    
+
     for session_id in session_ids {
         if let Some(session) = session_state.redis_store.get_session(&session_id).await? {
             let time_to_expiry = session.expires_at.timestamp() - Utc::now().timestamp();
-            
+
             // Notify if session expires within 1 hour
             if time_to_expiry > 0 && time_to_expiry <= 3600 {
                 let notification = crate::handlers::sse::SseMessage {
@@ -281,14 +281,18 @@ async fn notify_expiring_sessions(
                     target_user_id: Some(session.user_id),
                     target_faculty_id: None,
                 };
-                
-                if sse_manager.send_to_session(&session_id, notification).await.is_ok() {
+
+                if sse_manager
+                    .send_to_session(&session_id, notification)
+                    .await
+                    .is_ok()
+                {
                     notified_count += 1;
                 }
             }
         }
     }
-    
+
     Ok(notified_count)
 }
 
@@ -301,9 +305,11 @@ struct SessionActivityStats {
     faculty_breakdown: std::collections::HashMap<String, usize>,
 }
 
-async fn monitor_session_activity(session_state: &SessionState) -> Result<SessionActivityStats, anyhow::Error> {
+async fn monitor_session_activity(
+    session_state: &SessionState,
+) -> Result<SessionActivityStats, anyhow::Error> {
     let session_ids = session_state.redis_store.get_active_sessions(None).await?;
-    
+
     let mut stats = SessionActivityStats {
         total_sessions: session_ids.len(),
         admin_sessions: 0,
@@ -311,19 +317,21 @@ async fn monitor_session_activity(session_state: &SessionState) -> Result<Sessio
         device_breakdown: std::collections::HashMap::new(),
         faculty_breakdown: std::collections::HashMap::new(),
     };
-    
+
     for session_id in session_ids {
         if let Some(session) = session_state.redis_store.get_session(&session_id).await? {
             // Check if session is active (accessed within last 30 minutes)
             let last_activity = Utc::now().timestamp() - session.last_accessed.timestamp();
-            if last_activity <= 1800 { // 30 minutes
+            if last_activity <= 1800 {
+                // 30 minutes
                 stats.active_sessions += 1;
             }
-            
+
             // Check if user is admin
-            if let Ok(Some(admin_role)) = get_user_admin_role(session_state, session.user_id).await {
+            if let Ok(Some(admin_role)) = get_user_admin_role(session_state, session.user_id).await
+            {
                 stats.admin_sessions += 1;
-                
+
                 // Track faculty breakdown for admins
                 if let Some(faculty_id) = admin_role.faculty_id {
                     if let Ok(Some(faculty)) = get_faculty_by_id(session_state, faculty_id).await {
@@ -331,9 +339,10 @@ async fn monitor_session_activity(session_state: &SessionState) -> Result<Sessio
                     }
                 }
             }
-            
+
             // Track device breakdown
-            let device_type = session.device_info
+            let device_type = session
+                .device_info
                 .get("device_type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown")
@@ -341,7 +350,7 @@ async fn monitor_session_activity(session_state: &SessionState) -> Result<Sessio
             *stats.device_breakdown.entry(device_type).or_insert(0) += 1;
         }
     }
-    
+
     // Log detailed stats
     tracing::info!("Session Activity Monitoring:");
     tracing::info!("  Total Sessions: {}", stats.total_sessions);
@@ -349,7 +358,7 @@ async fn monitor_session_activity(session_state: &SessionState) -> Result<Sessio
     tracing::info!("  Admin Sessions: {}", stats.admin_sessions);
     tracing::info!("  Device Breakdown: {:?}", stats.device_breakdown);
     tracing::info!("  Faculty Breakdown: {:?}", stats.faculty_breakdown);
-    
+
     Ok(stats)
 }
 
@@ -357,11 +366,12 @@ async fn audit_admin_sessions(session_state: &SessionState) -> Result<usize, any
     // Get all admin sessions
     let session_ids = session_state.redis_store.get_active_sessions(None).await?;
     let mut audit_count = 0;
-    
+
     for session_id in session_ids {
         if let Some(session) = session_state.redis_store.get_session(&session_id).await? {
             // Check if user is admin
-            if let Ok(Some(admin_role)) = get_user_admin_role(session_state, session.user_id).await {
+            if let Ok(Some(admin_role)) = get_user_admin_role(session_state, session.user_id).await
+            {
                 // Log admin session activity
                 tracing::info!(
                     "Admin Session Audit - User: {}, Level: {:?}, Faculty: {:?}, IP: {:?}, Last Active: {}",
@@ -371,7 +381,7 @@ async fn audit_admin_sessions(session_state: &SessionState) -> Result<usize, any
                     session.ip_address,
                     session.last_accessed
                 );
-                
+
                 // Store audit record in database (optional)
                 let audit_record = sqlx::query(
                     r#"
@@ -389,14 +399,14 @@ async fn audit_admin_sessions(session_state: &SessionState) -> Result<usize, any
                 .bind(Utc::now().date_naive())
                 .execute(&session_state.db_pool)
                 .await;
-                
+
                 if audit_record.is_ok() {
                     audit_count += 1;
                 }
             }
         }
     }
-    
+
     Ok(audit_count)
 }
 
@@ -406,12 +416,12 @@ async fn get_user_admin_role(
     user_id: Uuid,
 ) -> Result<Option<crate::models::admin_role::AdminRole>, anyhow::Error> {
     let admin_role = sqlx::query_as::<_, crate::models::admin_role::AdminRole>(
-        "SELECT * FROM admin_roles WHERE user_id = $1"
+        "SELECT * FROM admin_roles WHERE user_id = $1",
     )
     .bind(user_id)
     .fetch_optional(&session_state.db_pool)
     .await?;
-    
+
     Ok(admin_role)
 }
 
@@ -420,11 +430,11 @@ async fn get_faculty_by_id(
     faculty_id: Uuid,
 ) -> Result<Option<crate::models::faculty::Faculty>, anyhow::Error> {
     let faculty = sqlx::query_as::<_, crate::models::faculty::Faculty>(
-        "SELECT * FROM faculties WHERE id = $1"
+        "SELECT * FROM faculties WHERE id = $1",
     )
     .bind(faculty_id)
     .fetch_optional(&session_state.db_pool)
     .await?;
-    
+
     Ok(faculty)
 }

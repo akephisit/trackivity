@@ -1,16 +1,16 @@
-use std::collections::HashMap;
 use axum::{
-    extract::{State, Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use sqlx::Row;
+use std::collections::HashMap;
+use uuid::Uuid;
 
-use crate::middleware::session::{SessionState, AdminUser};
+use crate::middleware::session::{AdminUser, SessionState};
 use crate::models::session::SessionUser;
 use crate::models::{
     activity::{Activity, ActivityStatus},
@@ -104,7 +104,7 @@ pub async fn get_activities(
         .get("limit")
         .and_then(|l| l.parse::<i64>().ok())
         .unwrap_or(50);
-    
+
     let offset = params
         .get("offset")
         .and_then(|o| o.parse::<i64>().ok())
@@ -112,9 +112,11 @@ pub async fn get_activities(
 
     let search = params.get("search").cloned();
     let status_filter = params.get("status");
-    let faculty_id = params.get("faculty_id")
+    let faculty_id = params
+        .get("faculty_id")
         .and_then(|f| Uuid::parse_str(f).ok());
-    let department_id = params.get("department_id")
+    let department_id = params
+        .get("department_id")
         .and_then(|d| Uuid::parse_str(d).ok());
 
     let mut query = r#"
@@ -144,20 +146,25 @@ pub async fn get_activities(
         LEFT JOIN users u ON a.created_by = u.id
         LEFT JOIN participations p ON a.id = p.activity_id
         LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $3
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut count_query = r#"
         SELECT COUNT(DISTINCT a.id) 
         FROM activities a
         LEFT JOIN faculties f ON a.faculty_id = f.id
         LEFT JOIN departments d ON a.department_id = d.id
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut conditions = Vec::new();
     let mut param_count = 4;
 
     if let Some(_search_term) = &search {
-        conditions.push(format!("(a.title ILIKE ${} OR a.description ILIKE ${} OR a.location ILIKE ${})", param_count, param_count, param_count));
+        conditions.push(format!(
+            "(a.title ILIKE ${} OR a.description ILIKE ${} OR a.location ILIKE ${})",
+            param_count, param_count, param_count
+        ));
         param_count += 1;
     }
 
@@ -228,7 +235,9 @@ pub async fn get_activities(
                     start_time: row.get("start_time"),
                     end_time: row.get("end_time"),
                     max_participants: row.get::<Option<i32>, _>("max_participants"),
-                    current_participants: row.get::<Option<i64>, _>("current_participants").unwrap_or(0),
+                    current_participants: row
+                        .get::<Option<i64>, _>("current_participants")
+                        .unwrap_or(0),
                     status: row.get::<ActivityStatus, _>("status"),
                     faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
                     faculty_name: row.get::<Option<String>, _>("faculty_name"),
@@ -239,7 +248,8 @@ pub async fn get_activities(
                     created_at: row.get("created_at"),
                     updated_at: row.get("updated_at"),
                     is_registered: row.get::<Option<bool>, _>("is_registered").unwrap_or(false),
-                    user_participation_status: row.get::<Option<ParticipationStatus>, _>("user_participation_status"),
+                    user_participation_status: row
+                        .get::<Option<ParticipationStatus>, _>("user_participation_status"),
                 };
 
                 activities_with_details.push(activity_detail);
@@ -324,13 +334,23 @@ pub async fn get_activity(
                 current_participants: row.get::<i64, _>("current_participants"),
                 status: row.get("status"),
                 faculty_id: row.get("faculty_id"),
-                faculty_name: row.get::<Option<String>, _>("faculty_name").filter(|s| !s.is_empty()),
+                faculty_name: row
+                    .get::<Option<String>, _>("faculty_name")
+                    .filter(|s| !s.is_empty()),
                 department_id: row.get("department_id"),
-                department_name: row.get::<Option<String>, _>("department_name").filter(|s| !s.is_empty()),
+                department_name: row
+                    .get::<Option<String>, _>("department_name")
+                    .filter(|s| !s.is_empty()),
                 created_by: row.get("created_by"),
-                created_by_name: row.get::<Option<String>, _>("created_by_name").unwrap_or_else(|| "Unknown".to_string()),
-                created_at: row.get::<Option<DateTime<Utc>>, _>("created_at").unwrap_or_else(|| Utc::now()),
-                updated_at: row.get::<Option<DateTime<Utc>>, _>("updated_at").unwrap_or_else(|| Utc::now()),
+                created_by_name: row
+                    .get::<Option<String>, _>("created_by_name")
+                    .unwrap_or_else(|| "Unknown".to_string()),
+                created_at: row
+                    .get::<Option<DateTime<Utc>>, _>("created_at")
+                    .unwrap_or_else(|| Utc::now()),
+                updated_at: row
+                    .get::<Option<DateTime<Utc>>, _>("updated_at")
+                    .unwrap_or_else(|| Utc::now()),
                 is_registered: row.get::<Option<bool>, _>("is_registered").unwrap_or(false),
                 user_participation_status: row.get("user_participation_status"),
             };
@@ -367,7 +387,11 @@ pub async fn create_activity(
     Json(request): Json<CreateActivityRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if user has permission to create activities
-    if !user.permissions.iter().any(|p| p.contains("ManageActivities") || p.contains("CreateActivity")) {
+    if !user
+        .permissions
+        .iter()
+        .any(|p| p.contains("ManageActivities") || p.contains("CreateActivity"))
+    {
         let error_response = json!({
             "status": "error",
             "message": "Access denied: You don't have permission to create activities"
@@ -437,8 +461,11 @@ pub async fn update_activity(
 
     let can_update = match activity_check {
         Ok(activity) => {
-            activity.get::<Uuid, _>("created_by") == user.user_id || 
-            user.permissions.iter().any(|p| p.contains("ManageActivities"))
+            activity.get::<Uuid, _>("created_by") == user.user_id
+                || user
+                    .permissions
+                    .iter()
+                    .any(|p| p.contains("ManageActivities"))
         }
         Err(sqlx::Error::RowNotFound) => {
             let error_response = json!({
@@ -528,7 +555,7 @@ pub async fn update_activity(
 
     // Execute query with proper parameter binding
     let mut query_builder = sqlx::query_as::<_, Activity>(&query);
-    
+
     if let Some(title) = &request.title {
         query_builder = query_builder.bind(title);
     }
@@ -591,8 +618,11 @@ pub async fn delete_activity(
 
     let can_delete = match activity_check {
         Ok(activity) => {
-            activity.get::<Uuid, _>("created_by") == user.user_id || 
-            user.permissions.iter().any(|p| p.contains("ManageActivities"))
+            activity.get::<Uuid, _>("created_by") == user.user_id
+                || user
+                    .permissions
+                    .iter()
+                    .any(|p| p.contains("ManageActivities"))
         }
         Err(sqlx::Error::RowNotFound) => {
             let error_response = json!({
@@ -618,12 +648,10 @@ pub async fn delete_activity(
         return Err((StatusCode::FORBIDDEN, Json(error_response)));
     }
 
-    let delete_result = sqlx::query(
-        "DELETE FROM activities WHERE id = $1"
-    )
-    .bind(activity_id)
-    .execute(&session_state.db_pool)
-    .await;
+    let delete_result = sqlx::query("DELETE FROM activities WHERE id = $1")
+        .bind(activity_id)
+        .execute(&session_state.db_pool)
+        .await;
 
     match delete_result {
         Ok(result) => {
@@ -666,8 +694,11 @@ pub async fn get_activity_participations(
 
     let can_view = match activity_check {
         Ok(activity) => {
-            activity.get::<Uuid, _>("created_by") == user.user_id || 
-            user.permissions.iter().any(|p| p.contains("ManageActivities") || p.contains("ViewParticipations"))
+            activity.get::<Uuid, _>("created_by") == user.user_id
+                || user
+                    .permissions
+                    .iter()
+                    .any(|p| p.contains("ManageActivities") || p.contains("ViewParticipations"))
         }
         Err(sqlx::Error::RowNotFound) => {
             let error_response = json!({
@@ -712,7 +743,8 @@ pub async fn get_activity_participations(
         JOIN users u ON p.user_id = u.id
         LEFT JOIN departments d ON u.department_id = d.id
         WHERE p.activity_id = $1
-    "#.to_string();
+    "#
+    .to_string();
 
     if let Some(_status) = status_filter {
         query.push_str(" AND p.status = $2");
@@ -783,10 +815,12 @@ pub async fn participate(
     Path(activity_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if activity exists and get details
-    let activity = sqlx::query("SELECT id, title, status, start_time, max_participants FROM activities WHERE id = $1")
-        .bind(&activity_id)
-        .fetch_one(&session_state.db_pool)
-        .await;
+    let activity = sqlx::query(
+        "SELECT id, title, status, start_time, max_participants FROM activities WHERE id = $1",
+    )
+    .bind(&activity_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
 
     let activity = match activity {
         Ok(activity) => activity,
@@ -817,11 +851,12 @@ pub async fn participate(
     }
 
     // Check if user is already registered
-    let existing_participation = sqlx::query("SELECT id FROM participations WHERE user_id = $1 AND activity_id = $2")
-        .bind(&user.user_id)
-        .bind(&activity_id)
-        .fetch_optional(&session_state.db_pool)
-        .await;
+    let existing_participation =
+        sqlx::query("SELECT id FROM participations WHERE user_id = $1 AND activity_id = $2")
+            .bind(&user.user_id)
+            .bind(&activity_id)
+            .fetch_optional(&session_state.db_pool)
+            .await;
 
     match existing_participation {
         Ok(Some(_)) => {
@@ -845,7 +880,7 @@ pub async fn participate(
     let max_participants: Option<i32> = activity.get("max_participants");
     if let Some(max_participants) = max_participants {
         let current_count = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM participations WHERE activity_id = $1"
+            "SELECT COUNT(*) FROM participations WHERE activity_id = $1",
         )
         .bind(activity_id)
         .fetch_one(&session_state.db_pool)
@@ -912,9 +947,11 @@ pub async fn scan_qr(
         }
     };
 
-    let user_id = match qr_data.get("user_id")
+    let user_id = match qr_data
+        .get("user_id")
         .and_then(|id| id.as_str())
-        .and_then(|id| Uuid::parse_str(id).ok()) {
+        .and_then(|id| Uuid::parse_str(id).ok())
+    {
         Some(id) => id,
         None => {
             let error_response = json!({
@@ -937,10 +974,11 @@ pub async fn scan_qr(
     };
 
     // Verify QR secret
-    let user_check = sqlx::query("SELECT student_id, first_name, last_name, qr_secret FROM users WHERE id = $1")
-        .bind(&user_id)
-        .fetch_one(&session_state.db_pool)
-        .await;
+    let user_check =
+        sqlx::query("SELECT student_id, first_name, last_name, qr_secret FROM users WHERE id = $1")
+            .bind(&user_id)
+            .fetch_one(&session_state.db_pool)
+            .await;
 
     let user_data = match user_check {
         Ok(user) => {
@@ -970,11 +1008,13 @@ pub async fn scan_qr(
     };
 
     // Check if user is registered for this activity
-    let participation = sqlx::query("SELECT id, status FROM participations WHERE user_id = $1 AND activity_id = $2")
-        .bind(&user_id)
-        .bind(&activity_id)
-        .fetch_one(&session_state.db_pool)
-        .await;
+    let participation = sqlx::query(
+        "SELECT id, status FROM participations WHERE user_id = $1 AND activity_id = $2",
+    )
+    .bind(&user_id)
+    .bind(&activity_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
 
     let participation = match participation {
         Ok(p) => p,
@@ -1013,7 +1053,10 @@ pub async fn scan_qr(
     let update_query = if field_to_update.is_empty() {
         "UPDATE participations SET status = $1 WHERE id = $2".to_string()
     } else {
-        format!("UPDATE participations SET status = $1, {} = NOW() WHERE id = $2", field_to_update)
+        format!(
+            "UPDATE participations SET status = $1, {} = NOW() WHERE id = $2",
+            field_to_update
+        )
     };
 
     let update_result = sqlx::query(&update_query)
@@ -1033,7 +1076,11 @@ pub async fn scan_qr(
                     "completed" => ParticipationStatus::Completed,
                     _ => ParticipationStatus::Registered,
                 }),
-                user_name: Some(format!("{} {}", user_data.get::<String, _>("first_name"), user_data.get::<String, _>("last_name"))),
+                user_name: Some(format!(
+                    "{} {}",
+                    user_data.get::<String, _>("first_name"),
+                    user_data.get::<String, _>("last_name")
+                )),
                 student_id: Some(user_data.get::<String, _>("student_id")),
             };
 

@@ -16,8 +16,9 @@ impl Config {
         dotenvy::dotenv().ok();
 
         Ok(Config {
-            database_url: std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgresql://postgres:password@localhost:5432/trackivity".to_string()),
+            database_url: std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+                "postgresql://postgres:password@localhost:5432/trackivity".to_string()
+            }),
             redis_url: std::env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             port: std::env::var("PORT")

@@ -1,18 +1,18 @@
-use std::sync::Arc;
+use axum::extract::FromRequestParts;
+use axum::http::request::Parts;
 use axum::{
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
 };
-use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
 use sqlx::PgPool;
+use std::sync::Arc;
 use tower_cookies::{Cookie, Cookies};
 use uuid::Uuid;
 
-use crate::models::session::{SessionUser, SessionValidation, Permission};
-use crate::models::admin_role::{AdminRole, AdminLevel};
+use crate::models::admin_role::{AdminLevel, AdminRole};
+use crate::models::session::{Permission, SessionUser, SessionValidation};
 use crate::models::user::User;
 use crate::services::{RedisSessionStore, SessionConfig};
 
@@ -22,6 +22,7 @@ pub struct SessionState {
     pub redis_store: Arc<RedisSessionStore>,
     pub db_pool: PgPool,
     pub config: SessionConfig,
+    pub sse_manager: Option<Arc<crate::handlers::sse::SseConnectionManager>>,
 }
 
 // Session middleware for validating and extracting session info
@@ -34,7 +35,7 @@ pub async fn session_middleware(
 ) -> Result<Response, StatusCode> {
     // Extract session ID from cookie or header
     let session_id = extract_session_id(&cookies, &headers);
-    
+
     if let Some(session_id) = session_id {
         // Validate session and get user data
         match validate_and_get_session_user(&session_state, &session_id).await {
@@ -58,14 +59,19 @@ pub async fn session_middleware(
             }
         }
     }
-    
+
     Ok(next.run(request).await)
 }
 
 // Permission-based route guard middleware
 pub fn require_permission(
     permission: Permission,
-) -> impl Fn(SessionUser, Request, Next) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send> + Clone {
+) -> impl Fn(
+    SessionUser,
+    Request,
+    Next,
+) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>
+       + Clone {
     move |session_user: SessionUser, request: Request, next: Next| {
         let permission = permission.clone();
         Box::new(async move {
@@ -78,10 +84,15 @@ pub fn require_permission(
     }
 }
 
-// Admin level requirement middleware  
+// Admin level requirement middleware
 pub fn require_admin_level(
     required_level: AdminLevel,
-) -> impl Fn(SessionUser, Request, Next) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send> + Clone {
+) -> impl Fn(
+    SessionUser,
+    Request,
+    Next,
+) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>
+       + Clone {
     move |session_user: SessionUser, request: Request, next: Next| {
         let required_level = required_level.clone();
         Box::new(async move {
@@ -102,23 +113,26 @@ pub fn require_admin_level(
 // Faculty scope requirement middleware
 pub fn require_faculty_scope(
     faculty_id: Option<Uuid>,
-) -> impl Fn(SessionUser, Request, Next) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send> + Clone {
+) -> impl Fn(
+    SessionUser,
+    Request,
+    Next,
+) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>
+       + Clone {
     move |session_user: SessionUser, request: Request, next: Next| {
         let faculty_id = faculty_id;
         Box::new(async move {
             match (&session_user.admin_role, faculty_id) {
-                (Some(admin_role), Some(required_faculty_id)) => {
-                    match admin_role.admin_level {
-                        AdminLevel::SuperAdmin => Ok(next.run(request).await),
-                        AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
-                            if session_user.faculty_id == Some(required_faculty_id) {
-                                Ok(next.run(request).await)
-                            } else {
-                                Err(StatusCode::FORBIDDEN)
-                            }
+                (Some(admin_role), Some(required_faculty_id)) => match admin_role.admin_level {
+                    AdminLevel::SuperAdmin => Ok(next.run(request).await),
+                    AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+                        if session_user.faculty_id == Some(required_faculty_id) {
+                            Ok(next.run(request).await)
+                        } else {
+                            Err(StatusCode::FORBIDDEN)
                         }
                     }
-                }
+                },
                 (Some(_admin_role), None) => {
                     // No specific faculty required, any admin can access
                     Ok(next.run(request).await)
@@ -135,14 +149,14 @@ fn extract_session_id(cookies: &Cookies, headers: &HeaderMap) -> Option<String> 
     if let Some(cookie) = cookies.get("session_id") {
         return Some(cookie.value().to_string());
     }
-    
+
     // Try custom header (mobile apps)
     if let Some(header_value) = headers.get("X-Session-ID") {
         if let Ok(session_id) = header_value.to_str() {
             return Some(session_id.to_string());
         }
     }
-    
+
     // Try Authorization header (Bearer token format)
     if let Some(auth_header) = headers.get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
@@ -151,7 +165,7 @@ fn extract_session_id(cookies: &Cookies, headers: &HeaderMap) -> Option<String> 
             }
         }
     }
-    
+
     None
 }
 
@@ -164,51 +178,48 @@ async fn validate_and_get_session_user(
         Some(session) => session,
         None => return Ok(SessionValidation::Invalid),
     };
-    
+
     // Check if session is expired
     if session.expires_at <= chrono::Utc::now() {
         session_state.redis_store.delete_session(session_id).await?;
         return Ok(SessionValidation::Expired);
     }
-    
+
     // Check if session is active
     if !session.is_active {
         return Ok(SessionValidation::Revoked);
     }
-    
+
     // Get user data from database
-    let user = sqlx::query_as::<_, User>(
-        "SELECT * FROM users WHERE id = $1"
-    )
-    .bind(session.user_id)
-    .fetch_optional(&session_state.db_pool)
-    .await?;
-    
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+        .bind(session.user_id)
+        .fetch_optional(&session_state.db_pool)
+        .await?;
+
     let user = match user {
         Some(user) => user,
         None => return Ok(SessionValidation::Invalid),
     };
-    
+
     // Get admin role if exists
-    let admin_role = sqlx::query_as::<_, AdminRole>(
-        "SELECT * FROM admin_roles WHERE user_id = $1"
-    )
-    .bind(user.id)
-    .fetch_optional(&session_state.db_pool)
-    .await?;
-    
+    let admin_role = sqlx::query_as::<_, AdminRole>("SELECT * FROM admin_roles WHERE user_id = $1")
+        .bind(user.id)
+        .fetch_optional(&session_state.db_pool)
+        .await?;
+
     // Build permissions list
     let permissions = match &admin_role {
         Some(role) => {
             let perms = Permission::from_admin_level(&role.admin_level, role.faculty_id);
             // Convert role permissions from strings to Permission enums if needed
-            let mut perm_strings: Vec<String> = perms.into_iter().map(|p| format!("{:?}", p)).collect();
+            let mut perm_strings: Vec<String> =
+                perms.into_iter().map(|p| format!("{:?}", p)).collect();
             perm_strings.extend(role.permissions.iter().cloned());
             perm_strings
         }
         None => vec!["ViewProfile".to_string(), "UpdateProfile".to_string()],
     };
-    
+
     // Create session user
     let session_user = SessionUser {
         user_id: user.id,
@@ -222,10 +233,13 @@ async fn validate_and_get_session_user(
         permissions,
         faculty_id: admin_role.as_ref().and_then(|r| r.faculty_id),
     };
-    
+
     // Update session activity
-    session_state.redis_store.update_session_activity(session_id).await?;
-    
+    session_state
+        .redis_store
+        .update_session_activity(session_id)
+        .await?;
+
     Ok(SessionValidation::Valid(session_user))
 }
 
@@ -303,7 +317,7 @@ where
             .get::<SessionUser>()
             .cloned()
             .ok_or(StatusCode::UNAUTHORIZED)?;
-        
+
         match session_user.admin_role.clone() {
             Some(admin_role) => Ok(AdminUser {
                 session_user,
@@ -329,7 +343,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let admin_user = AdminUser::from_request_parts(parts, _state).await?;
-        
+
         match admin_user.admin_role.admin_level {
             AdminLevel::SuperAdmin => Ok(SuperAdminUser {
                 session_user: admin_user.session_user,
@@ -356,7 +370,7 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let admin_user = AdminUser::from_request_parts(parts, _state).await?;
-        
+
         match admin_user.admin_role.admin_level {
             AdminLevel::SuperAdmin | AdminLevel::FacultyAdmin => Ok(FacultyAdminUser {
                 faculty_id: admin_user.admin_role.faculty_id,
@@ -372,7 +386,9 @@ where
 pub fn create_session_cookie(session_id: &str, max_age_seconds: i64) -> Cookie<'static> {
     Cookie::build(("session_id", session_id.to_owned()))
         .path("/")
-        .max_age(tower_cookies::cookie::time::Duration::seconds(max_age_seconds))
+        .max_age(tower_cookies::cookie::time::Duration::seconds(
+            max_age_seconds,
+        ))
         .http_only(true)
         .secure(true) // Set to false for development if not using HTTPS
         .same_site(tower_cookies::cookie::SameSite::Lax)

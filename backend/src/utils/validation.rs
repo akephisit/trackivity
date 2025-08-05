@@ -13,9 +13,9 @@ pub fn validate_student_id(student_id: &str) -> bool {
 
 pub fn validate_password(password: &str) -> bool {
     // At least 8 characters, contains at least one letter and one number
-    password.len() >= 8 && 
-    password.chars().any(|c| c.is_alphabetic()) && 
-    password.chars().any(|c| c.is_numeric())
+    password.len() >= 8
+        && password.chars().any(|c| c.is_alphabetic())
+        && password.chars().any(|c| c.is_numeric())
 }
 
 pub fn validate_name(name: &str) -> bool {

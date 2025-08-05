@@ -1,22 +1,22 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 use axum::{
     extract::{Path, State},
-    http::{StatusCode, HeaderMap},
-    response::Sse,
+    http::{HeaderMap, StatusCode},
     response::sse::{Event, KeepAlive},
+    response::Sse,
 };
 use chrono::Utc;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{broadcast, RwLock};
 use tokio_stream::StreamExt as _;
 use uuid::Uuid;
 
-use crate::models::session::{SessionUser, Permission};
 use crate::middleware::session::SessionState;
+use crate::models::session::{Permission, SessionUser};
 
 // SSE Connection Manager
 #[derive(Clone)]
@@ -31,8 +31,8 @@ pub struct SseMessage {
     pub data: Value,
     pub timestamp: chrono::DateTime<Utc>,
     pub target_permissions: Option<Vec<String>>, // Filter by permissions
-    pub target_user_id: Option<Uuid>,           // Target specific user
-    pub target_faculty_id: Option<Uuid>,        // Target faculty members
+    pub target_user_id: Option<Uuid>,            // Target specific user
+    pub target_faculty_id: Option<Uuid>,         // Target faculty members
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,16 +70,16 @@ impl SseConnectionManager {
     // Add new SSE connection
     pub async fn add_connection(&self, session_id: String) -> broadcast::Receiver<SseMessage> {
         let mut connections = self.connections.write().await;
-        
+
         // Remove old connection if exists
         if connections.contains_key(&session_id) {
             connections.remove(&session_id);
         }
-        
+
         // Create new broadcast channel
         let (tx, rx) = broadcast::channel(100);
         connections.insert(session_id.clone(), tx);
-        
+
         tracing::info!("Added SSE connection for session: {}", session_id);
         rx
     }
@@ -93,9 +93,13 @@ impl SseConnectionManager {
     }
 
     // Send message to specific session
-    pub async fn send_to_session(&self, session_id: &str, message: SseMessage) -> Result<(), String> {
+    pub async fn send_to_session(
+        &self,
+        session_id: &str,
+        message: SseMessage,
+    ) -> Result<(), String> {
         let connections = self.connections.read().await;
-        
+
         if let Some(tx) = connections.get(session_id) {
             if let Err(_) = tx.send(message) {
                 return Err("Failed to send message - connection closed".to_string());
@@ -103,38 +107,45 @@ impl SseConnectionManager {
         } else {
             return Err("Session not connected".to_string());
         }
-        
+
         Ok(())
     }
 
     // Broadcast message to all connections
     pub async fn broadcast(&self, message: SseMessage) {
         let connections = self.connections.read().await;
-        
+
         for (session_id, tx) in connections.iter() {
             if let Err(_) = tx.send(message.clone()) {
-                tracing::warn!("Failed to send broadcast message to session: {}", session_id);
+                tracing::warn!(
+                    "Failed to send broadcast message to session: {}",
+                    session_id
+                );
             }
         }
     }
 
     // Send message to users with specific permission
     pub async fn send_to_permission(
-        &self, 
+        &self,
         session_state: &SessionState,
         permission: &Permission,
-        message: SseMessage
+        message: SseMessage,
     ) {
         let connections = self.connections.read().await;
-        
+
         for (session_id, tx) in connections.iter() {
             // Check if session user has the required permission
             if let Ok(Some(session)) = session_state.redis_store.get_session(session_id).await {
                 // Get user permissions (this would need to be optimized in production)
                 if let Ok(Some(user)) = get_user_by_id(session_state, session.user_id).await {
-                    if let Ok(Some(admin_role)) = get_user_admin_role(session_state, user.id).await {
-                        let user_permissions = Permission::from_admin_level(&admin_role.admin_level, admin_role.faculty_id);
-                        
+                    if let Ok(Some(admin_role)) = get_user_admin_role(session_state, user.id).await
+                    {
+                        let user_permissions = Permission::from_admin_level(
+                            &admin_role.admin_level,
+                            admin_role.faculty_id,
+                        );
+
                         if user_permissions.contains(permission) {
                             let _ = tx.send(message.clone());
                         }
@@ -149,13 +160,15 @@ impl SseConnectionManager {
         &self,
         session_state: &SessionState,
         faculty_id: Uuid,
-        message: SseMessage
+        message: SseMessage,
     ) {
         let connections = self.connections.read().await;
-        
+
         for (session_id, tx) in connections.iter() {
             if let Ok(Some(session)) = session_state.redis_store.get_session(session_id).await {
-                if let Ok(Some(admin_role)) = get_user_admin_role(session_state, session.user_id).await {
+                if let Ok(Some(admin_role)) =
+                    get_user_admin_role(session_state, session.user_id).await
+                {
                     if admin_role.faculty_id == Some(faculty_id) {
                         let _ = tx.send(message.clone());
                     }
@@ -174,14 +187,14 @@ impl SseConnectionManager {
     pub async fn cleanup_inactive_connections(&self, session_state: &SessionState) {
         let mut connections = self.connections.write().await;
         let mut to_remove = Vec::new();
-        
+
         for session_id in connections.keys() {
             // Check if session still exists in Redis
             if let Ok(None) = session_state.redis_store.get_session(session_id).await {
                 to_remove.push(session_id.clone());
             }
         }
-        
+
         for session_id in to_remove {
             connections.remove(&session_id);
             tracing::info!("Cleaned up inactive SSE connection: {}", session_id);
@@ -191,12 +204,15 @@ impl SseConnectionManager {
 
 // SSE endpoint handler
 pub async fn sse_handler(
-    State(_session_state): State<SessionState>,
-    State(sse_manager): State<SseConnectionManager>,
+    State(session_state): State<SessionState>,
     Path(session_id): Path<String>,
     _headers: HeaderMap,
     session_user: SessionUser, // This ensures authentication
 ) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
+    let sse_manager = session_state
+        .sse_manager
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     // Verify that the session_id matches the authenticated user's session
     if session_user.session_id != session_id {
         return Err(StatusCode::FORBIDDEN);
@@ -204,43 +220,41 @@ pub async fn sse_handler(
 
     // Add connection to manager
     let rx = sse_manager.add_connection(session_id.clone()).await;
-    
+
     // Create the stream
-    let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
-        .map(|result| {
-            match result {
-                Ok(message) => {
-                    let event_data = serde_json::to_string(&message)
-                        .unwrap_or_else(|_| "{}".to_string());
-                    
-                    Ok(Event::default()
-                        .event(&message.event_type)
-                        .data(event_data))
-                }
-                Err(_) => {
-                    // Channel closed or lagged
-                    Ok(Event::default()
-                        .event("error")
-                        .data("Connection error"))
-                }
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| {
+        match result {
+            Ok(message) => {
+                let event_data =
+                    serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
+
+                Ok(Event::default().event(&message.event_type).data(event_data))
             }
-        });
+            Err(_) => {
+                // Channel closed or lagged
+                Ok(Event::default().event("error").data("Connection error"))
+            }
+        }
+    });
 
     // Set up keep-alive and return SSE response
-    Ok(Sse::new(stream)
-        .keep_alive(
-            KeepAlive::new()
-                .interval(Duration::from_secs(15))
-                .text("keep-alive-text")
-        ))
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("keep-alive-text"),
+    ))
 }
 
 // Send notification to user
 pub async fn send_notification(
-    State(sse_manager): State<SseConnectionManager>,
+    State(session_state): State<SessionState>,
     session_user: SessionUser,
-    notification: NotificationMessage,
+    axum::Json(notification): axum::Json<NotificationMessage>,
 ) -> Result<axum::Json<serde_json::Value>, StatusCode> {
+    let sse_manager = session_state
+        .sse_manager
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let message = SseMessage {
         event_type: "notification".to_string(),
         data: serde_json::to_value(notification).unwrap(),
@@ -250,7 +264,10 @@ pub async fn send_notification(
         target_faculty_id: None,
     };
 
-    if let Err(e) = sse_manager.send_to_session(&session_user.session_id, message).await {
+    if let Err(e) = sse_manager
+        .send_to_session(&session_user.session_id, message)
+        .await
+    {
         tracing::error!("Failed to send notification: {}", e);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -264,11 +281,14 @@ pub async fn send_notification(
 // Admin: Send notification to all users with specific permission
 pub async fn admin_send_notification_by_permission(
     State(session_state): State<SessionState>,
-    State(sse_manager): State<SseConnectionManager>,
     _admin_user: SessionUser, // Must be admin
     Path(permission_str): Path<String>,
     axum::Json(notification): axum::Json<NotificationMessage>,
 ) -> Result<axum::Json<serde_json::Value>, StatusCode> {
+    let sse_manager = session_state
+        .sse_manager
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     // Parse permission string to Permission enum
     let permission = match permission_str.as_str() {
         "ViewSystemReports" => Permission::ViewSystemReports,
@@ -288,7 +308,9 @@ pub async fn admin_send_notification_by_permission(
         target_faculty_id: None,
     };
 
-    sse_manager.send_to_permission(&session_state, &permission, message).await;
+    sse_manager
+        .send_to_permission(&session_state, &permission, message)
+        .await;
 
     Ok(axum::Json(serde_json::json!({
         "success": true,
@@ -298,15 +320,22 @@ pub async fn admin_send_notification_by_permission(
 
 // Admin: Force logout notification
 pub async fn admin_send_force_logout(
-    State(sse_manager): State<SseConnectionManager>,
+    State(session_state): State<SessionState>,
     _admin_user: SessionUser,
     Path(target_session_id): Path<String>,
     axum::Json(reason): axum::Json<serde_json::Value>,
 ) -> Result<axum::Json<serde_json::Value>, StatusCode> {
+    let sse_manager = session_state
+        .sse_manager
+        .as_ref()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let logout_message = SessionUpdateMessage {
         session_id: target_session_id.clone(),
         action: "force_logout".to_string(),
-        reason: reason.get("reason").and_then(|r| r.as_str()).map(|s| s.to_string()),
+        reason: reason
+            .get("reason")
+            .and_then(|r| r.as_str())
+            .map(|s| s.to_string()),
         new_expires_at: None,
     };
 
@@ -319,7 +348,10 @@ pub async fn admin_send_force_logout(
         target_faculty_id: None,
     };
 
-    if let Err(e) = sse_manager.send_to_session(&target_session_id, message).await {
+    if let Err(e) = sse_manager
+        .send_to_session(&target_session_id, message)
+        .await
+    {
         tracing::error!("Failed to send force logout notification: {}", e);
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -348,7 +380,9 @@ pub async fn send_activity_update(
 
     // Send to users in the same faculty who can view activities
     if let Some(faculty_id) = session_user.faculty_id {
-        sse_manager.send_to_faculty(&session_state, faculty_id, message).await;
+        sse_manager
+            .send_to_faculty(&session_state, faculty_id, message)
+            .await;
     } else {
         // Send to all if no faculty restriction
         sse_manager.broadcast(message).await;
@@ -362,13 +396,11 @@ async fn get_user_by_id(
     session_state: &SessionState,
     user_id: Uuid,
 ) -> Result<Option<crate::models::user::User>, anyhow::Error> {
-    let user = sqlx::query_as::<_, crate::models::user::User>(
-        "SELECT * FROM users WHERE id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(&session_state.db_pool)
-    .await?;
-    
+    let user = sqlx::query_as::<_, crate::models::user::User>("SELECT * FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&session_state.db_pool)
+        .await?;
+
     Ok(user)
 }
 
@@ -377,27 +409,26 @@ async fn get_user_admin_role(
     user_id: Uuid,
 ) -> Result<Option<crate::models::admin_role::AdminRole>, anyhow::Error> {
     let admin_role = sqlx::query_as::<_, crate::models::admin_role::AdminRole>(
-        "SELECT * FROM admin_roles WHERE user_id = $1"
+        "SELECT * FROM admin_roles WHERE user_id = $1",
     )
     .bind(user_id)
     .fetch_optional(&session_state.db_pool)
     .await?;
-    
+
     Ok(admin_role)
 }
 
 // Background task for cleaning up inactive SSE connections
-pub async fn sse_cleanup_task(
-    session_state: SessionState,
-    sse_manager: SseConnectionManager,
-) {
+pub async fn sse_cleanup_task(session_state: SessionState, sse_manager: SseConnectionManager) {
     let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
-    
+
     loop {
         interval.tick().await;
-        
-        sse_manager.cleanup_inactive_connections(&session_state).await;
-        
+
+        sse_manager
+            .cleanup_inactive_connections(&session_state)
+            .await;
+
         let connection_count = sse_manager.connection_count().await;
         tracing::debug!("Active SSE connections: {}", connection_count);
     }
@@ -409,40 +440,29 @@ pub async fn handle_sse(
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
     // Extract session from headers or cookies
-    let session_id = extract_session_id_from_headers(&headers)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    
+    let session_id = extract_session_id_from_headers(&headers).ok_or(StatusCode::UNAUTHORIZED)?;
+
     // Verify session exists
     if let Ok(Some(_session)) = session_state.redis_store.get_session(&session_id).await {
         // Create SSE manager instance (in production this would be shared state)
         let sse_manager = SseConnectionManager::new();
         let rx = sse_manager.add_connection(session_id.clone()).await;
-        
-        let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
-            .map(|result| {
-                match result {
-                    Ok(message) => {
-                        let event_data = serde_json::to_string(&message)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        
-                        Ok(Event::default()
-                            .event(&message.event_type)
-                            .data(event_data))
-                    }
-                    Err(_) => {
-                        Ok(Event::default()
-                            .event("error")
-                            .data("Connection error"))
-                    }
-                }
-            });
 
-        Ok(Sse::new(stream)
-            .keep_alive(
-                KeepAlive::new()
-                    .interval(Duration::from_secs(15))
-                    .text("keep-alive-text")
-            ))
+        let stream = tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| match result {
+            Ok(message) => {
+                let event_data =
+                    serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
+
+                Ok(Event::default().event(&message.event_type).data(event_data))
+            }
+            Err(_) => Ok(Event::default().event("error").data("Connection error")),
+        });
+
+        Ok(Sse::new(stream).keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive-text"),
+        ))
     } else {
         Err(StatusCode::UNAUTHORIZED)
     }
@@ -453,40 +473,30 @@ pub async fn handle_admin_sse(
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
     // Extract session and verify admin permissions
-    let session_id = extract_session_id_from_headers(&headers)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    
+    let session_id = extract_session_id_from_headers(&headers).ok_or(StatusCode::UNAUTHORIZED)?;
+
     if let Ok(Some(_session)) = session_state.redis_store.get_session(&session_id).await {
         // Verify user has admin permissions
         if let Ok(Some(_admin_role)) = get_user_admin_role(&session_state, _session.user_id).await {
             let sse_manager = SseConnectionManager::new();
             let rx = sse_manager.add_connection(session_id.clone()).await;
-            
-            let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
-                .map(|result| {
-                    match result {
-                        Ok(message) => {
-                            let event_data = serde_json::to_string(&message)
-                                .unwrap_or_else(|_| "{}".to_string());
-                            
-                            Ok(Event::default()
-                                .event(&message.event_type)
-                                .data(event_data))
-                        }
-                        Err(_) => {
-                            Ok(Event::default()
-                                .event("error")
-                                .data("Connection error"))
-                        }
+
+            let stream =
+                tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| match result {
+                    Ok(message) => {
+                        let event_data =
+                            serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
+
+                        Ok(Event::default().event(&message.event_type).data(event_data))
                     }
+                    Err(_) => Ok(Event::default().event("error").data("Connection error")),
                 });
 
-            Ok(Sse::new(stream)
-                .keep_alive(
-                    KeepAlive::new()
-                        .interval(Duration::from_secs(15))
-                        .text("keep-alive-text")
-                ))
+            Ok(Sse::new(stream).keep_alive(
+                KeepAlive::new()
+                    .interval(Duration::from_secs(15))
+                    .text("keep-alive-text"),
+            ))
         } else {
             Err(StatusCode::FORBIDDEN)
         }
@@ -505,14 +515,14 @@ fn extract_session_id_from_headers(headers: &HeaderMap) -> Option<String> {
             }
         }
     }
-    
+
     // Try custom session header
     if let Some(session_header) = headers.get("x-session-id") {
         if let Ok(session_str) = session_header.to_str() {
             return Some(session_str.to_string());
         }
     }
-    
+
     // Try cookie (would need cookie parsing)
     // This is simplified - in production you'd parse the Cookie header properly
     if let Some(cookie_header) = headers.get("cookie") {
@@ -525,6 +535,6 @@ fn extract_session_id_from_headers(headers: &HeaderMap) -> Option<String> {
             }
         }
     }
-    
+
     None
 }

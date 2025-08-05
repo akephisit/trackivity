@@ -1,6 +1,10 @@
-use axum::{extract::{Path, State}, http::StatusCode, Json};
-use serde_json::json;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
+};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::middleware::session::SessionState;
 use crate::models::faculty::Faculty;
@@ -25,7 +29,7 @@ pub async fn get_faculties(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     // Query all faculties from database
     let query_result = sqlx::query_as::<_, Faculty>(
-        "SELECT id, name, code, description, created_at, updated_at FROM faculties ORDER BY name"
+        "SELECT id, name, code, description, created_at, updated_at FROM faculties ORDER BY name",
     )
     .fetch_all(&session_state.db_pool)
     .await;
@@ -56,7 +60,7 @@ pub async fn get_faculty(
     Path(id): Path<i32>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let query_result = sqlx::query_as::<_, Faculty>(
-        "SELECT id, name, code, description, created_at, updated_at FROM faculties WHERE id = $1"
+        "SELECT id, name, code, description, created_at, updated_at FROM faculties WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&session_state.db_pool)
@@ -136,23 +140,26 @@ pub async fn update_faculty(
         params.push(name.clone());
         param_count += 1;
     }
-    
+
     if let Some(code) = &request.code {
         query.push_str(&format!(", code = ${}", param_count));
         params.push(code.clone());
         param_count += 1;
     }
-    
+
     if let Some(description) = &request.description {
         query.push_str(&format!(", description = ${}", param_count));
         params.push(description.clone());
         param_count += 1;
     }
 
-    query.push_str(&format!(" WHERE id = ${} RETURNING id, name, code, description, created_at, updated_at", param_count));
+    query.push_str(&format!(
+        " WHERE id = ${} RETURNING id, name, code, description, created_at, updated_at",
+        param_count
+    ));
 
     let mut query_builder = sqlx::query_as::<_, Faculty>(&query);
-    
+
     for param in params {
         query_builder = query_builder.bind(param);
     }

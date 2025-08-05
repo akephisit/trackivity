@@ -1,24 +1,24 @@
-use std::collections::HashMap;
 use axum::{
-    extract::{State, Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
+use bcrypt;
+use chrono::{DateTime, Utc};
+use qrcode::{EcLevel, QrCode};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use sqlx::Row;
-use bcrypt;
-use qrcode::{QrCode, EcLevel};
+use std::collections::HashMap;
+use uuid::Uuid;
 // use image::Luma; // Removed unused import
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
-use crate::middleware::session::{SessionState, AdminUser};
+use crate::middleware::session::{AdminUser, SessionState};
 use crate::models::session::SessionUser;
 use crate::models::{
-    user::{User, UserResponse},
     admin_role::AdminRole,
+    user::{User, UserResponse},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,14 +75,15 @@ pub async fn get_users(
         .get("limit")
         .and_then(|l| l.parse::<i64>().ok())
         .unwrap_or(50);
-    
+
     let offset = params
         .get("offset")
         .and_then(|o| o.parse::<i64>().ok())
         .unwrap_or(0);
 
     let search = params.get("search").cloned();
-    let department_id = params.get("department_id")
+    let department_id = params
+        .get("department_id")
         .and_then(|d| Uuid::parse_str(d).ok());
 
     let mut query = r#"
@@ -110,13 +111,15 @@ pub async fn get_users(
         LEFT JOIN faculties f ON d.faculty_id = f.id
         LEFT JOIN admin_roles ar ON u.id = ar.user_id
         LEFT JOIN participations p ON u.id = p.user_id
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut count_query = r#"
         SELECT COUNT(DISTINCT u.id) 
         FROM users u
         LEFT JOIN departments d ON u.department_id = d.id
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut conditions = Vec::new();
     let mut param_count = 3;
@@ -139,9 +142,7 @@ pub async fn get_users(
     query.push_str(" GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, f.name, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.created_at, ar.updated_at");
     query.push_str(" ORDER BY u.created_at DESC LIMIT $1 OFFSET $2");
 
-    let mut query_builder = sqlx::query(&query)
-        .bind(limit)
-        .bind(offset);
+    let mut query_builder = sqlx::query(&query).bind(limit).bind(offset);
 
     let mut count_query_builder = sqlx::query_scalar::<_, i64>(&count_query);
 
@@ -165,19 +166,20 @@ pub async fn get_users(
 
             for row in rows {
                 let admin_role = match row.get::<Option<Uuid>, _>("admin_role_id") {
-                    Some(role_id) => {
-                        Some(AdminRole {
-                            id: role_id,
-                            user_id: row.get("id"),
-                            admin_level: row.get::<Option<crate::models::admin_role::AdminLevel>, _>("admin_level")
-                                .unwrap_or(crate::models::admin_role::AdminLevel::RegularAdmin),
-                            faculty_id: row.get::<Option<Uuid>, _>("admin_faculty_id"),
-                            permissions: row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_else(|| vec![]),
-                            created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
-                            updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
-                        })
-                    }
-                    None => None
+                    Some(role_id) => Some(AdminRole {
+                        id: role_id,
+                        user_id: row.get("id"),
+                        admin_level: row
+                            .get::<Option<crate::models::admin_role::AdminLevel>, _>("admin_level")
+                            .unwrap_or(crate::models::admin_role::AdminLevel::RegularAdmin),
+                        faculty_id: row.get::<Option<Uuid>, _>("admin_faculty_id"),
+                        permissions: row
+                            .get::<Option<Vec<String>>, _>("permissions")
+                            .unwrap_or_else(|| vec![]),
+                        created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
+                        updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
+                    }),
+                    None => None,
                 };
 
                 let user_detail = UserWithDetails {
@@ -228,12 +230,11 @@ pub async fn get_user(
     _admin: AdminUser,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let query_result = sqlx::query_as::<_, crate::models::user::User>(
-        "SELECT * FROM users WHERE id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(&session_state.db_pool)
-    .await;
+    let query_result =
+        sqlx::query_as::<_, crate::models::user::User>("SELECT * FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&session_state.db_pool)
+            .await;
 
     match query_result {
         Ok(Some(row)) => {
@@ -287,7 +288,7 @@ pub async fn create_user(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if user already exists
     let existing_user = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users WHERE email = $1 OR student_id = $2"
+        "SELECT COUNT(*) FROM users WHERE email = $1 OR student_id = $2",
     )
     .bind(&request.email)
     .bind(&request.student_id)
@@ -373,12 +374,10 @@ pub async fn update_user(
     Json(request): Json<UpdateUserRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if user exists
-    let existing_user = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users WHERE id = $1"
-    )
-    .bind(user_id)
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let existing_user = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     match existing_user {
         Ok(0) => {
@@ -447,7 +446,7 @@ pub async fn update_user(
 
     // Execute query with proper parameter binding
     let mut query_builder = sqlx::query_as::<_, User>(&query);
-    
+
     if let Some(email) = &request.email {
         query_builder = query_builder.bind(email);
     }
@@ -492,12 +491,10 @@ pub async fn delete_user(
     _admin: AdminUser,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let delete_result = sqlx::query(
-        "DELETE FROM users WHERE id = $1"
-    )
-    .bind(user_id)
-    .execute(&session_state.db_pool)
-    .await;
+    let delete_result = sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(user_id)
+        .execute(&session_state.db_pool)
+        .await;
 
     match delete_result {
         Ok(result) => {
@@ -570,11 +567,13 @@ pub async fn get_user_qr(
             };
 
             // Create image from QR code
-            let image = qr_code.render::<char>().quiet_zone(false)
+            let image = qr_code
+                .render::<char>()
+                .quiet_zone(false)
                 .dark_color(' ')
                 .light_color('█')
                 .build();
-            
+
             // Convert to base64 (simplified version using string)
             let qr_image_base64 = general_purpose::STANDARD.encode(image.as_bytes());
 

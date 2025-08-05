@@ -1,21 +1,21 @@
-use std::collections::HashMap;
 use axum::{
-    extract::{State, Query},
+    extract::{Query, State},
     http::StatusCode,
     response::Json,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use sqlx::Row;
+use std::collections::HashMap;
+use uuid::Uuid;
 
-use crate::middleware::session::{SessionState, AdminUser, SuperAdminUser};
+use crate::middleware::session::{AdminUser, SessionState, SuperAdminUser};
 use crate::models::{
-    user::User,
     activity::ActivityStatus,
-    admin_role::{AdminRole, AdminLevel},
+    admin_role::{AdminLevel, AdminRole},
     session::AdminSessionInfo,
+    user::User,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,32 +76,26 @@ pub async fn get_dashboard(
     _admin: AdminUser,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Get total users count
-    let total_users_result = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users"
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let total_users_result = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     // Get total activities count
-    let total_activities_result = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM activities"
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let total_activities_result = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM activities")
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     // Get ongoing activities count
-    let ongoing_activities_result = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM activities WHERE status = 'ongoing'"
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let ongoing_activities_result =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM activities WHERE status = 'ongoing'")
+            .fetch_one(&session_state.db_pool)
+            .await;
 
     // Get total participations count
-    let total_participations_result = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM participations"
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let total_participations_result =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM participations")
+            .fetch_one(&session_state.db_pool)
+            .await;
 
     // Get active sessions count from Redis
     let active_sessions = match session_state.redis_store.get_session_count().await {
@@ -110,11 +104,10 @@ pub async fn get_dashboard(
     };
 
     // Get user registrations today
-    let user_registrations_today_result = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE"
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let user_registrations_today_result =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE")
+            .fetch_one(&session_state.db_pool)
+            .await;
 
     // Get recent activities (last 5)
     let recent_activities_result = sqlx::query(
@@ -131,7 +124,7 @@ pub async fn get_dashboard(
         GROUP BY a.id, a.title, a.start_time, a.status
         ORDER BY a.created_at DESC
         LIMIT 5
-        "#
+        "#,
     )
     .fetch_all(&session_state.db_pool)
     .await;
@@ -150,7 +143,7 @@ pub async fn get_dashboard(
         GROUP BY a.id, a.title, a.start_time, a.status
         ORDER BY participant_count DESC
         LIMIT 5
-        "#
+        "#,
     )
     .fetch_all(&session_state.db_pool)
     .await;
@@ -235,7 +228,7 @@ pub async fn get_admin_users(
         .get("limit")
         .and_then(|l| l.parse::<i64>().ok())
         .unwrap_or(50);
-    
+
     let offset = params
         .get("offset")
         .and_then(|o| o.parse::<i64>().ok())
@@ -263,7 +256,8 @@ pub async fn get_admin_users(
         FROM users u
         LEFT JOIN admin_roles ar ON u.id = ar.user_id
         LEFT JOIN sessions s ON u.id = s.user_id AND s.is_active = true
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut count_query = "SELECT COUNT(*) FROM users u".to_string();
 
@@ -309,19 +303,20 @@ pub async fn get_admin_users(
 
             for row in rows {
                 let admin_role = match row.get::<Option<Uuid>, _>("admin_role_id") {
-                    Some(role_id) => {
-                        Some(AdminRole {
-                            id: role_id,
-                            user_id: row.get("id"),
-                            admin_level: row.get::<Option<AdminLevel>, _>("admin_level")
-                                .unwrap_or(AdminLevel::RegularAdmin),
-                            faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
-                            permissions: row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_else(|| vec![]),
-                            created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
-                            updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
-                        })
-                    }
-                    None => None
+                    Some(role_id) => Some(AdminRole {
+                        id: role_id,
+                        user_id: row.get("id"),
+                        admin_level: row
+                            .get::<Option<AdminLevel>, _>("admin_level")
+                            .unwrap_or(AdminLevel::RegularAdmin),
+                        faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
+                        permissions: row
+                            .get::<Option<Vec<String>>, _>("permissions")
+                            .unwrap_or_else(|| vec![]),
+                        created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
+                        updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
+                    }),
+                    None => None,
                 };
 
                 let admin_user = AdminUserInfo {
@@ -373,7 +368,7 @@ pub async fn get_admin_activities(
         .get("limit")
         .and_then(|l| l.parse::<i64>().ok())
         .unwrap_or(50);
-    
+
     let offset = params
         .get("offset")
         .and_then(|o| o.parse::<i64>().ok())
@@ -402,7 +397,8 @@ pub async fn get_admin_activities(
         LEFT JOIN faculties f ON a.faculty_id = f.id
         LEFT JOIN departments d ON a.department_id = d.id
         LEFT JOIN participations p ON a.id = p.activity_id
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut count_query = r#"
         SELECT COUNT(DISTINCT a.id) 
@@ -410,7 +406,8 @@ pub async fn get_admin_activities(
         LEFT JOIN users u ON a.created_by = u.id
         LEFT JOIN faculties f ON a.faculty_id = f.id
         LEFT JOIN departments d ON a.department_id = d.id
-    "#.to_string();
+    "#
+    .to_string();
 
     let mut conditions = Vec::new();
     let mut param_count = 3;
@@ -421,7 +418,10 @@ pub async fn get_admin_activities(
     }
 
     if search.is_some() {
-        conditions.push(format!("(a.title ILIKE ${} OR a.description ILIKE ${})", param_count, param_count));
+        conditions.push(format!(
+            "(a.title ILIKE ${} OR a.description ILIKE ${})",
+            param_count, param_count
+        ));
     }
 
     if !conditions.is_empty() {
@@ -433,9 +433,7 @@ pub async fn get_admin_activities(
     query.push_str(" GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.created_at, u.first_name, u.last_name, f.name, d.name");
     query.push_str(" ORDER BY a.created_at DESC LIMIT $1 OFFSET $2");
 
-    let mut query_builder = sqlx::query(&query)
-        .bind(limit)
-        .bind(offset);
+    let mut query_builder = sqlx::query(&query).bind(limit).bind(offset);
 
     let mut count_query_builder = sqlx::query_scalar::<_, i64>(&count_query);
 
@@ -466,7 +464,9 @@ pub async fn get_admin_activities(
                     start_time: row.get("start_time"),
                     end_time: row.get("end_time"),
                     max_participants: row.get::<Option<i32>, _>("max_participants"),
-                    current_participants: row.get::<Option<i64>, _>("current_participants").unwrap_or(0),
+                    current_participants: row
+                        .get::<Option<i64>, _>("current_participants")
+                        .unwrap_or(0),
                     status: row.get::<ActivityStatus, _>("status"),
                     created_by_name: row.get("created_by_name"),
                     faculty_name: row.get::<Option<String>, _>("faculty_name"),
@@ -514,7 +514,10 @@ pub async fn get_admin_sessions(
     let search = params.get("search").cloned();
 
     // Get active session IDs from Redis
-    let session_ids_result = session_state.redis_store.get_active_sessions(Some(limit * 2)).await;
+    let session_ids_result = session_state
+        .redis_store
+        .get_active_sessions(Some(limit * 2))
+        .await;
 
     match session_ids_result {
         Ok(session_ids) => {
@@ -531,27 +534,39 @@ pub async fn get_admin_sessions(
                                 || user.last_name.to_lowercase().contains(&search_lower)
                                 || user.email.to_lowercase().contains(&search_lower)
                                 || user.student_id.to_lowercase().contains(&search_lower);
-                            
+
                             if !user_match {
                                 continue;
                             }
                         }
 
                         // Get admin role
-                        let admin_role = get_user_admin_role(&session_state, user.id).await.ok().flatten();
+                        let admin_role = get_user_admin_role(&session_state, user.id)
+                            .await
+                            .ok()
+                            .flatten();
 
                         let session_info = AdminSessionInfo {
                             session_id: session.id,
                             user_id: user.id,
                             user_name: format!("{} {}", user.first_name, user.last_name),
+                            student_id: user.student_id,
+                            email: user.email,
                             admin_level: admin_role.as_ref().map(|r| r.admin_level.clone()),
                             faculty_name: None, // TODO: Join with faculty table if needed
+                            department_name: None, // TODO: Join with department table
+                            session_type: session.session_type,
+                            login_method: session.login_method,
                             device_info: session.device_info,
                             ip_address: session.ip_address,
                             user_agent: session.user_agent,
                             created_at: session.created_at,
                             last_accessed: session.last_accessed,
                             expires_at: session.expires_at,
+                            permissions: session.permissions,
+                            sse_connections: session.sse_connections,
+                            is_active: session.is_active,
+                            recent_activities: session.activity_log,
                         };
 
                         admin_sessions.push(session_info);
@@ -563,7 +578,10 @@ pub async fn get_admin_sessions(
                 }
             }
 
-            let total_count = session_state.redis_store.get_session_count().await
+            let total_count = session_state
+                .redis_store
+                .get_session_count()
+                .await
                 .map_err(|_| {
                     let error_response = json!({
                         "status": "error",
@@ -600,12 +618,10 @@ async fn get_user_by_id(
     session_state: &SessionState,
     user_id: Uuid,
 ) -> Result<Option<User>, anyhow::Error> {
-    let user = sqlx::query_as::<_, User>(
-        "SELECT * FROM users WHERE id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(&session_state.db_pool)
-    .await?;
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&session_state.db_pool)
+        .await?;
 
     Ok(user)
 }
@@ -614,12 +630,10 @@ async fn get_user_admin_role(
     session_state: &SessionState,
     user_id: Uuid,
 ) -> Result<Option<AdminRole>, anyhow::Error> {
-    let admin_role = sqlx::query_as::<_, AdminRole>(
-        "SELECT * FROM admin_roles WHERE user_id = $1"
-    )
-    .bind(user_id)
-    .fetch_optional(&session_state.db_pool)
-    .await?;
+    let admin_role = sqlx::query_as::<_, AdminRole>("SELECT * FROM admin_roles WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_optional(&session_state.db_pool)
+        .await?;
 
     Ok(admin_role)
 }

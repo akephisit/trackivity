@@ -4,7 +4,7 @@ use chrono::{Duration, Utc};
 use uuid::Uuid;
 
 use crate::database::Database;
-use crate::models::{User, CreateUser, LoginRequest, CreateSession, AdminRole};
+use crate::models::{AdminRole, CreateSession, CreateUser, LoginRequest, User};
 use crate::services::SessionService;
 
 pub struct AuthService {
@@ -23,7 +23,7 @@ impl AuthService {
     pub async fn register_user(&self, user_data: CreateUser) -> Result<User> {
         let password_hash = hash(&user_data.password, self.bcrypt_cost)?;
         let qr_secret = Uuid::new_v4().to_string();
-        
+
         let user = sqlx::query_as::<_, User>(
             r#"
             INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
@@ -71,7 +71,7 @@ impl AuthService {
         user_agent: Option<String>,
     ) -> Result<String> {
         let expires_at = Utc::now() + Duration::seconds(session_max_age);
-        
+
         let session_data = CreateSession {
             user_id,
             expires_at,
@@ -106,7 +106,7 @@ impl AuthService {
 
     pub async fn change_password(&self, user_id: Uuid, new_password: &str) -> Result<()> {
         let password_hash = hash(new_password, self.bcrypt_cost)?;
-        
+
         sqlx::query("UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2")
             .bind(&password_hash)
             .bind(&user_id)
@@ -127,7 +127,7 @@ impl AuthService {
 
     pub async fn regenerate_qr_secret(&self, user_id: Uuid) -> Result<String> {
         let new_qr_secret = Uuid::new_v4().to_string();
-        
+
         sqlx::query("UPDATE users SET qr_secret = $1, updated_at = NOW() WHERE id = $2")
             .bind(&new_qr_secret)
             .bind(&user_id)
