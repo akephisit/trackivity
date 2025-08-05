@@ -8,7 +8,8 @@
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
-	import { IconLoader, IconEye, IconEyeOff, IconUser, IconSchool } from '@tabler/icons-svelte/icons';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { IconLoader, IconEye, IconEyeOff, IconShield, IconAlertTriangle, IconKey } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
@@ -17,7 +18,9 @@
 		validators: zodClient(loginSchema),
 		onResult: ({ result }) => {
 			if (result.type === 'failure') {
-				toast.error('เข้าสู่ระบบไม่สำเร็จ');
+				toast.error('การเข้าสู่ระบบไม่สำเร็จ');
+			} else if (result.type === 'redirect') {
+				toast.success('เข้าสู่ระบบสำเร็จ');
 			}
 		}
 	});
@@ -32,48 +35,59 @@
 </script>
 
 <svelte:head>
-	<title>เข้าสู่ระบบ - Trackivity</title>
-	<meta name="description" content="เข้าสู่ระบบสำหรับนักเรียน" />
+	<title>Admin Login - Trackivity</title>
+	<meta name="description" content="Admin login portal for Trackivity system" />
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-blue-900 py-12 px-4 sm:px-6 lg:px-8">
 	<div class="max-w-md w-full space-y-8">
 		<div class="text-center">
-			<div class="mx-auto h-16 w-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
-				<IconSchool class="h-8 w-8 text-white" />
+			<div class="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
+				<IconShield class="h-8 w-8 text-white" />
 			</div>
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-				Trackivity
+				Admin Portal
 			</h1>
 			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-				เข้าสู่ระบบสำหรับนักเรียน
+				เข้าสู่ระบบจัดการสำหรับผู้ดูแลระบบ
 			</p>
 		</div>
 
 		<Card class="w-full">
 			<CardHeader class="space-y-1">
 				<CardTitle class="text-2xl text-center flex items-center justify-center gap-2">
-					<IconUser class="h-5 w-5" />
-					เข้าสู่ระบบ
+					<IconKey class="h-5 w-5" />
+					Admin Login
 				</CardTitle>
 				<CardDescription class="text-center">
-					สำหรับนักเรียนและผู้เข้าร่วมกิจกรรม
+					สำหรับผู้ดูแลระบบเท่านั้น
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
 				<form method="POST" use:enhance class="space-y-4">
-					<Form.Field {form} name="student_id">
+					{#if $errors._errors}
+						<Alert variant="destructive">
+							<IconAlertTriangle class="h-4 w-4" />
+							<AlertDescription>
+								<div class="space-y-2">
+									<p class="font-medium">เกิดข้อผิดพลาดในการเข้าสู่ระบบ</p>
+									<p class="text-sm">{$errors._errors[0]}</p>
+								</div>
+							</AlertDescription>
+						</Alert>
+					{/if}
+
+					<Form.Field {form} name="email">
 						<Form.Control>
 							{#snippet children({ props })}
-								<Label for={props.id}>รหัสนักศึกษา</Label>
+								<Label for={props.id}>อีเมล</Label>
 								<Input
 									{...props}
-									type="text"
-									bind:value={$formData.student_id}
-									placeholder="64123456789"
+									type="email"
+									bind:value={$formData.email}
+									placeholder="admin@example.com"
 									disabled={$submitting}
 									class="w-full"
-									maxlength="12"
 								/>
 							{/snippet}
 						</Form.Control>
@@ -111,20 +125,35 @@
 						<Form.FieldErrors />
 					</Form.Field>
 
-					{#if $errors.student_id && $errors.student_id.includes('รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง')}
-						<Alert variant="destructive">
-							<AlertDescription>
-								รหัสนักศึกษาหรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง
-							</AlertDescription>
-						</Alert>
-					{/if}
+					<Form.Field {form} name="remember_me">
+						<Form.Control>
+							{#snippet children({ props })}
+								<div class="flex items-center space-x-2">
+									<Checkbox
+										{...props}
+										bind:checked={$formData.remember_me}
+										disabled={$submitting}
+									/>
+									<Label for={props.id} class="text-sm">
+										จดจำการเข้าสู่ระบบ (30 วัน)
+									</Label>
+								</div>
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
 
-					<Button type="submit" class="w-full" disabled={$submitting}>
+					<Button 
+						type="submit" 
+						class="w-full bg-blue-600 hover:bg-blue-700" 
+						disabled={$submitting}
+					>
 						{#if $submitting}
 							<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 							กำลังเข้าสู่ระบบ...
 						{:else}
-							เข้าสู่ระบบ
+							<IconShield class="mr-2 h-4 w-4" />
+							เข้าสู่ระบบ Admin
 						{/if}
 					</Button>
 				</form>
@@ -132,42 +161,51 @@
 				<div class="space-y-3">
 					<div class="relative">
 						<div class="absolute inset-0 flex items-center">
-							<span class="w-full border-t" />
+							<span class="w-full border-t"></span>
 						</div>
 						<div class="relative flex justify-center text-xs uppercase">
 							<span class="bg-background px-2 text-muted-foreground">หรือ</span>
 						</div>
 					</div>
 					
-					<div class="text-center space-y-2">
+					<div class="text-center">
 						<p class="text-sm text-gray-600 dark:text-gray-400">
-							ยังไม่มีบัญชี? 
-							<a href="/register" class="font-medium text-green-600 hover:text-green-500">
-								สมัครสมาชิก
-							</a>
-						</p>
-						<p class="text-sm text-gray-600 dark:text-gray-400">
-							ผู้ดูแลระบบ? 
-							<a href="/admin/login" class="font-medium text-blue-600 hover:text-blue-500">
-								เข้าสู่ระบบ Admin
+							นักเรียน? 
+							<a href="/login" class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+								เข้าสู่ระบบนักเรียน
 							</a>
 						</p>
 					</div>
 				</div>
+
+				<!-- Default Admin Info (for development) -->
+				{#if data.isDevelopment}
+					<Alert>
+						<IconAlertTriangle class="h-4 w-4" />
+						<AlertDescription>
+							<div class="space-y-2">
+								<p class="font-medium text-sm">Development Mode - Default Admin:</p>
+								<p class="text-xs font-mono">Email: admin@trackivity.local</p>
+								<p class="text-xs font-mono">Password: admin123!</p>
+								<p class="text-xs text-orange-600">⚠️ Change password after first login!</p>
+							</div>
+						</AlertDescription>
+					</Alert>
+				{/if}
 			</CardContent>
 		</Card>
 
 		<div class="text-center text-xs text-gray-500 dark:text-gray-400">
-			<p>© 2025 Trackivity System. All rights reserved.</p>
+			<p>© 2025 Trackivity Admin System. All rights reserved.</p>
 		</div>
 	</div>
 </div>
 
 <style>
 	:global(body) {
-		background-color: rgb(249 250 251);
+		background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
 	}
 	:global(.dark body) {
-		background-color: rgb(17 24 39);
+		background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
 	}
 </style>

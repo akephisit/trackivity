@@ -193,11 +193,12 @@ export const actions: Actions = {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
+					student_id: form.data.student_id,
 					email: form.data.email,
 					password: form.data.password,
-					name: form.data.name,
-					admin_level: form.data.admin_level,
-					faculty_id: form.data.faculty_id
+					first_name: form.data.first_name,
+					last_name: form.data.last_name,
+					department_id: form.data.department_id
 				})
 			});
 
@@ -207,7 +208,9 @@ export const actions: Actions = {
 
 			if (!response.ok) {
 				// การสมัครล้มเหลว
-				if (result.message?.includes('email')) {
+				if (result.message?.includes('student_id')) {
+					form.errors.student_id = [result.message || 'รหัสนักศึกษานี้ถูกใช้งานแล้ว'];
+				} else if (result.message?.includes('email')) {
 					form.errors.email = [result.message || 'อีเมลนี้ถูกใช้งานแล้ว'];
 				} else {
 					form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก'];

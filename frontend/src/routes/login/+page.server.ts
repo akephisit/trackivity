@@ -53,8 +53,9 @@ export const actions: Actions = {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					email: form.data.email,
-					password: form.data.password
+					student_id: form.data.student_id,
+					password: form.data.password,
+					remember_me: form.data.remember_me
 				})
 			});
 
@@ -62,7 +63,7 @@ export const actions: Actions = {
 
 			if (!response.ok) {
 				// Login ล้มเหลว
-				form.errors.email = [result.message || 'อีเมลหรือรหัسผ่านไม่ถูกต้อง'];
+				form.errors.student_id = [result.message || 'อีเมลหรือรหัسผ่านไม่ถูกต้อง'];
 				return fail(400, { form });
 			}
 
@@ -80,12 +81,12 @@ export const actions: Actions = {
 				const redirectTo = url.searchParams.get('redirectTo') || '/admin';
 				throw redirect(303, redirectTo);
 			} else {
-				form.errors.email = [result.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ'];
+				form.errors.student_id = [result.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ'];
 				return fail(400, { form });
 			}
 		} catch (error) {
 			console.error('Login error:', error);
-			form.errors.email = ['เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง'];
+			form.errors.student_id = ['เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง'];
 			return fail(500, { form });
 		}
 	}

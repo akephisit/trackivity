@@ -9,9 +9,8 @@
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
 	import * as Select from '$lib/components/ui/select';
-	import { IconLoader, IconEye, IconEyeOff, IconUser, IconMail, IconLock, IconShield, IconAlertTriangle, IconWifi, IconWifiOff } from '@tabler/icons-svelte/icons';
+	import { IconLoader, IconEye, IconEyeOff, IconUser, IconMail, IconLock, IconAlertTriangle, IconWifi, IconWifiOff } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
-	import { AdminLevel } from '$lib/types/admin';
 
 	let { data } = $props();
 
@@ -31,9 +30,8 @@
 	let showPassword = $state(false);
 	let showConfirmPassword = $state(false);
 
-	// Select values for reactive binding
-	let selectedAdminLevel = $state<string>("");
-	let selectedFaculty = $state<string>("");
+	// Student registration state variables
+	let selectedDepartment = $state('');
 
 	function togglePasswordVisibility() {
 		showPassword = !showPassword;
@@ -43,46 +41,36 @@
 		showConfirmPassword = !showConfirmPassword;
 	}
 
-	// Admin Level options
-	const adminLevelOptions = [
-		{ value: AdminLevel.RegularAdmin, label: 'แอดมินทั่วไป' },
-		{ value: AdminLevel.FacultyAdmin, label: 'แอดมินคณะ' },
-		{ value: AdminLevel.SuperAdmin, label: 'ซุปเปอร์แอดมิน' }
-	];
-
-	// Faculty options
-	let facultyOptions = $derived(Array.isArray(data.faculties) ? data.faculties.map(faculty => ({
+	// Department options for student registration
+	let departmentOptions = $derived(Array.isArray(data.faculties) ? data.faculties.map(faculty => ({
 		value: faculty.id,
 		label: faculty.name
 	})) : []);
 
-	// Update form data when select values change
+	// Handle department selection
 	$effect(() => {
-		if (selectedAdminLevel) {
-			$formData.admin_level = Number(selectedAdminLevel) as unknown as AdminLevel;
-		}
-	});
-
-	$effect(() => {
-		if (selectedFaculty) {
-			$formData.faculty_id = Number(selectedFaculty);
+		if (selectedDepartment) {
+			$formData.department_id = parseInt(selectedDepartment);
 		}
 	});
 </script>
 
 <svelte:head>
-	<title>สมัครสมาชิก - Admin Panel</title>
-	<meta name="description" content="สมัครสมาชิกสำหรับผู้ดูแลระบบ" />
+	<title>สมัครสมาชิก - Trackivity</title>
+	<meta name="description" content="สมัครสมาชิกสำหรับนักศึกษา" />
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
 	<div class="max-w-md w-full space-y-8 overflow-y-auto">
 		<div class="text-center">
+			<div class="mx-auto h-16 w-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
+				<IconUser class="h-8 w-8 text-white" />
+			</div>
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-				Admin Panel
+				Trackivity
 			</h1>
 			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-				สมัครสมาชิกสำหรับผู้ดูแลระบบ
+				สมัครสมาชิกสำหรับนักศึกษา
 			</p>
 		</div>
 
@@ -90,7 +78,7 @@
 			<CardHeader class="space-y-1">
 				<CardTitle class="text-2xl text-center">สมัครสมาชิก</CardTitle>
 				<CardDescription class="text-center">
-					กรุณากรอกข้อมูลเพื่อสร้างบัญชีแอดมินใหม่
+					กรุณากรอกข้อมูลเพื่อสร้างบัญชีนักศึกษาใหม่
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
@@ -147,17 +135,59 @@
 						</Alert>
 					{/if}
 
-					<Form.Field {form} name="name">
+					<Form.Field {form} name="student_id">
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
 									<IconUser class="h-4 w-4" />
-									ชื่อ-นามสกุล
+									รหัสนักศึกษา
 								</Label>
 								<Input
 									{...props}
-									bind:value={$formData.name}
-									placeholder="กรอกชื่อ-นามสกุลของคุณ"
+									type="text"
+									bind:value={$formData.student_id}
+									placeholder="64123456789"
+									disabled={$submitting}
+									class="w-full"
+									maxlength="12"
+								/>
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
+
+					<Form.Field {form} name="first_name">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Label for={props.id} class="flex items-center gap-2">
+									<IconUser class="h-4 w-4" />
+									ชื่อจริง
+								</Label>
+								<Input
+									{...props}
+									type="text"
+									bind:value={$formData.first_name}
+									placeholder="ชื่อจริงของคุณ"
+									disabled={$submitting}
+									class="w-full"
+								/>
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
+
+					<Form.Field {form} name="last_name">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Label for={props.id} class="flex items-center gap-2">
+									<IconUser class="h-4 w-4" />
+									นามสกุล
+								</Label>
+								<Input
+									{...props}
+									type="text"
+									bind:value={$formData.last_name}
+									placeholder="นามสกุลของคุณ"
 									disabled={$submitting}
 									class="w-full"
 								/>
@@ -254,19 +284,19 @@
 						<Form.FieldErrors />
 					</Form.Field>
 
-					<Form.Field {form} name="admin_level">
+					<Form.Field {form} name="department_id">
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
-									<IconShield class="h-4 w-4" />
-									ระดับแอดมิน (ไม่บังคับ)
+									<IconUser class="h-4 w-4" />
+									สาขาวิชา (ไม่บังคับ)
 								</Label>
-								<Select.Root type="single" bind:value={selectedAdminLevel} disabled={$submitting}>
+								<Select.Root type="single" bind:value={selectedDepartment} disabled={$submitting}>
 									<Select.Trigger class="w-full">
-										{adminLevelOptions.find(opt => opt.value.toString() === selectedAdminLevel)?.label ?? "เลือกระดับแอดมิน"}
+										{departmentOptions.find(opt => opt.value.toString() === selectedDepartment)?.label ?? "เลือกสาขาวิชา"}
 									</Select.Trigger>
 									<Select.Content>
-										{#each adminLevelOptions as option}
+										{#each departmentOptions as option}
 											<Select.Item value={option.value.toString()} label={option.label}>
 												{option.label}
 											</Select.Item>
@@ -277,29 +307,6 @@
 						</Form.Control>
 						<Form.FieldErrors />
 					</Form.Field>
-
-					{#if selectedAdminLevel === AdminLevel.FacultyAdmin.toString()}
-						<Form.Field {form} name="faculty_id">
-							<Form.Control>
-								{#snippet children({ props })}
-									<Label for={props.id}>คณะ</Label>
-									<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
-										<Select.Trigger class="w-full">
-											{facultyOptions.find(opt => opt.value.toString() === selectedFaculty)?.label ?? "เลือกคณะ"}
-										</Select.Trigger>
-										<Select.Content>
-											{#each facultyOptions as option}
-												<Select.Item value={option.value.toString()} label={option.label}>
-													{option.label}
-												</Select.Item>
-											{/each}
-										</Select.Content>
-									</Select.Root>
-								{/snippet}
-							</Form.Control>
-							<Form.FieldErrors />
-						</Form.Field>
-					{/if}
 
 					<div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
 						<p class="font-medium mb-1">หมายเหตุ:</p>

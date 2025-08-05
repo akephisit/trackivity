@@ -69,6 +69,14 @@ pub struct SessionLoginRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StudentLoginRequest {
+    pub student_id: String,
+    pub password: String,
+    pub remember_me: Option<bool>,
+    pub device_info: Option<HashMap<String, Value>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionResponse {
     pub session_id: String,
     pub user: SessionUser,

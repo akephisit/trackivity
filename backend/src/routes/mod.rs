@@ -8,11 +8,16 @@ use crate::middleware::session::SessionState;
 
 pub fn create_routes() -> Router<SessionState> {
     Router::new()
-        // Authentication routes
-        .route("/api/auth/login", post(auth::login))
-        .route("/api/auth/register", post(auth::register))
+        // Student Authentication routes
+        .route("/api/auth/login", post(auth::student_login))
+        .route("/api/auth/register", post(auth::student_register))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/me", get(auth::me))
+        
+        // Admin Authentication routes
+        .route("/api/admin/auth/login", post(auth::admin_login))
+        .route("/api/admin/auth/logout", post(auth::admin_logout))
+        .route("/api/admin/auth/me", get(auth::admin_me))
         
         // Faculty routes
         .route("/api/faculties", get(faculty::get_faculties))

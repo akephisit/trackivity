@@ -2,17 +2,28 @@ import { z } from 'zod';
 import { AdminLevel } from '$lib/types/admin';
 
 export const loginSchema = z.object({
-	email: z
+	student_id: z
 		.string()
-		.min(1, 'กรุณาใส่อีเมล')
-		.email('รูปแบบอีเมลไม่ถูกต้อง'),
+		.min(1, 'กรุณาใส่รหัสนักศึกษา')
+		.regex(/^[0-9]+$/, 'รหัสนักศึกษาต้องเป็นตัวเลขเท่านั้น')
+		.min(8, 'รหัสนักศึกษาต้องมีอย่างน้อย 8 หลัก'),
 	password: z
 		.string()
 		.min(1, 'กรุณาใส่รหัสผ่าน')
-		.min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
+		.min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
+	remember_me: z
+		.boolean()
+		.optional()
+		.default(false)
 });
 
+// Student registration schema (no admin fields)
 export const registerSchema = z.object({
+	student_id: z
+		.string()
+		.min(1, 'กรุณาใส่รหัสนักเรียน')
+		.regex(/^[0-9]+$/, 'รหัสนักเรียนต้องเป็นตัวเลขเท่านั้น')
+		.min(8, 'รหัสนักเรียนต้องมีอย่างน้อย 8 หลัก'),
 	email: z
 		.string()
 		.min(1, 'กรุณาใส่อีเมล')
@@ -24,17 +35,19 @@ export const registerSchema = z.object({
 	confirmPassword: z
 		.string()
 		.min(1, 'กรุณายืนยันรหัสผ่าน'),
-	name: z
+	first_name: z
 		.string()
-		.min(1, 'กรุณาใส่ชื่อ')
+		.min(1, 'กรุณาใส่ชื่อจริง')
 		.min(2, 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร')
-		.max(100, 'ชื่อต้องไม่เกิน 100 ตัวอักษร'),
-	admin_level: z
-		.nativeEnum(AdminLevel)
-		.optional(),
-	faculty_id: z
+		.max(50, 'ชื่อต้องไม่เกิน 50 ตัวอักษร'),
+	last_name: z
+		.string()
+		.min(1, 'กรุณาใส่นามสกุล')
+		.min(2, 'นามสกุลต้องมีอย่างน้อย 2 ตัวอักษร')
+		.max(50, 'นามสกุลต้องไม่เกิน 50 ตัวอักษร'),
+	department_id: z
 		.number()
-		.positive('กรุณาเลือกคณะ')
+		.positive('กรุณาเลือกสาขาวิชา')
 		.optional()
 }).refine(data => data.password === data.confirmPassword, {
 	message: 'รหัสผ่านไม่ตรงกัน',

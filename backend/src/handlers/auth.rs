@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::models::{
     session::{
-        SessionLoginRequest, SessionResponse, SessionUser, 
+        SessionLoginRequest, StudentLoginRequest, SessionResponse, SessionUser, 
         CreateSession, DeviceInfo, AdminSessionInfo,
         SessionRevocationRequest
     },
@@ -71,8 +71,113 @@ pub struct SessionInfo {
     pub expires_at: chrono::DateTime<Utc>,
 }
 
-// Enhanced login with multi-device support
-pub async fn login(
+// Student login - no admin privileges required
+pub async fn student_login(
+    State(session_state): State<SessionState>,
+    cookies: Cookies,
+    headers: HeaderMap,
+    Json(login_req): Json<StudentLoginRequest>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    // Extract device info from headers
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("Unknown");
+    
+    let device_info = match login_req.device_info {
+        Some(info) => info,
+        None => DeviceInfo::from_user_agent(user_agent).to_json(),
+    };
+    
+    // Get IP address from headers
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+    
+    // Authenticate user by student ID
+    let user = match authenticate_user_by_student_id(&session_state, &login_req.student_id, &login_req.password).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            return Ok(Json(LoginResponse {
+                success: false,
+                session: None,
+                message: "Invalid student ID or password".to_string(),
+            }));
+        }
+        Err(_) => {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // For student login, ensure user is NOT an admin
+    let admin_role = get_user_admin_role(&session_state, user.id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if admin_role.is_some() {
+        return Ok(Json(LoginResponse {
+            success: false,
+            session: None,
+            message: "Admin users must use admin login portal".to_string(),
+        }));
+    }
+    
+    // Check existing sessions and enforce limits
+    let existing_sessions = session_state.redis_store.get_user_sessions(user.id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if existing_sessions.len() >= session_state.config.max_sessions_per_user {
+        // Remove oldest session
+        if let Some(oldest_session) = existing_sessions.iter().min_by_key(|s| s.created_at) {
+            let _ = session_state.redis_store.delete_session(&oldest_session.id).await;
+        }
+    }
+    
+    // Create new session
+    let remember_me = login_req.remember_me.unwrap_or(false);
+    let expires_at = session_state.config.get_session_expiry(remember_me);
+    
+    let create_session = CreateSession {
+        user_id: user.id,
+        expires_at,
+        ip_address,
+        user_agent: Some(user_agent.to_string()),
+        device_info,
+    };
+    
+    let session = session_state.redis_store.create_session(create_session).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Store session metadata in database
+    let _ = store_session_metadata(&session_state, &session).await;
+    
+    // For student login, admin_role should be None
+    let admin_role = None;
+    
+    // Build session user
+    let session_user = build_session_user(&user, &admin_role, &session.id);
+    
+    // Set session cookie
+    let max_age_seconds = (expires_at - Utc::now()).num_seconds();
+    let cookie = create_session_cookie(&session.id, max_age_seconds);
+    cookies.add(cookie);
+    
+    let response = SessionResponse {
+        session_id: session.id,
+        user: session_user,
+        expires_at,
+    };
+    
+    Ok(Json(LoginResponse {
+        success: true,
+        session: Some(response),
+        message: "Login successful".to_string(),
+    }))
+}
+
+// Admin login - requires admin privileges
+pub async fn admin_login(
     State(session_state): State<SessionState>,
     cookies: Cookies,
     headers: HeaderMap,
@@ -111,6 +216,18 @@ pub async fn login(
         }
     };
     
+    // For admin login, ensure user IS an admin
+    let admin_role = get_user_admin_role(&session_state, user.id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if admin_role.is_none() {
+        return Ok(Json(LoginResponse {
+            success: false,
+            session: None,
+            message: "Access denied. Admin privileges required.".to_string(),
+        }));
+    }
+    
     // Check existing sessions and enforce limits
     let existing_sessions = session_state.redis_store.get_user_sessions(user.id).await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -140,11 +257,7 @@ pub async fn login(
     // Store session metadata in database
     let _ = store_session_metadata(&session_state, &session).await;
     
-    // Get admin role for user
-    let admin_role = get_user_admin_role(&session_state, user.id).await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
-    // Build session user
+    // Build session user with admin role
     let session_user = build_session_user(&user, &admin_role, &session.id);
     
     // Set session cookie
@@ -161,12 +274,12 @@ pub async fn login(
     Ok(Json(LoginResponse {
         success: true,
         session: Some(response),
-        message: "Login successful".to_string(),
+        message: "Admin login successful".to_string(),
     }))
 }
 
-// Register new user
-pub async fn register(
+// Student registration - no admin privileges
+pub async fn student_register(
     State(session_state): State<SessionState>,
     Json(register_req): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, StatusCode> {
@@ -246,6 +359,37 @@ pub async fn me(
     session_user: SessionUser,
 ) -> Result<Json<SessionUser>, StatusCode> {
     Ok(Json(session_user))
+}
+
+// Admin logout
+pub async fn admin_logout(
+    State(session_state): State<SessionState>,
+    admin_user: AdminUser,
+    cookies: Cookies,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Delete session from Redis
+    session_state.redis_store.delete_session(&admin_user.session_user.session_id).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Clear session cookie
+    let cookie = delete_session_cookie();
+    cookies.add(cookie);
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": "Admin logged out successfully"
+    })))
+}
+
+// Get current admin session info
+pub async fn admin_me(
+    admin_user: AdminUser,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    Ok(Json(serde_json::json!({
+        "user": admin_user.session_user,
+        "admin_role": admin_user.admin_role,
+        "permissions": admin_user.session_user.permissions
+    })))
 }
 
 // Get user's active sessions
@@ -447,6 +591,30 @@ async fn authenticate_user(
         "SELECT * FROM users WHERE email = $1"
     )
     .bind(email)
+    .fetch_optional(&session_state.db_pool)
+    .await?;
+    
+    match user {
+        Some(user) => {
+            if bcrypt::verify(password, &user.password_hash)? {
+                Ok(Some(user))
+            } else {
+                Ok(None)
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+async fn authenticate_user_by_student_id(
+    session_state: &SessionState,
+    student_id: &str,
+    password: &str,
+) -> Result<Option<User>, anyhow::Error> {
+    let user = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE student_id = $1"
+    )
+    .bind(student_id)
     .fetch_optional(&session_state.db_pool)
     .await?;
     
