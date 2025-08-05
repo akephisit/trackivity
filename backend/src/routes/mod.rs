@@ -48,7 +48,6 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/admin/dashboard", get(admin::get_dashboard))
         .route("/api/admin/users", get(admin::get_admin_users))
         .route("/api/admin/activities", get(admin::get_admin_activities))
-        .route("/api/admin/sessions", get(admin::get_admin_sessions))
         
         // Admin session management
         .route("/api/admin/sessions", get(admin_session::get_sessions))
