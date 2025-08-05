@@ -12,7 +12,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Loader2, Plus, Edit, Trash2, Shield, Users, Mail } from 'lucide-svelte';
+	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { AdminLevel } from '$lib/types/admin';
 	import { invalidateAll } from '$app/navigation';
@@ -46,19 +46,23 @@
 	];
 
 	// Faculty options
-	$: facultyOptions = data.faculties.map(faculty => ({
+	let facultyOptions = $derived(data.faculties.map(faculty => ({
 		value: faculty.id,
 		label: faculty.name
-	}));
+	})));
 
 	// Update form data when select values change
-	$: if (selectedAdminLevel) {
-		$formData.admin_level = selectedAdminLevel.value;
-	}
+	$effect(() => {
+		if (selectedAdminLevel) {
+			$formData.admin_level = selectedAdminLevel;
+		}
+	});
 
-	$: if (selectedFaculty) {
-		$formData.faculty_id = selectedFaculty.value;
-	}
+	$effect(() => {
+		if (selectedFaculty) {
+			$formData.faculty_id = selectedFaculty;
+		}
+	});
 
 	function getAdminLevelText(level: AdminLevel): string {
 		switch (level) {
@@ -126,7 +130,7 @@
 		$formData = {
 			email: '',
 			name: '',
-			admin_level: undefined,
+			admin_level: AdminLevel.RegularAdmin,
 			faculty_id: undefined,
 			permissions: []
 		};
@@ -154,7 +158,7 @@
 			</p>
 		</div>
 		<Button onclick={openDialog}>
-			<Plus class="h-4 w-4 mr-2" />
+			<IconPlus class="h-4 w-4 mr-2" />
 			เพิ่มแอดมิน
 		</Button>
 	</div>
@@ -164,7 +168,7 @@
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">แอดมินทั้งหมด</CardTitle>
-				<Users class="h-4 w-4 text-muted-foreground" />
+				<IconUsers class="h-4 w-4 text-muted-foreground" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold">{data.admins.length}</div>
@@ -174,7 +178,7 @@
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">ซุปเปอร์แอดมิน</CardTitle>
-				<Shield class="h-4 w-4 text-red-500" />
+				<IconShield class="h-4 w-4 text-red-500" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-red-600">
@@ -186,7 +190,7 @@
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">แอดมินคณะ</CardTitle>
-				<Shield class="h-4 w-4 text-blue-500" />
+				<IconShield class="h-4 w-4 text-blue-500" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-blue-600">
@@ -226,7 +230,7 @@
 									</Table.Cell>
 									<Table.Cell>
 										<div class="flex items-center gap-2">
-											<Mail class="h-4 w-4 text-gray-400" />
+											<IconMail class="h-4 w-4 text-gray-400" />
 											{admin.user?.email || 'ไม่ระบุ'}
 										</div>
 									</Table.Cell>
@@ -246,7 +250,7 @@
 									<Table.Cell class="text-right">
 										<div class="flex items-center gap-2 justify-end">
 											<Button variant="ghost" size="sm">
-												<Edit class="h-4 w-4" />
+												<IconEdit class="h-4 w-4" />
 											</Button>
 											<Button
 												variant="ghost"
@@ -254,7 +258,7 @@
 												onclick={() => handleDelete(admin.id, admin.user?.name || 'ไม่ระบุ')}
 												class="text-red-600 hover:text-red-700"
 											>
-												<Trash2 class="h-4 w-4" />
+												<IconTrash class="h-4 w-4" />
 											</Button>
 										</div>
 									</Table.Cell>
@@ -265,10 +269,10 @@
 				</div>
 			{:else}
 				<div class="text-center py-8 text-gray-500 dark:text-gray-400">
-					<Shield class="h-12 w-12 mx-auto mb-4 opacity-50" />
+					<IconShield class="h-12 w-12 mx-auto mb-4 opacity-50" />
 					<p>ยังไม่มีแอดมินในระบบ</p>
 					<Button onclick={openDialog} class="mt-4">
-						<Plus class="h-4 w-4 mr-2" />
+						<IconPlus class="h-4 w-4 mr-2" />
 						เพิ่มแอดมินคนแรก
 					</Button>
 				</div>
@@ -331,13 +335,13 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Label for={props.id}>ระดับแอดมิน</Label>
-						<Select.Root bind:selected={selectedAdminLevel} disabled={$submitting}>
+						<Select.Root type="single" bind:value={selectedAdminLevel} disabled={$submitting}>
 							<Select.Trigger>
-								<Select.Value placeholder="เลือกระดับแอดมิน" />
+								{adminLevelOptions.find(opt => opt.value === selectedAdminLevel)?.label ?? "เลือกระดับแอดมิน"}
 							</Select.Trigger>
 							<Select.Content>
 								{#each adminLevelOptions as option}
-									<Select.Item value={option.value}>
+									<Select.Item value={option.value.toString()}>
 										{option.label}
 									</Select.Item>
 								{/each}
@@ -348,18 +352,18 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
-			{#if selectedAdminLevel?.value === AdminLevel.FacultyAdmin}
+			{#if selectedAdminLevel === AdminLevel.FacultyAdmin}
 				<Form.Field {form} name="faculty_id">
 					<Form.Control>
 						{#snippet children({ props })}
 							<Label for={props.id}>คณะ</Label>
-							<Select.Root bind:selected={selectedFaculty} disabled={$submitting}>
+							<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
 								<Select.Trigger>
-									<Select.Value placeholder="เลือกคณะ" />
+									{facultyOptions.find(opt => opt.value === selectedFaculty)?.label ?? "เลือกคณะ"}
 								</Select.Trigger>
 								<Select.Content>
 									{#each facultyOptions as option}
-										<Select.Item value={option.value}>
+										<Select.Item value={option.value.toString()}>
 											{option.label}
 										</Select.Item>
 									{/each}
@@ -377,7 +381,7 @@
 				</Button>
 				<Button type="submit" disabled={$submitting}>
 					{#if $submitting}
-						<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+						<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 						กำลังสร้าง...
 					{:else}
 						สร้างแอดมิน

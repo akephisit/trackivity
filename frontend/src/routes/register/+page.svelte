@@ -9,7 +9,7 @@
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
 	import * as Select from '$lib/components/ui/select';
-	import { LoaderCircle, Eye, EyeOff, User, Mail, Lock, Shield, TriangleAlert, Wifi, WifiOff } from 'lucide-svelte';
+	import { IconLoader, IconEye, IconEyeOff, IconUser, IconMail, IconLock, IconShield, IconAlertTriangle, IconWifi, IconWifiOff } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { AdminLevel } from '$lib/types/admin';
 
@@ -97,7 +97,7 @@
 				<!-- แสดงสถานะการเชื่อมต่อ Backend -->
 				{#if !data.backendAvailable}
 					<Alert variant="destructive">
-						<WifiOff class="h-4 w-4" />
+						<IconWifiOff class="h-4 w-4" />
 						<AlertDescription>
 							<div class="space-y-2">
 								<p class="font-medium">ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้</p>
@@ -110,7 +110,7 @@
 					</Alert>
 				{:else if !data.facultiesFromBackend}
 					<Alert>
-						<TriangleAlert class="h-4 w-4" />
+						<IconAlertTriangle class="h-4 w-4" />
 						<AlertDescription>
 							<div class="space-y-2">
 								<p class="font-medium">ใช้ข้อมูลคณะแบบออฟไลน์</p>
@@ -122,7 +122,7 @@
 					</Alert>
 				{:else}
 					<Alert>
-						<Wifi class="h-4 w-4" />
+						<IconWifi class="h-4 w-4" />
 						<AlertDescription>
 							<p class="text-sm">เชื่อมต่อกับเซิร์ฟเวอร์สำเร็จ - ข้อมูลคณะเป็นปัจจุบัน</p>
 						</AlertDescription>
@@ -132,7 +132,7 @@
 				<form method="POST" use:enhance class="space-y-4">
 					{#if $errors._errors}
 						<Alert variant="destructive">
-							<TriangleAlert class="h-4 w-4" />
+							<IconAlertTriangle class="h-4 w-4" />
 							<AlertDescription>
 								<div class="space-y-2">
 									<p class="font-medium">เกิดข้อผิดพลาดในการสมัครสมาชิก</p>
@@ -151,7 +151,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
-									<User class="h-4 w-4" />
+									<IconUser class="h-4 w-4" />
 									ชื่อ-นามสกุล
 								</Label>
 								<Input
@@ -170,7 +170,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
-									<Mail class="h-4 w-4" />
+									<IconMail class="h-4 w-4" />
 									อีเมล
 								</Label>
 								<Input
@@ -190,7 +190,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
-									<Lock class="h-4 w-4" />
+									<IconLock class="h-4 w-4" />
 									รหัสผ่าน
 								</Label>
 								<div class="relative">
@@ -209,9 +209,9 @@
 										tabindex="-1"
 									>
 										{#if showPassword}
-											<EyeOff class="h-4 w-4 text-gray-400" />
+											<IconEyeOff class="h-4 w-4 text-gray-400" />
 										{:else}
-											<Eye class="h-4 w-4 text-gray-400" />
+											<IconEye class="h-4 w-4 text-gray-400" />
 										{/if}
 									</button>
 								</div>
@@ -224,7 +224,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
-									<Lock class="h-4 w-4" />
+									<IconLock class="h-4 w-4" />
 									ยืนยันรหัสผ่าน
 								</Label>
 								<div class="relative">
@@ -243,9 +243,9 @@
 										tabindex="-1"
 									>
 										{#if showConfirmPassword}
-											<EyeOff class="h-4 w-4 text-gray-400" />
+											<IconEyeOff class="h-4 w-4 text-gray-400" />
 										{:else}
-											<Eye class="h-4 w-4 text-gray-400" />
+											<IconEye class="h-4 w-4 text-gray-400" />
 										{/if}
 									</button>
 								</div>
@@ -258,7 +258,7 @@
 						<Form.Control>
 							{#snippet children({ props })}
 								<Label for={props.id} class="flex items-center gap-2">
-									<Shield class="h-4 w-4" />
+									<IconShield class="h-4 w-4" />
 									ระดับแอดมิน (ไม่บังคับ)
 								</Label>
 								<Select.Root type="single" bind:value={selectedAdminLevel} disabled={$submitting}>
@@ -317,13 +317,13 @@
 						variant={!data.backendAvailable ? "secondary" : "default"}
 					>
 						{#if $submitting}
-							<LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
+							<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 							กำลังสมัครสมาชิก...
 						{:else if !data.backendAvailable}
-							<WifiOff class="mr-2 h-4 w-4" />
+							<IconWifiOff class="mr-2 h-4 w-4" />
 							ลองสมัครสมาชิก (อาจไม่สำเร็จ)
 						{:else}
-							<Wifi class="mr-2 h-4 w-4" />
+							<IconWifi class="mr-2 h-4 w-4" />
 							สมัครสมาชิก
 						{/if}
 					</Button>

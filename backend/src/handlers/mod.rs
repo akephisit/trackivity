@@ -4,6 +4,7 @@ pub mod activity;
 pub mod admin;
 pub mod admin_session;
 pub mod sse;
+pub mod faculty;
 
 // pub use user::*;
 // pub use activity::*;

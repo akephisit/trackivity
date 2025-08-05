@@ -8,7 +8,7 @@
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
-	import { Loader2, Eye, EyeOff } from 'lucide-svelte';
+	import { IconLoader, IconEye, IconEyeOff } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 
 	let { data } = $props();
@@ -93,9 +93,9 @@
 										tabindex="-1"
 									>
 										{#if showPassword}
-											<EyeOff class="h-4 w-4 text-gray-400" />
+											<IconEyeOff class="h-4 w-4 text-gray-400" />
 										{:else}
-											<Eye class="h-4 w-4 text-gray-400" />
+											<IconEye class="h-4 w-4 text-gray-400" />
 										{/if}
 									</button>
 								</div>
@@ -114,7 +114,7 @@
 
 					<Button type="submit" class="w-full" disabled={$submitting}>
 						{#if $submitting}
-							<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+							<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 							กำลังเข้าสู่ระบบ...
 						{:else}
 							เข้าสู่ระบบ

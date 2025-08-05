@@ -4,16 +4,16 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Separator } from '$lib/components/ui/separator';
 	import { 
-		Users, 
-		Shield, 
-		Building, 
-		Activity,
-		TrendingUp,
-		Clock,
-		CheckCircle,
-		AlertCircle,
-		BarChart3
-	} from 'lucide-svelte';
+		IconUsers, 
+		IconShield, 
+		IconBuilding, 
+		IconActivity,
+		IconTrendingUp,
+		IconClock,
+		IconCircleCheck,
+		IconAlertCircle,
+		IconChartBar
+	} from '@tabler/icons-svelte/icons';
 	import { AdminLevel } from '$lib/types/admin';
 
 	let { data } = $props();
@@ -23,7 +23,7 @@
 		{
 			title: 'ผู้ใช้ทั้งหมด',
 			value: data.stats.total_users,
-			icon: Users,
+			icon: IconUsers,
 			color: 'text-blue-600',
 			bgColor: 'bg-blue-100',
 			description: 'จำนวนผู้ใช้ในระบบ'
@@ -31,7 +31,7 @@
 		{
 			title: 'แอดมิน',
 			value: data.stats.total_admins,
-			icon: Shield,
+			icon: IconShield,
 			color: 'text-green-600',
 			bgColor: 'bg-green-100',
 			description: 'จำนวนผู้ดูแลระบบ'
@@ -39,7 +39,7 @@
 		{
 			title: 'คณะ',
 			value: data.stats.total_faculties,
-			icon: Building,
+			icon: IconBuilding,
 			color: 'text-purple-600',
 			bgColor: 'bg-purple-100',
 			description: 'จำนวนคณะในระบบ'
@@ -47,14 +47,15 @@
 		{
 			title: 'กิจกรรมล่าสุด',
 			value: data.stats.recent_activities,
-			icon: Activity,
+			icon: IconActivity,
 			color: 'text-orange-600',
 			bgColor: 'bg-orange-100',
 			description: 'กิจกรรมใน 24 ชั่วโมงที่ผ่านมา'
 		}
 	];
 
-	function getAdminLevelText(level: AdminLevel): string {
+	function getAdminLevelText(level: AdminLevel | undefined): string {
+		if (!level) return 'ไม่ระบุ';
 		switch (level) {
 			case AdminLevel.SuperAdmin:
 				return 'ซุปเปอร์แอดมิน';
@@ -67,7 +68,8 @@
 		}
 	}
 
-	function getAdminLevelBadgeVariant(level: AdminLevel): 'default' | 'secondary' | 'destructive' | 'outline' {
+	function getAdminLevelBadgeVariant(level: AdminLevel | undefined): 'default' | 'secondary' | 'destructive' | 'outline' {
+		if (!level) return 'outline';
 		switch (level) {
 			case AdminLevel.SuperAdmin:
 				return 'destructive';
@@ -116,7 +118,7 @@
 						{stat.title}
 					</CardTitle>
 					<div class="p-2 rounded-lg {stat.bgColor} dark:bg-opacity-20">
-						<svelte:component this={stat.icon} class="h-4 w-4 {stat.color}" />
+						<stat.icon class="h-4 w-4 {stat.color}" />
 					</div>
 				</CardHeader>
 				<CardContent>
@@ -137,7 +139,7 @@
 		<Card>
 			<CardHeader>
 				<CardTitle class="flex items-center gap-2">
-					<BarChart3 class="h-5 w-5" />
+					<IconChartBar class="h-5 w-5" />
 					การดำเนินการด่วน
 				</CardTitle>
 				<CardDescription>
@@ -148,28 +150,28 @@
 				{#if data.admin_role?.admin_level === AdminLevel.SuperAdmin}
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
 						<Button variant="outline" class="justify-start h-auto py-3">
-							<Users class="h-4 w-4 mr-2" />
+							<IconUsers class="h-4 w-4 mr-2" />
 							<div class="text-left">
 								<div class="font-medium">จัดการผู้ใช้</div>
 								<div class="text-xs text-gray-500">เพิ่ม แก้ไข ลบผู้ใช้</div>
 							</div>
 						</Button>
 						<Button variant="outline" class="justify-start h-auto py-3">
-							<Shield class="h-4 w-4 mr-2" />
+							<IconShield class="h-4 w-4 mr-2" />
 							<div class="text-left">
 								<div class="font-medium">จัดการแอดมิน</div>
 								<div class="text-xs text-gray-500">กำหนดสิทธิ์ผู้ดูแล</div>
 							</div>
 						</Button>
 						<Button variant="outline" class="justify-start h-auto py-3">
-							<Building class="h-4 w-4 mr-2" />
+							<IconBuilding class="h-4 w-4 mr-2" />
 							<div class="text-left">
 								<div class="font-medium">จัดการคณะ</div>
 								<div class="text-xs text-gray-500">เพิ่ม แก้ไขข้อมูลคณะ</div>
 							</div>
 						</Button>
 						<Button variant="outline" class="justify-start h-auto py-3">
-							<Activity class="h-4 w-4 mr-2" />
+							<IconActivity class="h-4 w-4 mr-2" />
 							<div class="text-left">
 								<div class="font-medium">รายงานระบบ</div>
 								<div class="text-xs text-gray-500">ดูสถิติและรายงาน</div>
@@ -179,14 +181,14 @@
 				{:else if data.admin_role?.admin_level === AdminLevel.FacultyAdmin}
 					<div class="grid grid-cols-1 gap-3">
 						<Button variant="outline" class="justify-start h-auto py-3">
-							<Users class="h-4 w-4 mr-2" />
+							<IconUsers class="h-4 w-4 mr-2" />
 							<div class="text-left">
 								<div class="font-medium">จัดการผู้ใช้คณะ</div>
 								<div class="text-xs text-gray-500">จัดการผู้ใช้ในคณะของคุณ</div>
 							</div>
 						</Button>
 						<Button variant="outline" class="justify-start h-auto py-3">
-							<Activity class="h-4 w-4 mr-2" />
+							<IconActivity class="h-4 w-4 mr-2" />
 							<div class="text-left">
 								<div class="font-medium">รายงานคณะ</div>
 								<div class="text-xs text-gray-500">สถิติและรายงานของคณะ</div>
@@ -195,7 +197,7 @@
 					</div>
 				{:else}
 					<div class="text-center py-4 text-gray-500 dark:text-gray-400">
-						<Activity class="h-8 w-8 mx-auto mb-2 opacity-50" />
+						<IconActivity class="h-8 w-8 mx-auto mb-2 opacity-50" />
 						<p>การดำเนินการจะแสดงตามสิทธิ์ของคุณ</p>
 					</div>
 				{/if}
@@ -206,7 +208,7 @@
 		<Card>
 			<CardHeader>
 				<CardTitle class="flex items-center gap-2">
-					<Clock class="h-5 w-5" />
+					<IconClock class="h-5 w-5" />
 					กิจกรรมล่าสุด
 				</CardTitle>
 				<CardDescription>
@@ -220,11 +222,11 @@
 							<div class="flex items-start space-x-3">
 								<div class="flex-shrink-0">
 									{#if activity.type === 'success'}
-										<CheckCircle class="h-5 w-5 text-green-500" />
+										<IconCircleCheck class="h-5 w-5 text-green-500" />
 									{:else if activity.type === 'warning'}
-										<AlertCircle class="h-5 w-5 text-yellow-500" />
+										<IconAlertCircle class="h-5 w-5 text-yellow-500" />
 									{:else}
-										<Activity class="h-5 w-5 text-blue-500" />
+										<IconActivity class="h-5 w-5 text-blue-500" />
 									{/if}
 								</div>
 								<div class="flex-1 min-w-0">
@@ -247,7 +249,7 @@
 					</Button>
 				{:else}
 					<div class="text-center py-8 text-gray-500 dark:text-gray-400">
-						<Clock class="h-8 w-8 mx-auto mb-2 opacity-50" />
+						<IconClock class="h-8 w-8 mx-auto mb-2 opacity-50" />
 						<p>ยังไม่มีกิจกรรมล่าสุด</p>
 					</div>
 				{/if}
@@ -260,7 +262,7 @@
 		<Card>
 			<CardHeader>
 				<CardTitle class="flex items-center gap-2">
-					<TrendingUp class="h-5 w-5" />
+					<IconTrendingUp class="h-5 w-5" />
 					ข้อมูลระบบ
 				</CardTitle>
 				<CardDescription>

@@ -53,22 +53,6 @@ export interface SessionInfo {
     expires_at: string;
 }
 
-export interface LoginCredentials {
-    email: string;
-    password: string;
-    remember_me?: boolean;
-    device_info?: Record<string, any>;
-}
-
-export interface RegisterData {
-    student_id: string;
-    email: string;
-    password: string;
-    first_name: string;
-    last_name: string;
-    department_id?: string;
-}
-
 // Auth store state
 interface AuthState {
     user: User | null;

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ArrowLeftIcon from "@lucide/svelte/icons/arrow-left";
+	import IconArrowLeft from "@tabler/icons-svelte/icons/arrow-left";
 	import type { WithoutChildren } from "bits-ui";
 	import { getEmblaContext } from "./context.js";
 	import { cn } from "$lib/utils.js";
@@ -33,6 +33,6 @@
 	{...restProps}
 	bind:ref
 >
-	<ArrowLeftIcon class="size-4" />
+	<IconArrowLeft class="size-4" />
 	<span class="sr-only">Previous slide</span>
 </Button>

@@ -2,19 +2,18 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
-	import { Separator } from '$lib/components/ui/separator';
 	import { 
-		LayoutDashboard, 
-		Users, 
-		Building, 
-		Settings, 
-		LogOut, 
-		Shield,
-		Menu,
-		X,
-		Sun,
-		Moon
-	} from 'lucide-svelte';
+		IconLayoutDashboard, 
+		IconUsers, 
+		IconBuilding, 
+		IconSettings, 
+		IconLogout, 
+		IconShield,
+		IconMenu2,
+		IconX,
+		IconSun,
+		IconMoon
+	} from '@tabler/icons-svelte/icons';
 	import { AdminLevel } from '$lib/types/admin';
 	import { mode, setMode } from 'mode-watcher';
 	import { toast } from 'svelte-sonner';
@@ -24,14 +23,14 @@
 	let sidebarOpen = $state(false);
 
 	// Navigation items based on admin level
-	$: navigationItems = getNavigationItems(data.admin_role?.admin_level);
+	let navigationItems = $derived(getNavigationItems(data.admin_role?.admin_level));
 
 	function getNavigationItems(adminLevel?: AdminLevel) {
 		const baseItems = [
 			{
 				title: 'แดชบอร์ด',
 				href: '/admin',
-				icon: LayoutDashboard,
+				icon: IconLayoutDashboard,
 				active: $page.url.pathname === '/admin'
 			}
 		];
@@ -42,19 +41,19 @@
 				{
 					title: 'จัดการผู้ใช้',
 					href: '/admin/users',
-					icon: Users,
+					icon: IconUsers,
 					active: $page.url.pathname.startsWith('/admin/users')
 				},
 				{
 					title: 'จัดการคณะ',
 					href: '/admin/faculties',
-					icon: Building,
+					icon: IconBuilding,
 					active: $page.url.pathname.startsWith('/admin/faculties')
 				},
 				{
 					title: 'จัดการแอดมิน',
 					href: '/admin/admins',
-					icon: Shield,
+					icon: IconShield,
 					active: $page.url.pathname.startsWith('/admin/admins')
 				}
 			);
@@ -63,7 +62,7 @@
 				{
 					title: 'จัดการผู้ใช้คณะ',
 					href: '/admin/users',
-					icon: Users,
+					icon: IconUsers,
 					active: $page.url.pathname.startsWith('/admin/users')
 				}
 			);
@@ -72,7 +71,7 @@
 		baseItems.push({
 			title: 'ตั้งค่า',
 			href: '/admin/settings',
-			icon: Settings,
+			icon: IconSettings,
 			active: $page.url.pathname.startsWith('/admin/settings')
 		});
 
@@ -106,7 +105,7 @@
 	}
 
 	function toggleTheme() {
-		setMode($mode === 'light' ? 'dark' : 'light');
+		setMode(mode.current === 'light' ? 'dark' : 'light');
 	}
 </script>
 
@@ -114,7 +113,11 @@
 	<!-- Mobile sidebar overlay -->
 	{#if sidebarOpen}
 		<div class="fixed inset-0 z-40 md:hidden">
-			<div class="fixed inset-0 bg-black bg-opacity-50" onclick={closeSidebar}></div>
+			<button 
+				class="fixed inset-0 bg-black bg-opacity-50 w-full h-full cursor-pointer" 
+				onclick={closeSidebar}
+				aria-label="Close sidebar"
+			></button>
 		</div>
 	{/if}
 
@@ -130,7 +133,7 @@
 					onclick={closeSidebar}
 					class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 md:hidden"
 				>
-					<X class="h-5 w-5" />
+					<IconX class="h-5 w-5" />
 				</button>
 			</div>
 
@@ -169,7 +172,10 @@
 								'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
 							}"
 					>
-						<svelte:component this={item.icon} class="h-5 w-5" />
+						{#if item.icon}
+							{@const IconComponent = item.icon}
+							<IconComponent class="h-5 w-5" />
+						{/if}
 						<span>{item.title}</span>
 					</a>
 				{/each}
@@ -183,11 +189,11 @@
 					onclick={toggleTheme}
 					class="w-full justify-start"
 				>
-					{#if $mode === 'light'}
-						<Moon class="h-4 w-4 mr-2" />
+					{#if mode.current === 'light'}
+						<IconMoon class="h-4 w-4 mr-2" />
 						โหมดมืด
 					{:else}
-						<Sun class="h-4 w-4 mr-2" />
+						<IconSun class="h-4 w-4 mr-2" />
 						โหมดสว่าง
 					{/if}
 				</Button>
@@ -198,7 +204,7 @@
 					onclick={handleLogout}
 					class="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
 				>
-					<LogOut class="h-4 w-4 mr-2" />
+					<IconLogout class="h-4 w-4 mr-2" />
 					ออกจากระบบ
 				</Button>
 			</div>
@@ -214,7 +220,7 @@
 					onclick={toggleSidebar}
 					class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 md:hidden"
 				>
-					<Menu class="h-5 w-5" />
+					<IconMenu2 class="h-5 w-5" />
 				</button>
 
 				<div class="flex items-center space-x-4">

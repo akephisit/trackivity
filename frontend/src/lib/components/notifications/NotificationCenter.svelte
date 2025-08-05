@@ -12,19 +12,19 @@
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
 	import { 
-		Bell, 
-		BellRing, 
-		X, 
-		AlertCircle, 
-		CheckCircle, 
-		Info, 
-		AlertTriangle,
-		Trash2,
-		Check,
-		ExternalLink,
-		Wifi,
-		WifiOff
-	} from 'lucide-svelte';
+		IconBell, 
+		IconBellRinging, 
+		IconX, 
+		IconAlertCircle, 
+		IconCircleCheck, 
+		IconInfoCircle, 
+		IconAlertTriangle,
+		IconTrash,
+		IconCheck,
+		IconExternalLink,
+		IconWifi,
+		IconWifiOff
+	} from '@tabler/icons-svelte/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -106,14 +106,14 @@
 	function getNotificationIcon(type: string) {
 		switch (type) {
 			case 'success':
-				return CheckCircle;
+				return IconCircleCheck;
 			case 'error':
-				return AlertCircle;
+				return IconAlertCircle;
 			case 'warning':
-				return AlertTriangle;
+				return IconAlertTriangle;
 			case 'info':
 			default:
-				return Info;
+				return IconInfoCircle;
 		}
 	}
 
@@ -156,11 +156,11 @@
 		variant="ghost"
 		size="sm"
 		class="relative p-2"
-		on:click={toggleNotifications}
+		onclick={toggleNotifications}
 		aria-label="การแจ้งเตือน"
 	>
 		{#if $unreadCount > 0}
-			<BellRing class="h-5 w-5" />
+			<IconBellRinging class="h-5 w-5" />
 			<Badge 
 				variant="destructive" 
 				class="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs"
@@ -168,7 +168,7 @@
 				{$unreadCount > 99 ? '99+' : $unreadCount}
 			</Badge>
 		{:else}
-			<Bell class="h-5 w-5" />
+			<IconBell class="h-5 w-5" />
 		{/if}
 	</Button>
 
@@ -206,10 +206,10 @@
 							{#if showConnectionStatus}
 								<div class="flex items-center gap-1 text-xs">
 									{#if $isConnected}
-										<Wifi class="h-3 w-3 text-green-600" />
+										<IconWifi class="h-3 w-3 text-green-600" />
 										<span class="text-green-600">เชื่อมต่อ</span>
 									{:else}
-										<WifiOff class="h-3 w-3 text-red-600" />
+										<IconWifiOff class="h-3 w-3 text-red-600" />
 										<span class="text-red-600">ขาดการเชื่อมต่อ</span>
 									{/if}
 								</div>
@@ -222,10 +222,10 @@
 									variant="ghost"
 									size="sm"
 									class="h-6 w-6 p-0"
-									on:click={clearAllNotifications}
+									onclick={clearAllNotifications}
 									title="ลบทั้งหมด"
 								>
-									<Trash2 class="h-3 w-3" />
+									<IconTrash class="h-3 w-3" />
 								</Button>
 							{/if}
 							
@@ -234,10 +234,10 @@
 								variant="ghost"
 								size="sm"
 								class="h-6 w-6 p-0"
-								on:click={toggleNotifications}
+								onclick={toggleNotifications}
 								title="ปิด"
 							>
-								<X class="h-3 w-3" />
+								<IconX class="h-3 w-3" />
 							</Button>
 						</div>
 					</div>
@@ -248,7 +248,7 @@
 					<ScrollArea class="max-h-[{maxHeight}]">
 						{#if $notifications.length === 0}
 							<div class="p-8 text-center text-gray-500">
-								<Bell class="h-12 w-12 mx-auto mb-4 opacity-50" />
+								<IconBell class="h-12 w-12 mx-auto mb-4 opacity-50" />
 								<p class="text-sm">ไม่มีการแจ้งเตือน</p>
 							</div>
 						{:else}
@@ -258,8 +258,8 @@
 									{#if !expired}
 										<div 
 											class="p-4 hover:bg-gray-50 cursor-pointer transition-colors {getNotificationClasses(notification.notification_type)} border-l-4"
-											on:click={() => handleNotificationClick(notification, index)}
-											on:keydown={(e) => e.key === 'Enter' && handleNotificationClick(notification, index)}
+											onclick={() => handleNotificationClick(notification, index)}
+											onkeydown={(e) => e.key === 'Enter' && handleNotificationClick(notification, index)}
 											role="button"
 											tabindex="0"
 											transition:fade={{ duration: 150 }}
@@ -288,7 +288,7 @@
 																	{formatNotificationTime(notification.timestamp || new Date().toISOString())}
 																</span>
 																{#if notification.action_url}
-																	<ExternalLink class="h-3 w-3 opacity-50" />
+																	<IconExternalLink class="h-3 w-3 opacity-50" />
 																{/if}
 															</div>
 														</div>
@@ -299,19 +299,19 @@
 																variant="ghost"
 																size="sm"
 																class="h-6 w-6 p-0 opacity-50 hover:opacity-100"
-																on:click|stopPropagation={() => markAsRead(index)}
+																onclick={(e) => { e.stopPropagation(); markAsRead(index); }}
 																title="ทำเครื่องหมายว่าอ่านแล้ว"
 															>
-																<Check class="h-3 w-3" />
+																<IconCheck class="h-3 w-3" />
 															</Button>
 															<Button
 																variant="ghost"
 																size="sm"
 																class="h-6 w-6 p-0 opacity-50 hover:opacity-100 text-red-600"
-																on:click|stopPropagation={() => removeNotification(index)}
+																onclick={(e) => { e.stopPropagation(); removeNotification(index); }}
 																title="ลบ"
 															>
-																<X class="h-3 w-3" />
+																<IconX class="h-3 w-3" />
 															</Button>
 														</div>
 													</div>
@@ -345,8 +345,8 @@
 {#if isOpen}
 	<div 
 		class="fixed inset-0 z-40" 
-		on:click={toggleNotifications}
-		on:keydown={(e) => e.key === 'Escape' && toggleNotifications()}
+		onclick={toggleNotifications}
+		onkeydown={(e) => e.key === 'Escape' && toggleNotifications()}
 		role="button"
 		tabindex="-1"
 		aria-label="ปิดการแจ้งเตือน"

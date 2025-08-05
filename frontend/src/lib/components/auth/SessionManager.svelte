@@ -9,18 +9,18 @@
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '$lib/components/ui/dialog';
 	import { 
-		Monitor, 
-		Smartphone, 
-		Tablet, 
-		Clock, 
-		MapPin, 
-		Trash2, 
-		Shield, 
-		RefreshCw,
-		AlertTriangle,
-		Calendar,
-		User
-	} from 'lucide-svelte';
+		IconDeviceDesktop, 
+		IconDeviceMobile, 
+		IconDeviceTablet, 
+		IconClock, 
+		IconMapPin, 
+		IconTrash, 
+		IconShield, 
+		IconRefresh,
+		IconAlertTriangle,
+		IconCalendar,
+		IconUser
+	} from '@tabler/icons-svelte/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -104,13 +104,13 @@
 		
 		switch (deviceType) {
 			case 'mobile':
-				return Smartphone;
+				return IconDeviceMobile;
 			case 'tablet':
-				return Tablet;
+				return IconDeviceTablet;
 			case 'desktop':
 			case 'web':
 			default:
-				return Monitor;
+				return IconDeviceDesktop;
 		}
 	}
 
@@ -177,7 +177,7 @@
 		} else if (isExpired(session.expires_at)) {
 			return 'destructive';
 		} else if (isExpiringSoon(session.expires_at)) {
-			return 'warning';
+			return 'outline';
 		}
 		return 'secondary';
 	}
@@ -200,7 +200,7 @@
 		<div class="flex items-center justify-between">
 			<div>
 				<CardTitle class="flex items-center gap-2">
-					<Shield class="h-5 w-5" />
+					<IconShield class="h-5 w-5" />
 					การจัดการเซสชัน
 				</CardTitle>
 				<CardDescription>
@@ -208,17 +208,17 @@
 				</CardDescription>
 			</div>
 			<div class="flex gap-2">
-				<Button variant="outline" size="sm" on:click={loadSessions} disabled={loading}>
-					<RefreshCw class="h-4 w-4 mr-2" class:animate-spin={loading} />
+				<Button variant="outline" size="sm" onclick={loadSessions} disabled={loading}>
+					<IconRefresh class="h-4 w-4 mr-2 {loading ? 'animate-spin' : ''}" />
 					รีเฟรช
 				</Button>
 				<Button 
 					variant="outline" 
 					size="sm" 
-					on:click={extendCurrentSession}
+					onclick={extendCurrentSession}
 					disabled={extending}
 				>
-					<Clock class="h-4 w-4 mr-2" />
+					<IconClock class="h-4 w-4 mr-2" />
 					ขยายเซสชัน
 				</Button>
 			</div>
@@ -228,19 +228,19 @@
 	<CardContent class="space-y-4">
 		{#if error}
 			<Alert variant="destructive">
-				<AlertTriangle class="h-4 w-4" />
+				<IconAlertTriangle class="h-4 w-4" />
 				<AlertDescription>{error}</AlertDescription>
 			</Alert>
 		{/if}
 
 		{#if loading}
 			<div class="flex items-center justify-center py-8">
-				<RefreshCw class="h-6 w-6 animate-spin mr-2" />
+				<IconRefresh class="h-6 w-6 animate-spin mr-2" />
 				<span>กำลังโหลดเซสชัน...</span>
 			</div>
 		{:else if sessions.length === 0}
 			<div class="text-center py-8 text-gray-500">
-				<Shield class="h-12 w-12 mx-auto mb-4 opacity-50" />
+				<IconShield class="h-12 w-12 mx-auto mb-4 opacity-50" />
 				<p>ไม่พบเซสชันที่ใช้งานอยู่</p>
 			</div>
 		{:else}
@@ -272,23 +272,23 @@
 										<div class="space-y-1 text-sm text-gray-600">
 											{#if session.ip_address}
 												<div class="flex items-center gap-1">
-													<MapPin class="h-3 w-3" />
+													<IconMapPin class="h-3 w-3" />
 													<span>{session.ip_address}</span>
 												</div>
 											{/if}
 
 											<div class="flex items-center gap-1">
-												<User class="h-3 w-3" />
+												<IconUser class="h-3 w-3" />
 												<span>เข้าสู่ระบบ: {formatRelativeTime(session.created_at)}</span>
 											</div>
 
 											<div class="flex items-center gap-1">
-												<Clock class="h-3 w-3" />
+												<IconClock class="h-3 w-3" />
 												<span>ใช้งานล่าสุด: {formatRelativeTime(session.last_accessed)}</span>
 											</div>
 
 											<div class="flex items-center gap-1">
-												<Calendar class="h-3 w-3" />
+												<IconCalendar class="h-3 w-3" />
 												<span class="{isExpired(session.expires_at) ? 'text-red-600 font-medium' : isExpiringSoon(session.expires_at) ? 'text-yellow-600 font-medium' : ''}">
 													หมดอายุ: {formatAbsoluteTime(session.expires_at)}
 												</span>
@@ -301,21 +301,23 @@
 								<div class="ml-4">
 									{#if !isCurrentSession(session.session_id) && !isExpired(session.expires_at)}
 										<Dialog>
-											<DialogTrigger asChild let:builder>
-												<Button 
-													builders={[builder]}
-													variant="outline" 
-													size="sm" 
-													class="text-red-600 hover:text-red-700 hover:bg-red-50"
-													disabled={revoking.has(session.session_id)}
-												>
-													{#if revoking.has(session.session_id)}
-														<RefreshCw class="h-3 w-3 mr-1 animate-spin" />
-													{:else}
-														<Trash2 class="h-3 w-3 mr-1" />
-													{/if}
-													ยกเลิก
-												</Button>
+											<DialogTrigger>
+												{#snippet child({ props })}
+													<Button 
+														{...props}
+														variant="outline" 
+														size="sm" 
+														class="text-red-600 hover:text-red-700 hover:bg-red-50"
+														disabled={revoking.has(session.session_id)}
+													>
+														{#if revoking.has(session.session_id)}
+															<IconRefresh class="h-3 w-3 mr-1 animate-spin" />
+														{:else}
+															<IconTrash class="h-3 w-3 mr-1" />
+														{/if}
+														ยกเลิก
+													</Button>
+												{/snippet}
 											</DialogTrigger>
 											<DialogContent>
 												<DialogHeader>
@@ -331,11 +333,11 @@
 													<Button 
 														variant="destructive" 
 														size="sm"
-														on:click={() => revokeSession(session.session_id)}
+														onclick={() => revokeSession(session.session_id)}
 														disabled={revoking.has(session.session_id)}
 													>
 														{#if revoking.has(session.session_id)}
-															<RefreshCw class="h-3 w-3 mr-1 animate-spin" />
+															<IconRefresh class="h-3 w-3 mr-1 animate-spin" />
 														{/if}
 														ยืนยัน
 													</Button>

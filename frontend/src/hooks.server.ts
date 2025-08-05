@@ -2,6 +2,13 @@ import { type Handle, type HandleServerError } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 
 // Types for session management
+interface AdminRole {
+    id: string;
+    admin_level: 'SuperAdmin' | 'FacultyAdmin' | 'RegularAdmin';
+    faculty_id?: string;
+    permissions: string[];
+}
+
 interface SessionUser {
     user_id: string;
     student_id: string;
@@ -9,11 +16,7 @@ interface SessionUser {
     first_name: string;
     last_name: string;
     department_id?: string;
-    admin_role?: {
-        admin_level: 'SuperAdmin' | 'FacultyAdmin' | 'RegularAdmin';
-        faculty_id?: string;
-        permissions: string[];
-    };
+    admin_role?: AdminRole;
     permissions: string[];
     faculty_id?: string;
     session_id: string;

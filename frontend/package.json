@@ -21,7 +21,6 @@
 		"@eslint/compat": "^1.2.5",
 		"@eslint/js": "^9.18.0",
 		"@internationalized/date": "^3.8.2",
-		"@lucide/svelte": "^0.515.0",
 		"@sveltejs/adapter-auto": "^6.0.0",
 		"@sveltejs/kit": "^2.22.0",
 		"@sveltejs/vite-plugin-svelte": "^6.0.0",
@@ -62,7 +61,6 @@
 	},
 	"dependencies": {
 		"@types/node": "^24.2.0",
-		"date-fns": "^4.1.0",
-		"lucide-svelte": "^0.536.0"
+		"date-fns": "^4.1.0"
 	}
 }

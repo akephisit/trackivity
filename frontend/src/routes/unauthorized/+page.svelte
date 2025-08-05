@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Shield, Home, ArrowLeft } from 'lucide-svelte';
+	import { IconShield, IconHome, IconArrowLeft } from '@tabler/icons-svelte/icons';
 	import { goto } from '$app/navigation';
 
 	function goBack() {
@@ -18,7 +18,7 @@
 		<Card class="text-center">
 			<CardHeader class="pb-4">
 				<div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
-					<Shield class="h-8 w-8 text-red-600 dark:text-red-400" />
+					<IconShield class="h-8 w-8 text-red-600 dark:text-red-400" />
 				</div>
 				<CardTitle class="text-2xl font-bold text-gray-900 dark:text-white">
 					ไม่มีสิทธิ์เข้าถึง
@@ -41,11 +41,11 @@
 
 				<div class="flex flex-col sm:flex-row gap-3">
 					<Button onclick={goBack} variant="outline" class="flex-1">
-						<ArrowLeft class="h-4 w-4 mr-2" />
+						<IconArrowLeft class="h-4 w-4 mr-2" />
 						กลับไปหน้าก่อนหน้า
 					</Button>
 					<Button onclick={() => goto('/')} class="flex-1">
-						<Home class="h-4 w-4 mr-2" />
+						<IconHome class="h-4 w-4 mr-2" />
 						กลับสู่หน้าแรก
 					</Button>
 				</div>

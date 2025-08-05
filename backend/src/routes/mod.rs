@@ -3,7 +3,7 @@ use axum::{
     Router,
 };
 
-use crate::handlers::auth;
+use crate::handlers::{auth, faculty};
 use crate::middleware::session::SessionState;
 
 pub fn create_routes() -> Router<SessionState> {
@@ -14,7 +14,11 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/me", get(auth::me))
         
+        // Faculty routes
+        .route("/api/faculties", get(faculty::get_faculties))
+        
         // Health check
+        .route("/health", get(health_check))
         .route("/api/health", get(health_check))
 }
 

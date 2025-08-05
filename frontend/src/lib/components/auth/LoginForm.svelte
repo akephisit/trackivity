@@ -9,7 +9,7 @@
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { Loader2, Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+	import { IconLoader, IconEye, IconEyeOff, IconAlertCircle } from '@tabler/icons-svelte/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -114,12 +114,12 @@
 	<CardContent>
 		{#if $authError}
 			<Alert variant="destructive" class="mb-4">
-				<AlertCircle class="h-4 w-4" />
+				<IconAlertCircle class="h-4 w-4" />
 				<AlertDescription>{$authError}</AlertDescription>
 			</Alert>
 		{/if}
 
-		<form on:submit={handleSubmit} class="space-y-4">
+		<form onsubmit={handleSubmit} class="space-y-4">
 			<!-- Email Field -->
 			<div class="space-y-2">
 				<Label for="email">อีเมล</Label>
@@ -128,7 +128,7 @@
 					type="email"
 					placeholder="your.email@university.ac.th"
 					bind:value={email}
-					on:input={() => clearFieldError('email')}
+					oninput={() => clearFieldError('email')}
 					class={validationErrors.email ? 'border-red-500' : ''}
 					disabled={$isLoading}
 					autocomplete="username"
@@ -148,7 +148,7 @@
 						type={showPassword ? 'text' : 'password'}
 						placeholder="กรุณาป้อนรหัสผ่าน"
 						bind:value={password}
-						on:input={() => clearFieldError('password')}
+						oninput={() => clearFieldError('password')}
 						class={validationErrors.password ? 'border-red-500 pr-10' : 'pr-10'}
 						disabled={$isLoading}
 						autocomplete="current-password"
@@ -157,14 +157,14 @@
 					<button
 						type="button"
 						class="absolute inset-y-0 right-0 pr-3 flex items-center"
-						on:click={togglePasswordVisibility}
+						onclick={togglePasswordVisibility}
 						disabled={$isLoading}
 						aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
 					>
 						{#if showPassword}
-							<EyeOff class="h-4 w-4 text-gray-400" />
+							<IconEyeOff class="h-4 w-4 text-gray-400" />
 						{:else}
-							<Eye class="h-4 w-4 text-gray-400" />
+							<IconEye class="h-4 w-4 text-gray-400" />
 						{/if}
 					</button>
 				</div>
@@ -178,7 +178,7 @@
 				<Checkbox
 					id="remember"
 					bind:checked={rememberMe}
-					on:keydown={handleCheckboxKeydown}
+					onkeydown={handleCheckboxKeydown}
 					disabled={$isLoading}
 				/>
 				<Label 
@@ -196,7 +196,7 @@
 				disabled={$isLoading}
 			>
 				{#if $isLoading}
-					<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+					<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 					กำลังเข้าสู่ระบบ...
 				{:else}
 					เข้าสู่ระบบ
