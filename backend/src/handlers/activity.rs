@@ -1,2 +1,1068 @@
-// Activity handlers placeholder
-// This will be expanded as needed
+use std::collections::HashMap;
+use axum::{
+    extract::{State, Path, Query},
+    http::StatusCode,
+    response::Json,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+use sqlx::Row;
+
+use crate::middleware::session::{SessionState, AdminUser};
+use crate::models::session::SessionUser;
+use crate::models::{
+    activity::{Activity, ActivityStatus},
+    participation::{Participation, ParticipationStatus},
+};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateActivityRequest {
+    pub title: String,
+    pub description: String,
+    pub location: String,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub max_participants: Option<i32>,
+    pub faculty_id: Option<Uuid>,
+    pub department_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateActivityRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub location: Option<String>,
+    pub start_time: Option<DateTime<Utc>>,
+    pub end_time: Option<DateTime<Utc>>,
+    pub max_participants: Option<i32>,
+    pub status: Option<ActivityStatus>,
+    pub faculty_id: Option<Uuid>,
+    pub department_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActivityWithDetails {
+    pub id: Uuid,
+    pub title: String,
+    pub description: String,
+    pub location: String,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub max_participants: Option<i32>,
+    pub current_participants: i64,
+    pub status: ActivityStatus,
+    pub faculty_id: Option<Uuid>,
+    pub faculty_name: Option<String>,
+    pub department_id: Option<Uuid>,
+    pub department_name: Option<String>,
+    pub created_by: Uuid,
+    pub created_by_name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub is_registered: bool,
+    pub user_participation_status: Option<ParticipationStatus>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ParticipationWithUser {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub user_name: String,
+    pub student_id: String,
+    pub email: String,
+    pub department_name: Option<String>,
+    pub status: ParticipationStatus,
+    pub registered_at: DateTime<Utc>,
+    pub checked_in_at: Option<DateTime<Utc>>,
+    pub checked_out_at: Option<DateTime<Utc>>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QrScanRequest {
+    pub qr_data: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct QrScanResponse {
+    pub success: bool,
+    pub message: String,
+    pub participation_status: Option<ParticipationStatus>,
+    pub user_name: Option<String>,
+    pub student_id: Option<String>,
+}
+
+/// Get activities with filtering and pagination
+pub async fn get_activities(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let limit = params
+        .get("limit")
+        .and_then(|l| l.parse::<i64>().ok())
+        .unwrap_or(50);
+    
+    let offset = params
+        .get("offset")
+        .and_then(|o| o.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    let search = params.get("search").cloned();
+    let status_filter = params.get("status");
+    let faculty_id = params.get("faculty_id")
+        .and_then(|f| Uuid::parse_str(f).ok());
+    let department_id = params.get("department_id")
+        .and_then(|d| Uuid::parse_str(d).ok());
+
+    let mut query = r#"
+        SELECT 
+            a.id,
+            a.title,
+            a.description,
+            a.location,
+            a.start_time,
+            a.end_time,
+            a.max_participants,
+            a.status,
+            a.faculty_id,
+            a.department_id,
+            a.created_by,
+            a.created_at,
+            a.updated_at,
+            f.name as faculty_name,
+            d.name as department_name,
+            u.first_name || ' ' || u.last_name as created_by_name,
+            COALESCE(COUNT(p.id), 0) as current_participants,
+            CASE WHEN up.id IS NOT NULL THEN true ELSE false END as is_registered,
+            up.status as user_participation_status
+        FROM activities a
+        LEFT JOIN faculties f ON a.faculty_id = f.id
+        LEFT JOIN departments d ON a.department_id = d.id
+        LEFT JOIN users u ON a.created_by = u.id
+        LEFT JOIN participations p ON a.id = p.activity_id
+        LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $3
+    "#.to_string();
+
+    let mut count_query = r#"
+        SELECT COUNT(DISTINCT a.id) 
+        FROM activities a
+        LEFT JOIN faculties f ON a.faculty_id = f.id
+        LEFT JOIN departments d ON a.department_id = d.id
+    "#.to_string();
+
+    let mut conditions = Vec::new();
+    let mut param_count = 4;
+
+    if let Some(search_term) = &search {
+        conditions.push(format!("(a.title ILIKE ${} OR a.description ILIKE ${} OR a.location ILIKE ${})", param_count, param_count, param_count));
+        param_count += 1;
+    }
+
+    if let Some(status) = status_filter {
+        conditions.push(format!("a.status = ${}", param_count));
+        param_count += 1;
+    }
+
+    if faculty_id.is_some() {
+        conditions.push(format!("a.faculty_id = ${}", param_count));
+        param_count += 1;
+    }
+
+    if department_id.is_some() {
+        conditions.push(format!("a.department_id = ${}", param_count));
+        param_count += 1;
+    }
+
+    if !conditions.is_empty() {
+        let where_clause = format!(" WHERE {}", conditions.join(" AND "));
+        query.push_str(&where_clause);
+        count_query.push_str(&where_clause);
+    }
+
+    query.push_str(" GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.faculty_id, a.department_id, a.created_by, a.created_at, a.updated_at, f.name, d.name, u.first_name, u.last_name, up.id, up.status");
+    query.push_str(" ORDER BY a.start_time DESC LIMIT $1 OFFSET $2");
+
+    let mut query_builder = sqlx::query(&query)
+        .bind(limit)
+        .bind(offset)
+        .bind(user.user_id);
+
+    let mut count_query_builder = sqlx::query_scalar::<_, i64>(&count_query);
+
+    if let Some(search_term) = &search {
+        let search_pattern = format!("%{}%", search_term);
+        query_builder = query_builder.bind(&search_pattern);
+        count_query_builder = count_query_builder.bind(&search_pattern);
+    }
+
+    if let Some(status) = status_filter {
+        query_builder = query_builder.bind(status);
+        count_query_builder = count_query_builder.bind(status);
+    }
+
+    if let Some(f_id) = faculty_id {
+        query_builder = query_builder.bind(f_id);
+        count_query_builder = count_query_builder.bind(f_id);
+    }
+
+    if let Some(d_id) = department_id {
+        query_builder = query_builder.bind(d_id);
+        count_query_builder = count_query_builder.bind(d_id);
+    }
+
+    let activities_result = query_builder.fetch_all(&session_state.db_pool).await;
+    let total_count_result = count_query_builder.fetch_one(&session_state.db_pool).await;
+
+    match (activities_result, total_count_result) {
+        (Ok(rows), Ok(total_count)) => {
+            let mut activities_with_details = Vec::new();
+
+            for row in rows {
+                let activity_detail = ActivityWithDetails {
+                    id: row.get("id"),
+                    title: row.get("title"),
+                    description: row.get("description"),
+                    location: row.get("location"),
+                    start_time: row.get("start_time"),
+                    end_time: row.get("end_time"),
+                    max_participants: row.get::<Option<i32>, _>("max_participants"),
+                    current_participants: row.get::<Option<i64>, _>("current_participants").unwrap_or(0),
+                    status: row.get::<ActivityStatus, _>("status"),
+                    faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
+                    faculty_name: row.get::<Option<String>, _>("faculty_name"),
+                    department_id: row.get::<Option<Uuid>, _>("department_id"),
+                    department_name: row.get::<Option<String>, _>("department_name"),
+                    created_by: row.get("created_by"),
+                    created_by_name: row.get("created_by_name"),
+                    created_at: row.get("created_at"),
+                    updated_at: row.get("updated_at"),
+                    is_registered: row.get::<Option<bool>, _>("is_registered").unwrap_or(false),
+                    user_participation_status: row.get::<Option<ParticipationStatus>, _>("user_participation_status"),
+                };
+
+                activities_with_details.push(activity_detail);
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "activities": activities_with_details,
+                    "total_count": total_count,
+                    "limit": limit,
+                    "offset": offset
+                },
+                "message": "Activities retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve activities"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get activity by ID with detailed information
+pub async fn get_activity(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let query_result = sqlx::query!(
+        r#"
+        SELECT 
+            a.id,
+            a.title,
+            a.description,
+            a.location,
+            a.start_time,
+            a.end_time,
+            a.max_participants,
+            a.status as "status: ActivityStatus",
+            a.faculty_id,
+            a.department_id,
+            a.created_by,
+            a.created_at,
+            a.updated_at,
+            f.name as faculty_name,
+            d.name as department_name,
+            u.first_name || ' ' || u.last_name as created_by_name,
+            COALESCE(COUNT(p.id), 0) as current_participants,
+            CASE WHEN up.id IS NOT NULL THEN true ELSE false END as is_registered,
+            up.status as "user_participation_status: ParticipationStatus"
+        FROM activities a
+        LEFT JOIN faculties f ON a.faculty_id = f.id
+        LEFT JOIN departments d ON a.department_id = d.id
+        LEFT JOIN users u ON a.created_by = u.id
+        LEFT JOIN participations p ON a.id = p.activity_id
+        LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $2
+        WHERE a.id = $1
+        GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.faculty_id, a.department_id, a.created_by, a.created_at, a.updated_at, f.name, d.name, u.first_name, u.last_name, up.id, up.status
+        "#,
+        activity_id,
+        user.user_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match query_result {
+        Ok(row) => {
+            let activity_detail = ActivityWithDetails {
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                location: row.location,
+                start_time: row.start_time,
+                end_time: row.end_time,
+                max_participants: row.max_participants,
+                current_participants: row.current_participants.unwrap_or(0),
+                status: row.status,
+                faculty_id: row.faculty_id,
+                faculty_name: row.faculty_name,
+                department_id: row.department_id,
+                department_name: row.department_name,
+                created_by: row.created_by,
+                created_by_name: row.created_by_name,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                is_registered: row.is_registered.unwrap_or(false),
+                user_participation_status: row.user_participation_status,
+            };
+
+            let response = json!({
+                "status": "success",
+                "data": activity_detail,
+                "message": "Activity retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity not found"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve activity"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Create new activity
+pub async fn create_activity(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Json(request): Json<CreateActivityRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if user has permission to create activities
+    if !user.permissions.iter().any(|p| p.contains("ManageActivities") || p.contains("CreateActivity")) {
+        let error_response = json!({
+            "status": "error",
+            "message": "Access denied: You don't have permission to create activities"
+        });
+        return Err((StatusCode::FORBIDDEN, Json(error_response)));
+    }
+
+    // Validate time range
+    if request.start_time >= request.end_time {
+        let error_response = json!({
+            "status": "error",
+            "message": "Start time must be before end time"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    let create_result = sqlx::query_as::<_, Activity>(
+        r#"
+        INSERT INTO activities (title, description, location, start_time, end_time, max_participants, faculty_id, department_id, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, title, description, location, start_time, end_time, max_participants, status, faculty_id, department_id, created_by, created_at, updated_at
+        "#
+    )
+    .bind(&request.title)
+    .bind(&request.description)
+    .bind(&request.location)
+    .bind(request.start_time)
+    .bind(request.end_time)
+    .bind(request.max_participants)
+    .bind(request.faculty_id)
+    .bind(request.department_id)
+    .bind(user.user_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match create_result {
+        Ok(activity) => {
+            let response = json!({
+                "status": "success",
+                "data": activity,
+                "message": "Activity created successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create activity: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Update activity
+pub async fn update_activity(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Path(activity_id): Path<Uuid>,
+    Json(request): Json<UpdateActivityRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if user has permission to update activities or is the creator
+    let activity_check = sqlx::query!(
+        "SELECT created_by FROM activities WHERE id = $1",
+        activity_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    let can_update = match activity_check {
+        Ok(activity) => {
+            activity.created_by == user.user_id || 
+            user.permissions.iter().any(|p| p.contains("ManageActivities"))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check activity"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    if !can_update {
+        let error_response = json!({
+            "status": "error",
+            "message": "Access denied: You can only update your own activities or need ManageActivities permission"
+        });
+        return Err((StatusCode::FORBIDDEN, Json(error_response)));
+    }
+
+    // Validate time range if both times are provided
+    if let (Some(start_time), Some(end_time)) = (&request.start_time, &request.end_time) {
+        if start_time >= end_time {
+            let error_response = json!({
+                "status": "error",
+                "message": "Start time must be before end time"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    }
+
+    // Build dynamic update query
+    let mut query = "UPDATE activities SET updated_at = NOW()".to_string();
+    let mut param_count = 1;
+
+    if let Some(title) = &request.title {
+        query.push_str(&format!(", title = ${}", param_count));
+        param_count += 1;
+    }
+
+    if let Some(description) = &request.description {
+        query.push_str(&format!(", description = ${}", param_count));
+        param_count += 1;
+    }
+
+    if let Some(location) = &request.location {
+        query.push_str(&format!(", location = ${}", param_count));
+        param_count += 1;
+    }
+
+    if request.start_time.is_some() {
+        query.push_str(&format!(", start_time = ${}", param_count));
+        param_count += 1;
+    }
+
+    if request.end_time.is_some() {
+        query.push_str(&format!(", end_time = ${}", param_count));
+        param_count += 1;
+    }
+
+    if request.max_participants.is_some() {
+        query.push_str(&format!(", max_participants = ${}", param_count));
+        param_count += 1;
+    }
+
+    if let Some(_status) = &request.status {
+        query.push_str(&format!(", status = ${}", param_count));
+        param_count += 1;
+    }
+
+    if request.faculty_id.is_some() {
+        query.push_str(&format!(", faculty_id = ${}", param_count));
+        param_count += 1;
+    }
+
+    if request.department_id.is_some() {
+        query.push_str(&format!(", department_id = ${}", param_count));
+        param_count += 1;
+    }
+
+    query.push_str(&format!(" WHERE id = ${} RETURNING id, title, description, location, start_time, end_time, max_participants, status, faculty_id, department_id, created_by, created_at, updated_at", param_count));
+
+    // Execute query with proper parameter binding
+    let mut query_builder = sqlx::query_as::<_, Activity>(&query);
+    
+    if let Some(title) = &request.title {
+        query_builder = query_builder.bind(title);
+    }
+    if let Some(description) = &request.description {
+        query_builder = query_builder.bind(description);
+    }
+    if let Some(location) = &request.location {
+        query_builder = query_builder.bind(location);
+    }
+    if let Some(start_time) = request.start_time {
+        query_builder = query_builder.bind(start_time);
+    }
+    if let Some(end_time) = request.end_time {
+        query_builder = query_builder.bind(end_time);
+    }
+    if let Some(max_participants) = request.max_participants {
+        query_builder = query_builder.bind(max_participants);
+    }
+    if let Some(status) = &request.status {
+        query_builder = query_builder.bind(status);
+    }
+    if let Some(faculty_id) = request.faculty_id {
+        query_builder = query_builder.bind(faculty_id);
+    }
+    if let Some(department_id) = request.department_id {
+        query_builder = query_builder.bind(department_id);
+    }
+    query_builder = query_builder.bind(activity_id);
+
+    match query_builder.fetch_one(&session_state.db_pool).await {
+        Ok(activity) => {
+            let response = json!({
+                "status": "success",
+                "data": activity,
+                "message": "Activity updated successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to update activity: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Delete activity
+pub async fn delete_activity(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if user has permission to delete activities or is the creator
+    let activity_check = sqlx::query!(
+        "SELECT created_by FROM activities WHERE id = $1",
+        activity_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    let can_delete = match activity_check {
+        Ok(activity) => {
+            activity.created_by == user.user_id || 
+            user.permissions.iter().any(|p| p.contains("ManageActivities"))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check activity"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    if !can_delete {
+        let error_response = json!({
+            "status": "error",
+            "message": "Access denied: You can only delete your own activities or need ManageActivities permission"
+        });
+        return Err((StatusCode::FORBIDDEN, Json(error_response)));
+    }
+
+    let delete_result = sqlx::query(
+        "DELETE FROM activities WHERE id = $1"
+    )
+    .bind(activity_id)
+    .execute(&session_state.db_pool)
+    .await;
+
+    match delete_result {
+        Ok(result) => {
+            if result.rows_affected() == 0 {
+                let error_response = json!({
+                    "status": "error",
+                    "message": "Activity not found"
+                });
+                Err((StatusCode::NOT_FOUND, Json(error_response)))
+            } else {
+                let response = json!({
+                    "status": "success",
+                    "message": "Activity deleted successfully"
+                });
+                Ok(Json(response))
+            }
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to delete activity: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get activity participations
+pub async fn get_activity_participations(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Path(activity_id): Path<Uuid>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if user can view participations (activity creator or admin)
+    let activity_check = sqlx::query!(
+        "SELECT created_by FROM activities WHERE id = $1",
+        activity_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    let can_view = match activity_check {
+        Ok(activity) => {
+            activity.created_by == user.user_id || 
+            user.permissions.iter().any(|p| p.contains("ManageActivities") || p.contains("ViewParticipations"))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check activity"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    if !can_view {
+        let error_response = json!({
+            "status": "error",
+            "message": "Access denied: You don't have permission to view participations"
+        });
+        return Err((StatusCode::FORBIDDEN, Json(error_response)));
+    }
+
+    let status_filter = params.get("status");
+
+    let mut query = r#"
+        SELECT 
+            p.id,
+            p.user_id,
+            p.status,
+            p.registered_at,
+            p.checked_in_at,
+            p.checked_out_at,
+            p.notes,
+            u.first_name || ' ' || u.last_name as user_name,
+            u.student_id,
+            u.email,
+            d.name as department_name
+        FROM participations p
+        JOIN users u ON p.user_id = u.id
+        LEFT JOIN departments d ON u.department_id = d.id
+        WHERE p.activity_id = $1
+    "#.to_string();
+
+    if let Some(status) = status_filter {
+        query.push_str(" AND p.status = $2");
+    }
+
+    query.push_str(" ORDER BY p.registered_at DESC");
+
+    let participations_result = if let Some(status) = status_filter {
+        sqlx::query(&query)
+            .bind(activity_id)
+            .bind(status)
+            .fetch_all(&session_state.db_pool)
+            .await
+    } else {
+        sqlx::query(&query)
+            .bind(activity_id)
+            .fetch_all(&session_state.db_pool)
+            .await
+    };
+
+    match participations_result {
+        Ok(rows) => {
+            let mut participations_with_users = Vec::new();
+
+            for row in rows {
+                let participation = ParticipationWithUser {
+                    id: row.get("id"),
+                    user_id: row.get("user_id"),
+                    user_name: row.get("user_name"),
+                    student_id: row.get("student_id"),
+                    email: row.get("email"),
+                    department_name: row.get::<Option<String>, _>("department_name"),
+                    status: row.get::<ParticipationStatus, _>("status"),
+                    registered_at: row.get("registered_at"),
+                    checked_in_at: row.get::<Option<DateTime<Utc>>, _>("checked_in_at"),
+                    checked_out_at: row.get::<Option<DateTime<Utc>>, _>("checked_out_at"),
+                    notes: row.get::<Option<String>, _>("notes"),
+                };
+
+                participations_with_users.push(participation);
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "participations": participations_with_users,
+                    "total_count": participations_with_users.len()
+                },
+                "message": "Participations retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve participations"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Participate in activity (register)
+pub async fn participate(
+    State(session_state): State<SessionState>,
+    user: SessionUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if activity exists and get details
+    let activity = sqlx::query!(
+        "SELECT id, title, status::text as status, start_time, max_participants FROM activities WHERE id = $1",
+        activity_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    let activity = match activity {
+        Ok(activity) => activity,
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check activity"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Check if activity is open for registration
+    if activity.status.as_str() != "published" && activity.status.as_str() != "ongoing" {
+        let error_response = json!({
+            "status": "error",
+            "message": "Activity is not open for registration"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    // Check if user is already registered
+    let existing_participation = sqlx::query!(
+        "SELECT id FROM participations WHERE user_id = $1 AND activity_id = $2",
+        user.user_id,
+        activity_id
+    )
+    .fetch_optional(&session_state.db_pool)
+    .await;
+
+    match existing_participation {
+        Ok(Some(_)) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "You are already registered for this activity"
+            });
+            return Err((StatusCode::CONFLICT, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check existing participation"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+        _ => {}
+    }
+
+    // Check if activity has reached max participants
+    if let Some(max_participants) = activity.max_participants {
+        let current_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM participations WHERE activity_id = $1"
+        )
+        .bind(activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await
+        .unwrap_or(0);
+
+        if current_count >= max_participants as i64 {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity has reached maximum number of participants"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    }
+
+    // Create participation
+    let create_result = sqlx::query_as::<_, Participation>(
+        r#"
+        INSERT INTO participations (user_id, activity_id, status)
+        VALUES ($1, $2, 'registered')
+        RETURNING id, user_id, activity_id, status, registered_at, checked_in_at, checked_out_at, notes
+        "#
+    )
+    .bind(user.user_id)
+    .bind(activity_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match create_result {
+        Ok(participation) => {
+            let response = json!({
+                "status": "success",
+                "data": participation,
+                "message": "Successfully registered for activity"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to register for activity: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Scan QR code for check-in/check-out
+pub async fn scan_qr(
+    State(session_state): State<SessionState>,
+    admin: AdminUser, // Only admins or activity creators can scan QR codes
+    Path(activity_id): Path<Uuid>,
+    Json(request): Json<QrScanRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Parse QR data
+    let qr_data: Value = match serde_json::from_str(&request.qr_data) {
+        Ok(data) => data,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Invalid QR code format"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    let user_id = match qr_data.get("user_id")
+        .and_then(|id| id.as_str())
+        .and_then(|id| Uuid::parse_str(id).ok()) {
+        Some(id) => id,
+        None => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Invalid user ID in QR code"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    let qr_secret = match qr_data.get("secret").and_then(|s| s.as_str()) {
+        Some(secret) => secret,
+        None => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Missing secret in QR code"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    // Verify QR secret
+    let user_check = sqlx::query!(
+        "SELECT student_id, first_name, last_name, qr_secret FROM users WHERE id = $1",
+        user_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    let user_data = match user_check {
+        Ok(user) => {
+            if user.qr_secret != qr_secret {
+                let error_response = json!({
+                    "status": "error",
+                    "message": "Invalid QR code secret"
+                });
+                return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+            }
+            user
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "User not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to verify user"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Check if user is registered for this activity
+    let participation = sqlx::query!(
+        "SELECT id, status::text as status FROM participations WHERE user_id = $1 AND activity_id = $2",
+        user_id,
+        activity_id
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    let participation = match participation {
+        Ok(p) => p,
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "User is not registered for this activity"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check participation"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Determine next status based on current status
+    let (new_status, field_to_update) = match participation.status.as_str() {
+        "registered" => ("checked_in", "checked_in_at"),
+        "checked_in" => ("checked_out", "checked_out_at"),
+        "checked_out" => ("completed", ""), // No additional field to update
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Invalid participation status for QR scan"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    // Update participation status
+    let update_query = if field_to_update.is_empty() {
+        "UPDATE participations SET status = $1 WHERE id = $2".to_string()
+    } else {
+        format!("UPDATE participations SET status = $1, {} = NOW() WHERE id = $2", field_to_update)
+    };
+
+    let update_result = sqlx::query(&update_query)
+        .bind(new_status)
+        .bind(participation.id)
+        .execute(&session_state.db_pool)
+        .await;
+
+    match update_result {
+        Ok(_) => {
+            let response_data = QrScanResponse {
+                success: true,
+                message: format!("Successfully {} for activity", new_status.replace("_", " ")),
+                participation_status: Some(match new_status {
+                    "checked_in" => ParticipationStatus::CheckedIn,
+                    "checked_out" => ParticipationStatus::CheckedOut,
+                    "completed" => ParticipationStatus::Completed,
+                    _ => ParticipationStatus::Registered,
+                }),
+                user_name: Some(format!("{} {}", user_data.first_name, user_data.last_name)),
+                student_id: Some(user_data.student_id),
+            };
+
+            let response = json!({
+                "status": "success",
+                "data": response_data,
+                "message": "QR code scanned successfully"
+            });
+
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to update participation: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}

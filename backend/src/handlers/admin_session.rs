@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
+use sqlx::Row;
 
 use crate::models::{
     admin_role::{AdminRole, AdminLevel},
@@ -544,6 +545,260 @@ async fn get_department_by_id(
     .await?;
     
     Ok(department)
+}
+
+// Main handlers for routes
+
+/// Get sessions (simplified endpoint for admin_session routes)
+pub async fn get_sessions(
+    State(session_state): State<SessionState>,
+    admin: AdminUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let limit = params
+        .get("limit")
+        .and_then(|l| l.parse::<usize>().ok())
+        .unwrap_or(50);
+
+    let search = params.get("search").cloned();
+
+    // Get active session IDs from Redis
+    let session_ids_result = session_state.redis_store.get_active_sessions(Some(limit * 2)).await;
+
+    match session_ids_result {
+        Ok(session_ids) => {
+            let mut sessions = Vec::new();
+
+            for session_id in &session_ids {
+                if let Ok(Some(session)) = session_state.redis_store.get_session(session_id).await {
+                    // Get user info
+                    if let Ok(Some(user)) = get_user_by_id(&session_state, session.user_id).await {
+                        // Apply search filter
+                        if let Some(search_term) = &search {
+                            let search_lower = search_term.to_lowercase();
+                            let user_match = user.first_name.to_lowercase().contains(&search_lower)
+                                || user.last_name.to_lowercase().contains(&search_lower)
+                                || user.email.to_lowercase().contains(&search_lower)
+                                || user.student_id.to_lowercase().contains(&search_lower);
+                            
+                            if !user_match {
+                                continue;
+                            }
+                        }
+
+                        // Get admin role
+                        let admin_role = get_user_admin_role(&session_state, user.id).await.ok().flatten();
+
+                        let session_info = serde_json::json!({
+                            "session_id": session.id,
+                            "user_id": user.id,
+                            "user_name": format!("{} {}", user.first_name, user.last_name),
+                            "student_id": user.student_id,
+                            "email": user.email,
+                            "admin_level": admin_role.as_ref().map(|r| r.admin_level.clone()),
+                            "device_info": session.device_info,
+                            "ip_address": session.ip_address,
+                            "user_agent": session.user_agent,
+                            "created_at": session.created_at,
+                            "last_accessed": session.last_accessed,
+                            "expires_at": session.expires_at,
+                            "is_active": session.is_active
+                        });
+
+                        sessions.push(session_info);
+
+                        if sessions.len() >= limit {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            let total_count = session_state.redis_store.get_session_count().await
+                .map_err(|_| {
+                    let error_response = serde_json::json!({
+                        "status": "error",
+                        "message": "Failed to get session count"
+                    });
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response))
+                })?;
+
+            let response = serde_json::json!({
+                "status": "success",
+                "data": {
+                    "sessions": sessions,
+                    "total_count": total_count,
+                    "limit": limit,
+                    "filtered_count": sessions.len()
+                },
+                "message": "Sessions retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        Err(_) => {
+            let error_response = serde_json::json!({
+                "status": "error",
+                "message": "Failed to retrieve session information from Redis"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Revoke specific session
+pub async fn revoke_session(
+    State(session_state): State<SessionState>,
+    admin: AdminUser,
+    axum::extract::Path(session_id): axum::extract::Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if the session exists
+    let session_exists = match session_state.redis_store.get_session(&session_id).await {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(_) => {
+            let error_response = serde_json::json!({
+                "status": "error",
+                "message": "Failed to check session existence"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    if !session_exists {
+        let error_response = serde_json::json!({
+            "status": "error",
+            "message": "Session not found"
+        });
+        return Err((StatusCode::NOT_FOUND, Json(error_response)));
+    }
+
+    // Prevent admin from revoking their own session
+    if session_id == admin.session_user.session_id {
+        let error_response = serde_json::json!({
+            "status": "error",
+            "message": "Cannot revoke your own session"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    let reason = format!("Revoked by admin: {}", admin.session_user.email);
+    
+    match session_state.redis_store.revoke_session(&session_id, Some(reason.clone())).await {
+        Ok(true) => {
+            // Log the action
+            let _ = log_session_action(
+                &session_state,
+                "revoke",
+                &session_id,
+                &admin.session_user.user_id,
+                Some(reason),
+            ).await;
+
+            let response = serde_json::json!({
+                "status": "success",
+                "message": "Session revoked successfully"
+            });
+            Ok(Json(response))
+        }
+        Ok(false) => {
+            let error_response = serde_json::json!({
+                "status": "error",
+                "message": "Session not found or already expired"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
+        }
+        Err(e) => {
+            let error_response = serde_json::json!({
+                "status": "error",
+                "message": format!("Failed to revoke session: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Cleanup expired sessions
+pub async fn cleanup_expired(
+    State(session_state): State<SessionState>,
+    admin: SuperAdminUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Get all active sessions
+    let session_ids_result = session_state.redis_store.get_active_sessions(None).await;
+
+    match session_ids_result {
+        Ok(session_ids) => {
+            let mut expired_count = 0;
+            let mut cleanup_errors = Vec::new();
+            let current_time = Utc::now();
+
+            for session_id in &session_ids {
+                if let Ok(Some(session)) = session_state.redis_store.get_session(session_id).await {
+                    // Check if session has expired
+                    if session.expires_at <= current_time {
+                        match session_state.redis_store.revoke_session(session_id, Some("Expired session cleanup".to_string())).await {
+                            Ok(true) => {
+                                expired_count += 1;
+                                // Log the cleanup action
+                                let _ = log_session_action(
+                                    &session_state,
+                                    "cleanup_expired",
+                                    session_id,
+                                    &admin.session_user.user_id,
+                                    Some("Automated cleanup of expired session".to_string()),
+                                ).await;
+                            }
+                            Ok(false) => {
+                                cleanup_errors.push(format!("Session {} was already removed", session_id));
+                            }
+                            Err(e) => {
+                                cleanup_errors.push(format!("Failed to cleanup session {}: {}", session_id, e));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Also cleanup expired sessions from database
+            let db_cleanup_result = sqlx::query(
+                "UPDATE sessions SET is_active = false WHERE expires_at <= NOW() AND is_active = true"
+            )
+            .execute(&session_state.db_pool)
+            .await;
+
+            let db_affected_rows = match db_cleanup_result {
+                Ok(result) => result.rows_affected(),
+                Err(e) => {
+                    cleanup_errors.push(format!("Database cleanup failed: {}", e));
+                    0
+                }
+            };
+
+            let response = serde_json::json!({
+                "status": "success",
+                "data": {
+                    "redis_sessions_cleaned": expired_count,
+                    "database_sessions_cleaned": db_affected_rows,
+                    "total_sessions_checked": session_ids.len(),
+                    "errors": cleanup_errors
+                },
+                "message": format!(
+                    "Cleanup completed. Removed {} expired sessions from Redis and {} from database", 
+                    expired_count, 
+                    db_affected_rows
+                )
+            });
+
+            Ok(Json(response))
+        }
+        Err(_) => {
+            let error_response = serde_json::json!({
+                "status": "error",
+                "message": "Failed to retrieve sessions for cleanup"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
 }
 
 async fn log_session_action(

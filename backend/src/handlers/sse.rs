@@ -402,3 +402,129 @@ pub async fn sse_cleanup_task(
         tracing::debug!("Active SSE connections: {}", connection_count);
     }
 }
+
+// Route handlers for API endpoints
+pub async fn handle_sse(
+    State(session_state): State<SessionState>,
+    headers: HeaderMap,
+) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
+    // Extract session from headers or cookies
+    let session_id = extract_session_id_from_headers(&headers)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    
+    // Verify session exists
+    if let Ok(Some(session)) = session_state.redis_store.get_session(&session_id).await {
+        // Create SSE manager instance (in production this would be shared state)
+        let sse_manager = SseConnectionManager::new();
+        let rx = sse_manager.add_connection(session_id.clone()).await;
+        
+        let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+            .map(|result| {
+                match result {
+                    Ok(message) => {
+                        let event_data = serde_json::to_string(&message)
+                            .unwrap_or_else(|_| "{}".to_string());
+                        
+                        Ok(Event::default()
+                            .event(&message.event_type)
+                            .data(event_data))
+                    }
+                    Err(_) => {
+                        Ok(Event::default()
+                            .event("error")
+                            .data("Connection error"))
+                    }
+                }
+            });
+
+        Ok(Sse::new(stream)
+            .keep_alive(
+                KeepAlive::new()
+                    .interval(Duration::from_secs(15))
+                    .text("keep-alive-text")
+            ))
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
+pub async fn handle_admin_sse(
+    State(session_state): State<SessionState>,
+    headers: HeaderMap,
+) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
+    // Extract session and verify admin permissions
+    let session_id = extract_session_id_from_headers(&headers)
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    
+    if let Ok(Some(session)) = session_state.redis_store.get_session(&session_id).await {
+        // Verify user has admin permissions
+        if let Ok(Some(admin_role)) = get_user_admin_role(&session_state, session.user_id).await {
+            let sse_manager = SseConnectionManager::new();
+            let rx = sse_manager.add_connection(session_id.clone()).await;
+            
+            let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+                .map(|result| {
+                    match result {
+                        Ok(message) => {
+                            let event_data = serde_json::to_string(&message)
+                                .unwrap_or_else(|_| "{}".to_string());
+                            
+                            Ok(Event::default()
+                                .event(&message.event_type)
+                                .data(event_data))
+                        }
+                        Err(_) => {
+                            Ok(Event::default()
+                                .event("error")
+                                .data("Connection error"))
+                        }
+                    }
+                });
+
+            Ok(Sse::new(stream)
+                .keep_alive(
+                    KeepAlive::new()
+                        .interval(Duration::from_secs(15))
+                        .text("keep-alive-text")
+                ))
+        } else {
+            Err(StatusCode::FORBIDDEN)
+        }
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
+// Helper function to extract session ID from headers
+fn extract_session_id_from_headers(headers: &HeaderMap) -> Option<String> {
+    // Try Authorization header first
+    if let Some(auth_header) = headers.get("authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Bearer ") {
+                return Some(auth_str[7..].to_string());
+            }
+        }
+    }
+    
+    // Try custom session header
+    if let Some(session_header) = headers.get("x-session-id") {
+        if let Ok(session_str) = session_header.to_str() {
+            return Some(session_str.to_string());
+        }
+    }
+    
+    // Try cookie (would need cookie parsing)
+    // This is simplified - in production you'd parse the Cookie header properly
+    if let Some(cookie_header) = headers.get("cookie") {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("session_id=") {
+                    return Some(cookie[11..].to_string());
+                }
+            }
+        }
+    }
+    
+    None
+}
