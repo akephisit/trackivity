@@ -51,10 +51,10 @@
 	];
 
 	// Faculty options
-	let facultyOptions = $derived(data.faculties.map(faculty => ({
+	let facultyOptions = $derived(Array.isArray(data.faculties) ? data.faculties.map(faculty => ({
 		value: faculty.id,
 		label: faculty.name
-	})));
+	})) : []);
 
 	// Update form data when select values change
 	$effect(() => {
