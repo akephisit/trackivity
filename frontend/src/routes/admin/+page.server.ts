@@ -2,7 +2,7 @@ import { requireAdmin } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 import type { AdminDashboardStats } from '$lib/types/admin';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async (event) => {
 	const user = await requireAdmin(event);

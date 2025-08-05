@@ -5,7 +5,7 @@ import { registerSchema } from '$lib/schemas/auth';
 import type { Actions, PageServerLoad } from './$types';
 import type { Faculty } from '$lib/types/admin';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 // Fallback faculties data สำหรับกรณีที่ backend ไม่สามารถเชื่อมต่อได้
 const FALLBACK_FACULTIES: Faculty[] = [

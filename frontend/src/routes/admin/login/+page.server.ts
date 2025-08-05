@@ -4,7 +4,7 @@ import { zod } from 'sveltekit-superforms/adapters';
 import { loginSchema } from '$lib/schemas/auth';
 import type { Actions, PageServerLoad } from './$types';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	// Check if admin already logged in

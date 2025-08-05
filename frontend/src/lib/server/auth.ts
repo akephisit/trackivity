@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import type { User, AdminRole, AdminLevel } from '$lib/types/admin';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 export interface AuthenticatedUser extends User {
 	admin_role?: AdminRole;
