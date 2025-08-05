@@ -117,13 +117,13 @@ pub async fn get_dashboard(
     .await;
 
     // Get recent activities (last 5)
-    let recent_activities_result = sqlx::query!(
+    let recent_activities_result = sqlx::query(
         r#"
         SELECT 
             a.id,
             a.title,
             a.start_time,
-            a.status as "status: ActivityStatus",
+            a.status,
             COALESCE(COUNT(p.id), 0) as participant_count
         FROM activities a
         LEFT JOIN participations p ON a.id = p.activity_id
@@ -137,13 +137,13 @@ pub async fn get_dashboard(
     .await;
 
     // Get popular activities (most participants)
-    let popular_activities_result = sqlx::query!(
+    let popular_activities_result = sqlx::query(
         r#"
         SELECT 
             a.id,
             a.title,
             a.start_time,
-            a.status as "status: ActivityStatus",
+            a.status,
             COALESCE(COUNT(p.id), 0) as participant_count
         FROM activities a
         LEFT JOIN participations p ON a.id = p.activity_id
@@ -177,22 +177,22 @@ pub async fn get_dashboard(
             let recent_activities = recent_activities_data
                 .into_iter()
                 .map(|row| ActivitySummary {
-                    id: row.id,
-                    title: row.title,
-                    start_time: row.start_time,
-                    participant_count: row.participant_count.unwrap_or(0),
-                    status: row.status,
+                    id: row.get("id"),
+                    title: row.get("title"),
+                    start_time: row.get("start_time"),
+                    participant_count: row.get::<i64, _>("participant_count"),
+                    status: row.get("status"),
                 })
                 .collect();
 
             let popular_activities = popular_activities_data
                 .into_iter()
                 .map(|row| ActivitySummary {
-                    id: row.id,
-                    title: row.title,
-                    start_time: row.start_time,
-                    participant_count: row.participant_count.unwrap_or(0),
-                    status: row.status,
+                    id: row.get("id"),
+                    title: row.get("title"),
+                    start_time: row.get("start_time"),
+                    participant_count: row.get::<i64, _>("participant_count"),
+                    status: row.get("status"),
                 })
                 .collect();
 
@@ -422,7 +422,6 @@ pub async fn get_admin_activities(
 
     if search.is_some() {
         conditions.push(format!("(a.title ILIKE ${} OR a.description ILIKE ${})", param_count, param_count));
-        param_count += 1;
     }
 
     if !conditions.is_empty() {

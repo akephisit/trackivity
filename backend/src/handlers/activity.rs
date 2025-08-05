@@ -173,7 +173,6 @@ pub async fn get_activities(
 
     if department_id.is_some() {
         conditions.push(format!("a.department_id = ${}", param_count));
-        param_count += 1;
     }
 
     if !conditions.is_empty() {
@@ -275,7 +274,7 @@ pub async fn get_activity(
     user: SessionUser,
     Path(activity_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let query_result = sqlx::query!(
+    let query_result = sqlx::query(
         r#"
         SELECT 
             a.id,
@@ -285,7 +284,7 @@ pub async fn get_activity(
             a.start_time,
             a.end_time,
             a.max_participants,
-            a.status as "status: ActivityStatus",
+            a.status,
             a.faculty_id,
             a.department_id,
             a.created_by,
@@ -296,7 +295,7 @@ pub async fn get_activity(
             u.first_name || ' ' || u.last_name as created_by_name,
             COALESCE(COUNT(p.id), 0) as current_participants,
             CASE WHEN up.id IS NOT NULL THEN true ELSE false END as is_registered,
-            up.status as "user_participation_status: ParticipationStatus"
+            up.status as user_participation_status
         FROM activities a
         LEFT JOIN faculties f ON a.faculty_id = f.id
         LEFT JOIN departments d ON a.department_id = d.id
@@ -305,35 +304,35 @@ pub async fn get_activity(
         LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $2
         WHERE a.id = $1
         GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.faculty_id, a.department_id, a.created_by, a.created_at, a.updated_at, f.name, d.name, u.first_name, u.last_name, up.id, up.status
-        "#,
-        activity_id,
-        user.user_id
+        "#
     )
+    .bind(&activity_id)
+    .bind(&user.user_id)
     .fetch_one(&session_state.db_pool)
     .await;
 
     match query_result {
         Ok(row) => {
             let activity_detail = ActivityWithDetails {
-                id: row.id,
-                title: row.title,
-                description: row.description,
-                location: row.location,
-                start_time: row.start_time,
-                end_time: row.end_time,
-                max_participants: row.max_participants,
-                current_participants: row.current_participants.unwrap_or(0),
-                status: row.status,
-                faculty_id: row.faculty_id,
-                faculty_name: Some(row.faculty_name).filter(|s| !s.is_empty()),
-                department_id: row.department_id,
-                department_name: Some(row.department_name).filter(|s| !s.is_empty()),
-                created_by: row.created_by,
-                created_by_name: row.created_by_name.unwrap_or_else(|| "Unknown".to_string()),
-                created_at: row.created_at.unwrap_or_else(|| Utc::now()),
-                updated_at: row.updated_at.unwrap_or_else(|| Utc::now()),
-                is_registered: row.is_registered.unwrap_or(false),
-                user_participation_status: Some(row.user_participation_status),
+                id: row.get("id"),
+                title: row.get("title"),
+                description: row.get("description"),
+                location: row.get("location"),
+                start_time: row.get("start_time"),
+                end_time: row.get("end_time"),
+                max_participants: row.get("max_participants"),
+                current_participants: row.get::<i64, _>("current_participants"),
+                status: row.get("status"),
+                faculty_id: row.get("faculty_id"),
+                faculty_name: row.get::<Option<String>, _>("faculty_name").filter(|s| !s.is_empty()),
+                department_id: row.get("department_id"),
+                department_name: row.get::<Option<String>, _>("department_name").filter(|s| !s.is_empty()),
+                created_by: row.get("created_by"),
+                created_by_name: row.get::<Option<String>, _>("created_by_name").unwrap_or_else(|| "Unknown".to_string()),
+                created_at: row.get::<Option<DateTime<Utc>>, _>("created_at").unwrap_or_else(|| Utc::now()),
+                updated_at: row.get::<Option<DateTime<Utc>>, _>("updated_at").unwrap_or_else(|| Utc::now()),
+                is_registered: row.get::<Option<bool>, _>("is_registered").unwrap_or(false),
+                user_participation_status: row.get("user_participation_status"),
             };
 
             let response = json!({
@@ -431,16 +430,14 @@ pub async fn update_activity(
     Json(request): Json<UpdateActivityRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if user has permission to update activities or is the creator
-    let activity_check = sqlx::query!(
-        "SELECT created_by FROM activities WHERE id = $1",
-        activity_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let activity_check = sqlx::query("SELECT created_by FROM activities WHERE id = $1")
+        .bind(&activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     let can_update = match activity_check {
         Ok(activity) => {
-            activity.created_by == user.user_id || 
+            activity.get::<Uuid, _>("created_by") == user.user_id || 
             user.permissions.iter().any(|p| p.contains("ManageActivities"))
         }
         Err(sqlx::Error::RowNotFound) => {
@@ -587,16 +584,14 @@ pub async fn delete_activity(
     Path(activity_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if user has permission to delete activities or is the creator
-    let activity_check = sqlx::query!(
-        "SELECT created_by FROM activities WHERE id = $1",
-        activity_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let activity_check = sqlx::query("SELECT created_by FROM activities WHERE id = $1")
+        .bind(&activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     let can_delete = match activity_check {
         Ok(activity) => {
-            activity.created_by == user.user_id || 
+            activity.get::<Uuid, _>("created_by") == user.user_id || 
             user.permissions.iter().any(|p| p.contains("ManageActivities"))
         }
         Err(sqlx::Error::RowNotFound) => {
@@ -664,16 +659,14 @@ pub async fn get_activity_participations(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if user can view participations (activity creator or admin)
-    let activity_check = sqlx::query!(
-        "SELECT created_by FROM activities WHERE id = $1",
-        activity_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let activity_check = sqlx::query("SELECT created_by FROM activities WHERE id = $1")
+        .bind(&activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     let can_view = match activity_check {
         Ok(activity) => {
-            activity.created_by == user.user_id || 
+            activity.get::<Uuid, _>("created_by") == user.user_id || 
             user.permissions.iter().any(|p| p.contains("ManageActivities") || p.contains("ViewParticipations"))
         }
         Err(sqlx::Error::RowNotFound) => {
@@ -790,12 +783,10 @@ pub async fn participate(
     Path(activity_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Check if activity exists and get details
-    let activity = sqlx::query!(
-        "SELECT id, title, status::text as status, start_time, max_participants FROM activities WHERE id = $1",
-        activity_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let activity = sqlx::query("SELECT id, title, status, start_time, max_participants FROM activities WHERE id = $1")
+        .bind(&activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     let activity = match activity {
         Ok(activity) => activity,
@@ -816,7 +807,8 @@ pub async fn participate(
     };
 
     // Check if activity is open for registration
-    if activity.status.as_deref() != Some("published") && activity.status.as_deref() != Some("ongoing") {
+    let status: String = activity.get("status");
+    if status != "published" && status != "ongoing" {
         let error_response = json!({
             "status": "error",
             "message": "Activity is not open for registration"
@@ -825,13 +817,11 @@ pub async fn participate(
     }
 
     // Check if user is already registered
-    let existing_participation = sqlx::query!(
-        "SELECT id FROM participations WHERE user_id = $1 AND activity_id = $2",
-        user.user_id,
-        activity_id
-    )
-    .fetch_optional(&session_state.db_pool)
-    .await;
+    let existing_participation = sqlx::query("SELECT id FROM participations WHERE user_id = $1 AND activity_id = $2")
+        .bind(&user.user_id)
+        .bind(&activity_id)
+        .fetch_optional(&session_state.db_pool)
+        .await;
 
     match existing_participation {
         Ok(Some(_)) => {
@@ -852,7 +842,8 @@ pub async fn participate(
     }
 
     // Check if activity has reached max participants
-    if let Some(max_participants) = activity.max_participants {
+    let max_participants: Option<i32> = activity.get("max_participants");
+    if let Some(max_participants) = max_participants {
         let current_count = sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM participations WHERE activity_id = $1"
         )
@@ -946,16 +937,14 @@ pub async fn scan_qr(
     };
 
     // Verify QR secret
-    let user_check = sqlx::query!(
-        "SELECT student_id, first_name, last_name, qr_secret FROM users WHERE id = $1",
-        user_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let user_check = sqlx::query("SELECT student_id, first_name, last_name, qr_secret FROM users WHERE id = $1")
+        .bind(&user_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     let user_data = match user_check {
         Ok(user) => {
-            if user.qr_secret != qr_secret {
+            if user.get::<String, _>("qr_secret") != qr_secret {
                 let error_response = json!({
                     "status": "error",
                     "message": "Invalid QR code secret"
@@ -981,13 +970,11 @@ pub async fn scan_qr(
     };
 
     // Check if user is registered for this activity
-    let participation = sqlx::query!(
-        "SELECT id, status::text as status FROM participations WHERE user_id = $1 AND activity_id = $2",
-        user_id,
-        activity_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let participation = sqlx::query("SELECT id, status FROM participations WHERE user_id = $1 AND activity_id = $2")
+        .bind(&user_id)
+        .bind(&activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     let participation = match participation {
         Ok(p) => p,
@@ -1008,10 +995,11 @@ pub async fn scan_qr(
     };
 
     // Determine next status based on current status
-    let (new_status, field_to_update) = match participation.status.as_deref() {
-        Some("registered") => ("checked_in", "checked_in_at"),
-        Some("checked_in") => ("checked_out", "checked_out_at"),
-        Some("checked_out") => ("completed", ""), // No additional field to update
+    let status: String = participation.get("status");
+    let (new_status, field_to_update) = match status.as_str() {
+        "registered" => ("checked_in", "checked_in_at"),
+        "checked_in" => ("checked_out", "checked_out_at"),
+        "checked_out" => ("completed", ""), // No additional field to update
         _ => {
             let error_response = json!({
                 "status": "error",
@@ -1030,7 +1018,7 @@ pub async fn scan_qr(
 
     let update_result = sqlx::query(&update_query)
         .bind(new_status)
-        .bind(participation.id)
+        .bind(participation.get::<Uuid, _>("id"))
         .execute(&session_state.db_pool)
         .await;
 
@@ -1045,8 +1033,8 @@ pub async fn scan_qr(
                     "completed" => ParticipationStatus::Completed,
                     _ => ParticipationStatus::Registered,
                 }),
-                user_name: Some(format!("{} {}", user_data.first_name, user_data.last_name)),
-                student_id: Some(user_data.student_id),
+                user_name: Some(format!("{} {}", user_data.get::<String, _>("first_name"), user_data.get::<String, _>("last_name"))),
+                student_id: Some(user_data.get::<String, _>("student_id")),
             };
 
             let response = json!({

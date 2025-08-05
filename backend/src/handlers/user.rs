@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use sqlx::Row;
 use bcrypt;
 use qrcode::{QrCode, EcLevel};
 // use image::Luma; // Removed unused import
 use base64::{Engine as _, engine::general_purpose};
-use sqlx::Row;
 
 use crate::middleware::session::{SessionState, AdminUser};
 use crate::models::session::SessionUser;
@@ -128,7 +128,6 @@ pub async fn get_users(
 
     if department_id.is_some() {
         conditions.push(format!("u.department_id = ${}", param_count));
-        param_count += 1;
     }
 
     if !conditions.is_empty() {
@@ -541,20 +540,18 @@ pub async fn get_user_qr(
         return Err((StatusCode::FORBIDDEN, Json(error_response)));
     }
 
-    let user_result = sqlx::query!(
-        "SELECT id, student_id, qr_secret FROM users WHERE id = $1",
-        user_id
-    )
-    .fetch_one(&session_state.db_pool)
-    .await;
+    let user_result = sqlx::query("SELECT id, student_id, qr_secret FROM users WHERE id = $1")
+        .bind(&user_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
 
     match user_result {
         Ok(user_data) => {
             // Create QR data (JSON with user info and secret)
             let qr_data = json!({
-                "user_id": user_data.id,
-                "student_id": user_data.student_id,
-                "secret": user_data.qr_secret,
+                "user_id": user_data.get::<Uuid, _>("id"),
+                "student_id": user_data.get::<String, _>("student_id"),
+                "secret": user_data.get::<String, _>("qr_secret"),
                 "timestamp": chrono::Utc::now().timestamp()
             });
 
@@ -584,8 +581,8 @@ pub async fn get_user_qr(
             let response_data = QrCodeResponse {
                 qr_data: qr_data_string,
                 qr_image_base64: format!("data:image/png;base64,{}", qr_image_base64),
-                user_id: user_data.id,
-                student_id: user_data.student_id,
+                user_id: user_data.get::<Uuid, _>("id"),
+                student_id: user_data.get::<String, _>("student_id"),
             };
 
             let response = json!({
