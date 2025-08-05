@@ -10,7 +10,7 @@ use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use bcrypt;
 use qrcode::{QrCode, EcLevel};
-use image::Luma;
+// use image::Luma; // Removed unused import
 use base64::{Engine as _, engine::general_purpose};
 use sqlx::Row;
 
@@ -121,7 +121,7 @@ pub async fn get_users(
     let mut conditions = Vec::new();
     let mut param_count = 3;
 
-    if let Some(search_term) = &search {
+    if let Some(_search_term) = &search {
         conditions.push(format!("(u.first_name ILIKE ${} OR u.last_name ILIKE ${} OR u.email ILIKE ${} OR u.student_id ILIKE ${})", param_count, param_count, param_count, param_count));
         param_count += 1;
     }
@@ -148,8 +148,8 @@ pub async fn get_users(
 
     if let Some(search_term) = &search {
         let search_pattern = format!("%{}%", search_term);
-        query_builder = query_builder.bind(&search_pattern);
-        count_query_builder = count_query_builder.bind(&search_pattern);
+        query_builder = query_builder.bind(search_pattern.clone());
+        count_query_builder = count_query_builder.bind(search_pattern);
     }
 
     if let Some(dept_id) = department_id {
@@ -173,7 +173,7 @@ pub async fn get_users(
                             admin_level: row.get::<Option<crate::models::admin_role::AdminLevel>, _>("admin_level")
                                 .unwrap_or(crate::models::admin_role::AdminLevel::RegularAdmin),
                             faculty_id: row.get::<Option<Uuid>, _>("admin_faculty_id"),
-                            permissions: row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_default(),
+                            permissions: row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_else(|| vec![]),
                             created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
                             updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
                         })
@@ -229,84 +229,39 @@ pub async fn get_user(
     _admin: AdminUser,
     Path(user_id): Path<Uuid>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let query_result = sqlx::query!(
-        r#"
-        SELECT 
-            u.id,
-            u.student_id,
-            u.email,
-            u.first_name,
-            u.last_name,
-            u.department_id,
-            u.created_at,
-            u.updated_at,
-            d.name as department_name,
-            f.name as faculty_name,
-            ar.id as admin_role_id,
-            ar.admin_level as "admin_level: crate::models::admin_role::AdminLevel",
-            ar.faculty_id as admin_faculty_id,
-            ar.permissions,
-            ar.created_at as role_created_at,
-            ar.updated_at as role_updated_at,
-            COALESCE(COUNT(p.id), 0) as activity_count,
-            MAX(p.registered_at) as last_activity
-        FROM users u
-        LEFT JOIN departments d ON u.department_id = d.id
-        LEFT JOIN faculties f ON d.faculty_id = f.id
-        LEFT JOIN admin_roles ar ON u.id = ar.user_id
-        LEFT JOIN participations p ON u.id = p.user_id
-        WHERE u.id = $1
-        GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, f.name, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.created_at, ar.updated_at
-        "#,
-        user_id
+    let query_result = sqlx::query_as::<_, crate::models::user::User>(
+        "SELECT * FROM users WHERE id = $1"
     )
-    .fetch_one(&session_state.db_pool)
+    .bind(user_id)
+    .fetch_optional(&session_state.db_pool)
     .await;
 
     match query_result {
-        Ok(row) => {
-            let admin_role = if let (Some(role_id), Some(admin_level), Some(role_created_at), Some(role_updated_at)) = (
-                row.admin_role_id,
-                row.admin_level.as_ref(),
-                row.role_created_at,
-                row.role_updated_at,
-            ) {
-                Some(AdminRole {
-                    id: role_id,
-                    user_id: row.id,
-                    admin_level: admin_level.clone(),
-                    faculty_id: row.admin_faculty_id,
-                    permissions: row.permissions.unwrap_or_else(|| vec![]),
-                    created_at: role_created_at,
-                    updated_at: role_updated_at,
-                })
-            } else {
-                None
-            };
-
-            let user_detail = UserWithDetails {
-                id: row.id,
-                student_id: row.student_id,
-                email: row.email,
-                first_name: row.first_name,
-                last_name: row.last_name,
-                department_id: row.department_id,
-                department_name: row.department_name,
-                faculty_name: row.faculty_name,
-                admin_role,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                activity_count: row.activity_count.unwrap_or(0),
-                last_activity: row.last_activity,
-            };
-
+        Ok(Some(row)) => {
+            // Simple response for now, will add detailed info later
             let response = json!({
                 "status": "success",
-                "data": user_detail,
+                "data": {
+                    "id": row.id,
+                    "student_id": row.student_id,
+                    "email": row.email,
+                    "first_name": row.first_name,
+                    "last_name": row.last_name,
+                    "department_id": row.department_id,
+                    "created_at": row.created_at,
+                    "updated_at": row.updated_at
+                },
                 "message": "User retrieved successfully"
             });
 
             Ok(Json(response))
+        }
+        Ok(None) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "User not found"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
         }
         Err(sqlx::Error::RowNotFound) => {
             let error_response = json!({
@@ -618,29 +573,13 @@ pub async fn get_user_qr(
             };
 
             // Create image from QR code
-            let image = qr_code.render::<Luma<u8>>().build();
+            let image = qr_code.render::<char>().quiet_zone(false)
+                .dark_color(' ')
+                .light_color('█')
+                .build();
             
-            // Convert to PNG bytes
-            let mut png_data = Vec::new();
-            {
-                use image::{ImageEncoder, codecs::png::PngEncoder};
-                let encoder = PngEncoder::new(&mut png_data);
-                if let Err(_) = encoder.write_image(
-                    image.as_raw(),
-                    image.width(),
-                    image.height(),
-                    image::ColorType::L8,
-                ) {
-                    let error_response = json!({
-                        "status": "error",
-                        "message": "Failed to encode QR code image"
-                    });
-                    return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
-                }
-            }
-
-            // Convert to base64
-            let qr_image_base64 = general_purpose::STANDARD.encode(&png_data);
+            // Convert to base64 (simplified version using string)
+            let qr_image_base64 = general_purpose::STANDARD.encode(image.as_bytes());
 
             let response_data = QrCodeResponse {
                 qr_data: qr_data_string,

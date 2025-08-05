@@ -156,12 +156,12 @@ pub async fn get_activities(
     let mut conditions = Vec::new();
     let mut param_count = 4;
 
-    if let Some(search_term) = &search {
+    if let Some(_search_term) = &search {
         conditions.push(format!("(a.title ILIKE ${} OR a.description ILIKE ${} OR a.location ILIKE ${})", param_count, param_count, param_count));
         param_count += 1;
     }
 
-    if let Some(status) = status_filter {
+    if let Some(_status) = status_filter {
         conditions.push(format!("a.status = ${}", param_count));
         param_count += 1;
     }
@@ -194,8 +194,8 @@ pub async fn get_activities(
 
     if let Some(search_term) = &search {
         let search_pattern = format!("%{}%", search_term);
-        query_builder = query_builder.bind(&search_pattern);
-        count_query_builder = count_query_builder.bind(&search_pattern);
+        query_builder = query_builder.bind(search_pattern.clone());
+        count_query_builder = count_query_builder.bind(search_pattern);
     }
 
     if let Some(status) = status_filter {
@@ -325,15 +325,15 @@ pub async fn get_activity(
                 current_participants: row.current_participants.unwrap_or(0),
                 status: row.status,
                 faculty_id: row.faculty_id,
-                faculty_name: row.faculty_name,
+                faculty_name: Some(row.faculty_name).filter(|s| !s.is_empty()),
                 department_id: row.department_id,
-                department_name: row.department_name,
+                department_name: Some(row.department_name).filter(|s| !s.is_empty()),
                 created_by: row.created_by,
-                created_by_name: row.created_by_name,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
+                created_by_name: row.created_by_name.unwrap_or_else(|| "Unknown".to_string()),
+                created_at: row.created_at.unwrap_or_else(|| Utc::now()),
+                updated_at: row.updated_at.unwrap_or_else(|| Utc::now()),
                 is_registered: row.is_registered.unwrap_or(false),
-                user_participation_status: row.user_participation_status,
+                user_participation_status: Some(row.user_participation_status),
             };
 
             let response = json!({
@@ -482,17 +482,17 @@ pub async fn update_activity(
     let mut query = "UPDATE activities SET updated_at = NOW()".to_string();
     let mut param_count = 1;
 
-    if let Some(title) = &request.title {
+    if let Some(_title) = &request.title {
         query.push_str(&format!(", title = ${}", param_count));
         param_count += 1;
     }
 
-    if let Some(description) = &request.description {
+    if let Some(_description) = &request.description {
         query.push_str(&format!(", description = ${}", param_count));
         param_count += 1;
     }
 
-    if let Some(location) = &request.location {
+    if let Some(_location) = &request.location {
         query.push_str(&format!(", location = ${}", param_count));
         param_count += 1;
     }
@@ -721,7 +721,7 @@ pub async fn get_activity_participations(
         WHERE p.activity_id = $1
     "#.to_string();
 
-    if let Some(status) = status_filter {
+    if let Some(_status) = status_filter {
         query.push_str(" AND p.status = $2");
     }
 
@@ -816,7 +816,7 @@ pub async fn participate(
     };
 
     // Check if activity is open for registration
-    if activity.status.as_str() != "published" && activity.status.as_str() != "ongoing" {
+    if activity.status.as_deref() != Some("published") && activity.status.as_deref() != Some("ongoing") {
         let error_response = json!({
             "status": "error",
             "message": "Activity is not open for registration"
@@ -905,7 +905,7 @@ pub async fn participate(
 /// Scan QR code for check-in/check-out
 pub async fn scan_qr(
     State(session_state): State<SessionState>,
-    admin: AdminUser, // Only admins or activity creators can scan QR codes
+    _admin: AdminUser, // Only admins or activity creators can scan QR codes
     Path(activity_id): Path<Uuid>,
     Json(request): Json<QrScanRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -1008,10 +1008,10 @@ pub async fn scan_qr(
     };
 
     // Determine next status based on current status
-    let (new_status, field_to_update) = match participation.status.as_str() {
-        "registered" => ("checked_in", "checked_in_at"),
-        "checked_in" => ("checked_out", "checked_out_at"),
-        "checked_out" => ("completed", ""), // No additional field to update
+    let (new_status, field_to_update) = match participation.status.as_deref() {
+        Some("registered") => ("checked_in", "checked_in_at"),
+        Some("checked_in") => ("checked_out", "checked_out_at"),
+        Some("checked_out") => ("completed", ""), // No additional field to update
         _ => {
             let error_response = json!({
                 "status": "error",

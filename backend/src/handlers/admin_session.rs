@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
-use sqlx::Row;
+// use sqlx::Row; // Removed unused import
 
 use crate::models::{
     admin_role::{AdminRole, AdminLevel},
@@ -552,7 +552,7 @@ async fn get_department_by_id(
 /// Get sessions (simplified endpoint for admin_session routes)
 pub async fn get_sessions(
     State(session_state): State<SessionState>,
-    admin: AdminUser,
+    _admin: AdminUser,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let limit = params
@@ -802,7 +802,7 @@ pub async fn cleanup_expired(
 }
 
 async fn log_session_action(
-    session_state: &SessionState,
+    _session_state: &SessionState,
     action: &str,
     session_id: &str,
     admin_id: &Uuid,

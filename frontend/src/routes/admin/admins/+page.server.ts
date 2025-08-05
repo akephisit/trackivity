@@ -15,7 +15,7 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดรายการแอดมิน
 	let admins: AdminRole[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/admins`, {
+		const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
 			headers: {
 				'Cookie': `session_id=${sessionId}`
 			}
@@ -23,7 +23,7 @@ export const load: PageServerLoad = async (event) => {
 
 		if (response.ok) {
 			const result = await response.json();
-			if (result.success && result.data) {
+			if (result.status === 'success' && result.data) {
 				admins = result.data;
 			}
 		}
@@ -37,7 +37,7 @@ export const load: PageServerLoad = async (event) => {
 		const response = await fetch(`${API_BASE_URL}/api/faculties`);
 		if (response.ok) {
 			const result = await response.json();
-			faculties = result.data || [];
+			faculties = result.data?.faculties || result.data || [];
 		}
 	} catch (error) {
 		console.error('Failed to load faculties:', error);
@@ -63,7 +63,7 @@ export const actions: Actions = {
 
 		try {
 			const sessionId = cookies.get('session_id');
-			const response = await fetch(`${API_BASE_URL}/api/admin/admins`, {
+			const response = await fetch(`${API_BASE_URL}/api/users`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -79,7 +79,7 @@ export const actions: Actions = {
 				return fail(400, { form });
 			}
 
-			if (result.success) {
+			if (result.status === 'success') {
 				return { form, success: true, message: 'สร้างแอดมินสำเร็จ' };
 			} else {
 				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสร้างแอดมิน'];
@@ -102,7 +102,7 @@ export const actions: Actions = {
 
 		try {
 			const sessionId = cookies.get('session_id');
-			const response = await fetch(`${API_BASE_URL}/api/admin/admins/${adminId}`, {
+			const response = await fetch(`${API_BASE_URL}/api/users/${adminId}`, {
 				method: 'DELETE',
 				headers: {
 					'Cookie': `session_id=${sessionId}`

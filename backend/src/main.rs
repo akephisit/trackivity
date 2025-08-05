@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     
     // Initialize Redis connection
     let redis_client = redis::Client::open(config.redis_url.clone())?;
-    let redis_manager = redis::aio::ConnectionManager::new(redis_client).await?;
+    let _redis_manager = redis::aio::ConnectionManager::new(redis_client).await?;
 
     // Build Redis session store
     let redis_store = std::sync::Arc::new(crate::services::RedisSessionStore::new(&config.redis_url)?);

@@ -17,7 +17,7 @@ export const load: PageServerLoad = async (event) => {
 	};
 
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/dashboard/stats`, {
+		const response = await fetch(`${API_BASE_URL}/api/admin/dashboard`, {
 			headers: {
 				'Cookie': `session_id=${sessionId}`
 			}
@@ -25,7 +25,7 @@ export const load: PageServerLoad = async (event) => {
 
 		if (response.ok) {
 			const result = await response.json();
-			if (result.success && result.data) {
+			if (result.status === 'success' && result.data) {
 				stats = result.data;
 			}
 		}
@@ -36,7 +36,7 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดกิจกรรมล่าสุด (optional)
 	let recentActivities: any[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/dashboard/recent-activities?limit=10`, {
+		const response = await fetch(`${API_BASE_URL}/api/admin/activities?limit=10&recent=true`, {
 			headers: {
 				'Cookie': `session_id=${sessionId}`
 			}
@@ -44,8 +44,8 @@ export const load: PageServerLoad = async (event) => {
 
 		if (response.ok) {
 			const result = await response.json();
-			if (result.success && result.data) {
-				recentActivities = result.data;
+			if (result.status === 'success' && result.data) {
+				recentActivities = result.data || [];
 			}
 		}
 	} catch (error) {

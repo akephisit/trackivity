@@ -11,6 +11,12 @@ pub enum AdminLevel {
     RegularAdmin,
 }
 
+impl Default for AdminLevel {
+    fn default() -> Self {
+        AdminLevel::RegularAdmin
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AdminRole {
     pub id: Uuid,

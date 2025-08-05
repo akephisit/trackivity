@@ -191,10 +191,10 @@ impl SseConnectionManager {
 
 // SSE endpoint handler
 pub async fn sse_handler(
-    State(session_state): State<SessionState>,
+    State(_session_state): State<SessionState>,
     State(sse_manager): State<SseConnectionManager>,
     Path(session_id): Path<String>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     session_user: SessionUser, // This ensures authentication
 ) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
     // Verify that the session_id matches the authenticated user's session
@@ -413,7 +413,7 @@ pub async fn handle_sse(
         .ok_or(StatusCode::UNAUTHORIZED)?;
     
     // Verify session exists
-    if let Ok(Some(session)) = session_state.redis_store.get_session(&session_id).await {
+    if let Ok(Some(_session)) = session_state.redis_store.get_session(&session_id).await {
         // Create SSE manager instance (in production this would be shared state)
         let sse_manager = SseConnectionManager::new();
         let rx = sse_manager.add_connection(session_id.clone()).await;
@@ -456,9 +456,9 @@ pub async fn handle_admin_sse(
     let session_id = extract_session_id_from_headers(&headers)
         .ok_or(StatusCode::UNAUTHORIZED)?;
     
-    if let Ok(Some(session)) = session_state.redis_store.get_session(&session_id).await {
+    if let Ok(Some(_session)) = session_state.redis_store.get_session(&session_id).await {
         // Verify user has admin permissions
-        if let Ok(Some(admin_role)) = get_user_admin_role(&session_state, session.user_id).await {
+        if let Ok(Some(_admin_role)) = get_user_admin_role(&session_state, _session.user_id).await {
             let sse_manager = SseConnectionManager::new();
             let rx = sse_manager.add_connection(session_id.clone()).await;
             

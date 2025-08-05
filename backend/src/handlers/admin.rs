@@ -267,7 +267,7 @@ pub async fn get_admin_users(
 
     let mut count_query = "SELECT COUNT(*) FROM users u".to_string();
 
-    if let Some(search_term) = &search {
+    if let Some(_search_term) = &search {
         let where_clause = " WHERE (u.first_name ILIKE $3 OR u.last_name ILIKE $3 OR u.email ILIKE $3 OR u.student_id ILIKE $3)";
         query.push_str(where_clause);
         count_query.push_str(where_clause);
@@ -280,7 +280,7 @@ pub async fn get_admin_users(
         sqlx::query(&query)
             .bind(limit)
             .bind(offset)
-            .bind(&search_pattern)
+            .bind(search_pattern.clone())
             .fetch_all(&session_state.db_pool)
             .await
     } else {
@@ -294,7 +294,7 @@ pub async fn get_admin_users(
     let total_count_result = if let Some(search_term) = &search {
         let search_pattern = format!("%{}%", search_term);
         sqlx::query_scalar::<_, i64>(&count_query)
-            .bind(&search_pattern)
+            .bind(search_pattern)
             .fetch_one(&session_state.db_pool)
             .await
     } else {
@@ -316,7 +316,7 @@ pub async fn get_admin_users(
                             admin_level: row.get::<Option<AdminLevel>, _>("admin_level")
                                 .unwrap_or(AdminLevel::RegularAdmin),
                             faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
-                            permissions: row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_default(),
+                            permissions: row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_else(|| vec![]),
                             created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
                             updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
                         })
@@ -415,7 +415,7 @@ pub async fn get_admin_activities(
     let mut conditions = Vec::new();
     let mut param_count = 3;
 
-    if let Some(status) = status_filter {
+    if let Some(_status) = status_filter {
         conditions.push(format!("a.status = ${}", param_count));
         param_count += 1;
     }
@@ -447,8 +447,8 @@ pub async fn get_admin_activities(
 
     if let Some(search_term) = &search {
         let search_pattern = format!("%{}%", search_term);
-        query_builder = query_builder.bind(&search_pattern);
-        count_query_builder = count_query_builder.bind(&search_pattern);
+        query_builder = query_builder.bind(search_pattern.clone());
+        count_query_builder = count_query_builder.bind(search_pattern);
     }
 
     let activities_result = query_builder.fetch_all(&session_state.db_pool).await;
