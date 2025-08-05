@@ -60,28 +60,40 @@
 	<meta name="description" content="สมัครสมาชิกสำหรับนักศึกษา" />
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-	<div class="max-w-2xl w-full space-y-8 overflow-y-auto">
-		<div class="text-center">
-			<div class="mx-auto h-16 w-16 bg-green-600 rounded-full flex items-center justify-center mb-4">
-				<IconUser class="h-8 w-8 text-white" />
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+	<div class="flex flex-col lg:flex-row min-h-screen">
+		<!-- Left Side - Logo/Branding Section -->
+		<div class="lg:w-2/5 bg-gradient-to-br from-green-600 to-green-700 dark:from-green-700 dark:to-green-800 flex items-center justify-center p-8 lg:p-12">
+			<div class="text-center lg:text-left max-w-md">
+				<div class="mx-auto lg:mx-0 h-20 w-20 lg:h-24 lg:w-24 bg-white/10 rounded-full flex items-center justify-center mb-6">
+					<IconUser class="h-10 w-10 lg:h-12 lg:w-12 text-white" />
+				</div>
+				<h1 class="text-4xl lg:text-5xl font-bold text-white mb-4">
+					Trackivity
+				</h1>
+				<p class="text-lg lg:text-xl text-green-100 mb-6">
+					ระบบจัดการกิจกรรมนักศึกษา
+				</p>
+				<p class="text-green-100/80">
+					สมัครสมาชิกเพื่อเริ่มต้นใช้งานระบบและเข้าร่วมกิจกรรมต่างๆ ของมหาวิทยาลัย
+				</p>
 			</div>
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-				Trackivity
-			</h1>
-			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-				สมัครสมาชิกสำหรับนักศึกษา
-			</p>
 		</div>
 
-		<Card class="w-full">
-			<CardHeader class="space-y-1">
-				<CardTitle class="text-2xl text-center">สมัครสมาชิก</CardTitle>
-				<CardDescription class="text-center">
-					กรุณากรอกข้อมูลเพื่อสร้างบัญชีนักศึกษาใหม่
-				</CardDescription>
-			</CardHeader>
-			<CardContent class="space-y-4">
+		<!-- Right Side - Registration Form -->
+		<div class="lg:w-3/5 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+			<div class="w-full max-w-2xl">
+				<div class="mb-6 text-center lg:text-left">
+					<h2 class="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mb-2">
+						สมัครสมาชิก
+					</h2>
+					<p class="text-gray-600 dark:text-gray-400">
+						กรุณากรอกข้อมูลเพื่อสร้างบัญชีนักศึกษาใหม่
+					</p>
+				</div>
+
+				<Card class="w-full shadow-lg">
+					<CardContent class="space-y-4 p-6 lg:p-8">
 				<!-- แสดงสถานะการเชื่อมต่อ Backend -->
 				{#if !data.backendAvailable}
 					<Alert variant="destructive">
@@ -135,30 +147,54 @@
 						</Alert>
 					{/if}
 
-					<!-- รหัสนักศึกษา - เต็มแถว -->
-					<Form.Field {form} name="student_id">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconUser class="h-4 w-4" />
-									รหัสนักศึกษา
-								</Label>
-								<Input
-									{...props}
-									type="text"
-									bind:value={$formData.student_id}
-									placeholder="64123456789"
-									disabled={$submitting}
-									class="w-full"
-									maxlength={12}
-								/>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
+					<!-- ข้อมูลส่วนตัว - จัดเป็นแถวเพื่อประหยัดพื้นที่ -->
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+						<!-- รหัสนักศึกษา -->
+						<Form.Field {form} name="student_id">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconUser class="h-4 w-4" />
+										รหัสนักศึกษา
+									</Label>
+									<Input
+										{...props}
+										type="text"
+										bind:value={$formData.student_id}
+										placeholder="64123456789"
+										disabled={$submitting}
+										class="w-full"
+										maxlength={12}
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<!-- อีเมล -->
+						<Form.Field {form} name="email">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconMail class="h-4 w-4" />
+										อีเมล
+									</Label>
+									<Input
+										{...props}
+										type="email"
+										bind:value={$formData.email}
+										placeholder="your@email.com"
+										disabled={$submitting}
+										class="w-full"
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
 
 					<!-- ชื่อจริงและนามสกุล - 2 คอลัมน์ -->
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 						<Form.Field {form} name="first_name">
 							<Form.Control>
 								{#snippet children({ props })}
@@ -200,29 +236,8 @@
 						</Form.Field>
 					</div>
 
-					<!-- อีเมล - เต็มแถว -->
-					<Form.Field {form} name="email">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconMail class="h-4 w-4" />
-									อีเมล
-								</Label>
-								<Input
-									{...props}
-									type="email"
-									bind:value={$formData.email}
-									placeholder="your@email.com"
-									disabled={$submitting}
-									class="w-full"
-								/>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
-
 					<!-- รหัสผ่านและยืนยันรหัสผ่าน - 2 คอลัมน์ -->
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 						<Form.Field {form} name="password">
 							<Form.Control>
 								{#snippet children({ props })}
@@ -319,11 +334,20 @@
 
 					<div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
 						<p class="font-medium mb-1">หมายเหตุ:</p>
-						<ul class="space-y-1 list-disc list-inside">
-							<li>รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร</li>
-							<li>ต้องมีตัวพิมพ์เล็ก พิมพ์ใหญ่ และตัวเลข</li>
-							<li>หากเลือกแอดมินคณะ จำเป็นต้องระบุคณะ</li>
-						</ul>
+						<div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+							<div>
+								<ul class="space-y-1 list-disc list-inside">
+									<li>รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร</li>
+									<li>ต้องมีตัวพิมพ์เล็ก พิมพ์ใหญ่ และตัวเลข</li>
+								</ul>
+							</div>
+							<div>
+								<ul class="space-y-1 list-disc list-inside">
+									<li>สาขาวิชาเป็นข้อมูลไม่บังคับ</li>
+									<li>สามารถแก้ไขข้อมูลได้ภายหลัง</li>
+								</ul>
+							</div>
+						</div>
 					</div>
 
 					<Button 
@@ -345,21 +369,23 @@
 					</Button>
 				</form>
 
-				<div class="text-center">
-					<p class="text-sm text-gray-600 dark:text-gray-400">
-						มีบัญชีแล้ว? 
-						<a href="/login" class="font-medium text-primary hover:text-primary/90">
-							เข้าสู่ระบบ
-						</a>
-					</p>
-				</div>
-			</CardContent>
-		</Card>
+					<div class="text-center">
+						<p class="text-sm text-gray-600 dark:text-gray-400">
+							มีบัญชีแล้ว? 
+							<a href="/login" class="font-medium text-primary hover:text-primary/90">
+								เข้าสู่ระบบ
+							</a>
+						</p>
+					</div>
+				</CardContent>
+			</Card>
 
-		<div class="text-center text-xs text-gray-500 dark:text-gray-400">
-			<p>© 2025 Admin Management System. All rights reserved.</p>
+			<div class="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
+				<p>© 2025 Admin Management System. All rights reserved.</p>
+			</div>
 		</div>
 	</div>
+</div>
 </div>
 
 <style>
