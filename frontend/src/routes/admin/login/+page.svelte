@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
 	import { zodClient } from 'sveltekit-superforms/adapters';
-	import { loginSchema } from '$lib/schemas/auth';
+	import { adminLoginSchema } from '$lib/schemas/auth';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -15,7 +15,7 @@
 	let { data } = $props();
 
 	const form = superForm(data.form, {
-		validators: zodClient(loginSchema),
+		validators: zodClient(adminLoginSchema),
 		onResult: ({ result }) => {
 			if (result.type === 'failure') {
 				toast.error('การเข้าสู่ระบบไม่สำเร็จ');

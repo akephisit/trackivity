@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
-import { loginSchema } from '$lib/schemas/auth';
+import { adminLoginSchema } from '$lib/schemas/auth';
 import type { Actions, PageServerLoad } from './$types';
 
 const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		}
 	}
 
-	const form = await superValidate(zod(loginSchema));
+	const form = await superValidate(zod(adminLoginSchema));
 	
 	return {
 		form,
@@ -42,7 +42,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {
-		const form = await superValidate(request, zod(loginSchema));
+		const form = await superValidate(request, zod(adminLoginSchema));
 
 		if (!form.valid) {
 			return fail(400, { form });

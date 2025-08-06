@@ -17,6 +17,22 @@ export const loginSchema = z.object({
 		.default(false)
 });
 
+// Admin login schema (uses email instead of student_id)
+export const adminLoginSchema = z.object({
+	email: z
+		.string()
+		.min(1, 'กรุณาใส่อีเมล')
+		.email('รูปแบบอีเมลไม่ถูกต้อง'),
+	password: z
+		.string()
+		.min(1, 'กรุณาใส่รหัสผ่าน')
+		.min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
+	remember_me: z
+		.boolean()
+		.optional()
+		.default(false)
+});
+
 // Student registration schema (no admin fields)
 export const registerSchema = z.object({
 	student_id: z
@@ -111,6 +127,7 @@ export const adminUpdateSchema = z.object({
 });
 
 export type LoginFormData = z.infer<typeof loginSchema>;
+export type AdminLoginFormData = z.infer<typeof adminLoginSchema>;
 export type RegisterFormData = z.infer<typeof registerSchema>;
 export type AdminCreateFormData = z.infer<typeof adminCreateSchema>;
 export type AdminUpdateFormData = z.infer<typeof adminUpdateSchema>;
