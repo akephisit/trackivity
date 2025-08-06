@@ -12,9 +12,9 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
-	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail } from '@tabler/icons-svelte/icons';
+	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail, IconToggleLeft, IconToggleRight } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
-	import { AdminLevel } from '$lib/types/admin';
+	import { AdminLevel, type AdminRole } from '$lib/types/admin';
 	import { invalidateAll } from '$app/navigation';
 
 	let { data } = $props();
@@ -35,8 +35,12 @@
 	const { form: formData, enhance, errors, submitting } = form;
 
 	let dialogOpen = $state(false);
+	let editDialogOpen = $state(false);
 	let selectedAdminLevel = $state(undefined);
 	let selectedFaculty = $state(undefined);
+	let editingAdmin = $state<AdminRole | null>(null);
+	let editSelectedAdminLevel = $state<AdminLevel | undefined>(undefined);
+	let editSelectedFaculty = $state<string | undefined>(undefined);
 
 	// Admin Level options
 	const adminLevelOptions = [
@@ -90,9 +94,10 @@
 		}
 	}
 
-	function getFacultyName(facultyId?: number): string {
-		if (!facultyId) return '-';
-		const faculty = data.faculties.find(f => f.id === facultyId);
+	function getFacultyName(admin: AdminRole): string {
+		if (!admin.faculty_id) return '-';
+		if (admin.faculty?.name) return admin.faculty.name;
+		const faculty = data.faculties.find(f => f.id === admin.faculty_id);
 		return faculty?.name || 'ไม่พบข้อมูล';
 	}
 
@@ -139,6 +144,83 @@
 	function openDialog() {
 		resetForm();
 		dialogOpen = true;
+	}
+
+	function openEditDialog(admin: AdminRole) {
+		editingAdmin = admin;
+		editSelectedAdminLevel = admin.admin_level;
+		editSelectedFaculty = admin.faculty_id ? admin.faculty_id.toString() : undefined;
+		editDialogOpen = true;
+	}
+
+	async function handleUpdate(adminId: number, updateData: {
+		first_name: string;
+		last_name: string;
+		email: string;
+		admin_level: AdminLevel;
+		faculty_id?: number;
+		permissions: string[];
+	}) {
+		try {
+			const formData = new FormData();
+			formData.append('adminId', adminId.toString());
+			formData.append('updateData', JSON.stringify(updateData));
+
+			const response = await fetch('?/update', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success('แก้ไขแอดมินสำเร็จ');
+				editDialogOpen = false;
+				invalidateAll();
+			} else {
+				toast.error('เกิดข้อผิดพลาดในการแก้ไขแอดมิน');
+			}
+		} catch (error) {
+			console.error('Update error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		}
+	}
+
+	async function handleToggleStatus(adminId: number, currentStatus: boolean, adminName: string) {
+		const newStatus = !currentStatus;
+		const actionText = newStatus ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
+		
+		if (!confirm(`คุณต้องการ${actionText}แอดมิน "${adminName}" หรือไม่?`)) {
+			return;
+		}
+
+		try {
+			const formData = new FormData();
+			formData.append('adminId', adminId.toString());
+			formData.append('isActive', newStatus.toString());
+
+			const response = await fetch('?/toggleStatus', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success(`${actionText}แอดมินสำเร็จ`);
+				invalidateAll();
+			} else {
+				toast.error(`เกิดข้อผิดพลาดในการ${actionText}แอดมิน`);
+			}
+		} catch (error) {
+			console.error('Toggle status error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		}
+	}
+
+	function getAdminActiveStatus(admin: AdminRole): boolean {
+		// Check if admin has any permissions (empty permissions means deactivated)
+		return admin.permissions && admin.permissions.length > 0;
 	}
 </script>
 
@@ -218,6 +300,7 @@
 								<Table.Head>อีเมล</Table.Head>
 								<Table.Head>ระดับ</Table.Head>
 								<Table.Head>คณะ</Table.Head>
+								<Table.Head>สถานะ</Table.Head>
 								<Table.Head>สิทธิ์</Table.Head>
 								<Table.Head class="text-right">การดำเนินการ</Table.Head>
 							</Table.Row>
@@ -226,7 +309,7 @@
 							{#each data.admins as admin}
 								<Table.Row>
 									<Table.Cell class="font-medium">
-										{admin.user?.name || 'ไม่ระบุ'}
+										{admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ'}
 									</Table.Cell>
 									<Table.Cell>
 										<div class="flex items-center gap-2">
@@ -240,22 +323,43 @@
 										</Badge>
 									</Table.Cell>
 									<Table.Cell>
-										{getFacultyName(admin.faculty_id)}
+										{getFacultyName(admin)}
+									</Table.Cell>
+									<Table.Cell>
+										<Badge variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}>
+											{getAdminActiveStatus(admin) ? 'ใช้งาน' : 'ไม่ใช้งาน'}
+										</Badge>
 									</Table.Cell>
 									<Table.Cell>
 										<div class="text-sm text-gray-500">
-											{admin.permissions.length} สิทธิ์
+											{admin.permissions?.length || 0} สิทธิ์
 										</div>
 									</Table.Cell>
 									<Table.Cell class="text-right">
 										<div class="flex items-center gap-2 justify-end">
-											<Button variant="ghost" size="sm">
+											<Button 
+												variant="ghost" 
+												size="sm" 
+												onclick={() => handleToggleStatus(
+													admin.id, 
+													getAdminActiveStatus(admin), 
+													admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ'
+												)}
+												class={getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
+											>
+												{#if getAdminActiveStatus(admin)}
+													<IconToggleLeft class="h-4 w-4" />
+												{:else}
+													<IconToggleRight class="h-4 w-4" />
+												{/if}
+											</Button>
+											<Button variant="ghost" size="sm" onclick={() => openEditDialog(admin)}>
 												<IconEdit class="h-4 w-4" />
 											</Button>
 											<Button
 												variant="ghost"
 												size="sm"
-												onclick={() => handleDelete(admin.id, admin.user?.name || 'ไม่ระบุ')}
+												onclick={() => handleDelete(admin.id, admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ')}
 												class="text-red-600 hover:text-red-700"
 											>
 												<IconTrash class="h-4 w-4" />
@@ -389,5 +493,100 @@
 				</Button>
 			</Dialog.Footer>
 		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Edit Admin Dialog -->
+<Dialog.Root bind:open={editDialogOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>แก้ไขแอดมิน</Dialog.Title>
+			<Dialog.Description>
+				แก้ไขข้อมูลและสิทธิ์ของแอดมิน
+			</Dialog.Description>
+		</Dialog.Header>
+
+		{#if editingAdmin && editingAdmin.user}
+			<div class="space-y-4">
+				<div class="space-y-2">
+					<Label>ชื่อ-นามสกุล</Label>
+					<Input
+						bind:value={editingAdmin.user.first_name}
+						placeholder="ชื่อ"
+						class="mb-2"
+					/>
+					<Input
+						bind:value={editingAdmin.user.last_name}
+						placeholder="นามสกุล"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label>อีเมล</Label>
+					<Input
+						type="email"
+						bind:value={editingAdmin.user.email}
+						placeholder="admin@example.com"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label>ระดับแอดมิน</Label>
+					<Select.Root type="single" bind:value={editSelectedAdminLevel}>
+						<Select.Trigger>
+							{adminLevelOptions.find(opt => opt.value === editSelectedAdminLevel)?.label ?? "เลือกระดับแอดมิน"}
+						</Select.Trigger>
+						<Select.Content>
+							{#each adminLevelOptions as option}
+								<Select.Item value={option.value.toString()}>
+									{option.label}
+								</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
+
+				{#if editSelectedAdminLevel === AdminLevel.FacultyAdmin}
+					<div class="space-y-2">
+						<Label>คณะ</Label>
+						<Select.Root type="single" bind:value={editSelectedFaculty}>
+							<Select.Trigger>
+								{facultyOptions.find(opt => opt.value === (editSelectedFaculty ? parseInt(editSelectedFaculty) : undefined))?.label ?? "เลือกคณะ"}
+							</Select.Trigger>
+							<Select.Content>
+								{#each facultyOptions as option}
+									<Select.Item value={option.value.toString()}>
+										{option.label}
+									</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+					</div>
+				{/if}
+
+				<Dialog.Footer>
+					<Button type="button" variant="outline" onclick={() => editDialogOpen = false}>
+						ยกเลิก
+					</Button>
+					<Button 
+						type="button" 
+						onclick={() => {
+							if (editingAdmin && editingAdmin.user && editSelectedAdminLevel) {
+								handleUpdate(editingAdmin.id, {
+									first_name: editingAdmin.user.first_name,
+									last_name: editingAdmin.user.last_name,
+									email: editingAdmin.user.email,
+									admin_level: editSelectedAdminLevel,
+									faculty_id: editSelectedFaculty ? parseInt(editSelectedFaculty) : undefined,
+									permissions: editingAdmin.permissions || []
+								});
+							}
+						}}
+					>
+						บันทึกการแก้ไข
+					</Button>
+				</Dialog.Footer>
+			</div>
+		{/if}
 	</Dialog.Content>
 </Dialog.Root>
