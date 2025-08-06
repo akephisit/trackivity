@@ -55,6 +55,7 @@ export const actions: Actions = {
 				headers: {
 					'Content-Type': 'application/json',
 				},
+				credentials: 'include',
 				body: JSON.stringify({
 					email: form.data.email,
 					password: form.data.password,
@@ -85,18 +86,23 @@ export const actions: Actions = {
 				return fail(400, { form });
 			}
 		} catch (error) {
+			// Check if this is a SvelteKit redirect (success case)
+			if (error && typeof error === 'object' && 'status' in error && 'location' in error) {
+				throw error;
+			}
+			
 			// If redirect, throw it (this is success case)
 			if (error instanceof Response) {
 				throw error;
 			}
 			
-			// Only set error if it's actually an error (not redirect)
+			// Only set actual error messages for real errors
 			if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
 				form.errors._errors = [error.message];
 			} else {
 				form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อ'];
 			}
-			return fail(500, { form });
+			return fail(400, { form });
 		}
 	}
 };

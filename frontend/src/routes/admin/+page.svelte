@@ -22,31 +22,31 @@
 	const statCards = [
 		{
 			title: 'ผู้ใช้ทั้งหมด',
-			value: data.stats.total_users,
+			value: data.stats?.total_users || 0,
 			icon: IconUsers,
 			color: 'text-blue-600',
 			bgColor: 'bg-blue-100',
 			description: 'จำนวนผู้ใช้ในระบบ'
 		},
 		{
-			title: 'แอดมิน',
-			value: data.stats.total_admins,
+			title: 'กิจกรรมทั้งหมด',
+			value: data.stats?.total_activities || 0,
 			icon: IconShield,
 			color: 'text-green-600',
 			bgColor: 'bg-green-100',
-			description: 'จำนวนผู้ดูแลระบบ'
+			description: 'จำนวนกิจกรรมในระบบ'
 		},
 		{
-			title: 'คณะ',
-			value: data.stats.total_faculties,
+			title: 'การเข้าร่วม',
+			value: data.stats?.total_participations || 0,
 			icon: IconBuilding,
 			color: 'text-purple-600',
 			bgColor: 'bg-purple-100',
-			description: 'จำนวนคณะในระบบ'
+			description: 'จำนวนการเข้าร่วมกิจกรรม'
 		},
 		{
-			title: 'กิจกรรมล่าสุด',
-			value: data.stats.recent_activities,
+			title: 'เซสชันที่ใช้งาน',
+			value: data.stats?.active_sessions || 0,
 			icon: IconActivity,
 			color: 'text-orange-600',
 			bgColor: 'bg-orange-100',
@@ -123,7 +123,7 @@
 				</CardHeader>
 				<CardContent>
 					<div class="text-2xl font-bold text-gray-900 dark:text-white">
-						{stat.value.toLocaleString()}
+						{(stat.value || 0).toLocaleString()}
 					</div>
 					<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
 						{stat.description}
