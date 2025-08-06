@@ -24,6 +24,10 @@
 
 	// Navigation items based on admin level
 	let navigationItems = $derived(getNavigationItems(data.admin_role?.admin_level));
+	
+	// Check if we have user data
+	let hasUser = $derived(data.user != null);
+	let isLoginPage = $derived($page.url.pathname === '/admin/login');
 
 	function getNavigationItems(adminLevel?: AdminLevel) {
 		const baseItems = [
@@ -109,7 +113,12 @@
 	}
 </script>
 
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+{#if isLoginPage}
+	<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+		{@render children()}
+	</div>
+{:else}
+	<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
 	<!-- Mobile sidebar overlay -->
 	{#if sidebarOpen}
 		<div class="fixed inset-0 z-40 md:hidden">
@@ -143,13 +152,13 @@
 					<div class="flex-shrink-0">
 						<div class="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
 							<span class="text-white font-medium">
-								{data.user.name?.charAt(0).toUpperCase()}
+								{hasUser ? data.user.name?.charAt(0).toUpperCase() : 'A'}
 							</span>
 						</div>
 					</div>
 					<div class="flex-1 min-w-0">
 						<p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-							{data.user.name}
+							{hasUser ? data.user.name : 'Admin'}
 						</p>
 						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">
 							{data.admin_role?.admin_level === AdminLevel.SuperAdmin ? 'ซุปเปอร์แอดมิน' :
@@ -240,5 +249,6 @@
 		<main class="p-6">
 			{@render children()}
 		</main>
+			</div>
 	</div>
-</div>
+{/if}

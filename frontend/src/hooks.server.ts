@@ -137,6 +137,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         pathname.startsWith('/_app') ||
         pathname.startsWith('/favicon') ||
         pathname === '/login' ||
+        pathname === '/admin/login' ||
         pathname === '/register' ||
         pathname === '/' ||
         pathname === '/unauthorized'
