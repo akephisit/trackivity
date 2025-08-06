@@ -57,6 +57,7 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/admin/dashboard", get(admin::get_dashboard))
         .route("/api/admin/users", get(admin::get_admin_users))
         .route("/api/admin/activities", get(admin::get_admin_activities))
+        .route("/api/admin/create", post(admin::create_admin))
         // Admin session management routes (Super Admin only)
         .route("/api/admin/sessions", get(auth::get_all_sessions))
         .route(

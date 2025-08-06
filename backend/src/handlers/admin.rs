@@ -637,3 +637,170 @@ async fn get_user_admin_role(
 
     Ok(admin_role)
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateAdminRequest {
+    pub student_id: String,
+    pub email: String,
+    pub password: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub department_id: Option<Uuid>,
+    pub admin_level: AdminLevel,
+    pub faculty_id: Option<Uuid>,
+    pub permissions: Vec<String>,
+}
+
+/// Create new admin account (user + admin role)
+pub async fn create_admin(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+    Json(request): Json<CreateAdminRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if user already exists
+    let existing_user = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM users WHERE email = $1 OR student_id = $2",
+    )
+    .bind(&request.email)
+    .bind(&request.student_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match existing_user {
+        Ok(count) if count > 0 => {
+            let error_response = json!({
+                "status": "error",
+                "message": "User with this email or student ID already exists"
+            });
+            return Err((StatusCode::CONFLICT, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check existing user"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+        _ => {}
+    }
+
+    // Hash password
+    let password_hash = match bcrypt::hash(&request.password, bcrypt::DEFAULT_COST) {
+        Ok(hash) => hash,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to hash password"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Generate QR secret
+    let qr_secret = Uuid::new_v4().to_string();
+
+    // Start transaction
+    let mut tx = match session_state.db_pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to start transaction"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Create user
+    let user_result = sqlx::query_as::<_, User>(
+        r#"
+        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        "#
+    )
+    .bind(&request.student_id)
+    .bind(&request.email)
+    .bind(&password_hash)
+    .bind(&request.first_name)
+    .bind(&request.last_name)
+    .bind(&qr_secret)
+    .bind(request.department_id)
+    .fetch_one(&mut *tx)
+    .await;
+
+    let user = match user_result {
+        Ok(user) => user,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create user: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Create admin role
+    let admin_role_result = sqlx::query_as::<_, AdminRole>(
+        r#"
+        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        "#
+    )
+    .bind(user.id)
+    .bind(&request.admin_level)
+    .bind(request.faculty_id)
+    .bind(&request.permissions)
+    .fetch_one(&mut *tx)
+    .await;
+
+    let admin_role = match admin_role_result {
+        Ok(role) => role,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create admin role: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Commit transaction
+    if let Err(_) = tx.commit().await {
+        let error_response = json!({
+            "status": "error",
+            "message": "Failed to commit transaction"
+        });
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+    }
+
+    let response = json!({
+        "status": "success",
+        "data": {
+            "user": {
+                "id": user.id,
+                "student_id": user.student_id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "department_id": user.department_id,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at
+            },
+            "admin_role": {
+                "id": admin_role.id,
+                "admin_level": admin_role.admin_level,
+                "faculty_id": admin_role.faculty_id,
+                "permissions": admin_role.permissions,
+                "created_at": admin_role.created_at,
+                "updated_at": admin_role.updated_at
+            }
+        },
+        "message": "Admin account created successfully"
+    });
+
+    Ok(Json(response))
+}
