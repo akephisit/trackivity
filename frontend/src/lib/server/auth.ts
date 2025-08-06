@@ -1,8 +1,9 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import type { User, AdminRole, AdminLevel } from '$lib/types/admin';
+import { PUBLIC_API_URL } from '$env/static/public';
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export interface AuthenticatedUser extends User {
 	admin_role?: AdminRole;
@@ -54,13 +55,43 @@ export async function requireAuth(event: RequestEvent): Promise<AuthenticatedUse
  * ตรวจสอบว่าผู้ใช้เป็นแอดมินหรือไม่
  */
 export async function requireAdmin(event: RequestEvent): Promise<AuthenticatedUser> {
-	const user = await requireAuth(event);
+	const sessionId = event.cookies.get('session_id');
 	
-	if (!user.admin_role) {
-		throw redirect(303, '/unauthorized');
+	if (!sessionId) {
+		const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+		throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
 	}
 
-	return user;
+	try {
+		// Use admin-specific endpoint
+		const response = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
+			headers: {
+				'Cookie': `session_id=${sessionId}`
+			}
+		});
+
+		if (!response.ok) {
+			// Session หมดอายุหรือไม่ถูกต้อง
+			event.cookies.delete('session_id', { path: '/' });
+			const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+			throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
+		}
+
+		const result = await response.json();
+		
+		if (!result.user || !result.user.admin_role) {
+			event.cookies.delete('session_id', { path: '/' });
+			const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+			throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
+		}
+
+		return result.user as AuthenticatedUser;
+	} catch (error) {
+		console.error('Admin auth check failed:', error);
+		event.cookies.delete('session_id', { path: '/' });
+		const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+		throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
+	}
 }
 
 /**

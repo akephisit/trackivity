@@ -2,9 +2,10 @@ import { fail, redirect } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { adminLoginSchema } from '$lib/schemas/auth';
+import { PUBLIC_API_URL } from '$env/static/public';
 import type { Actions, PageServerLoad } from './$types';
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	// Check if admin already logged in
@@ -84,13 +85,17 @@ export const actions: Actions = {
 				return fail(400, { form });
 			}
 		} catch (error) {
-			// If redirect, throw it
+			// If redirect, throw it (this is success case)
 			if (error instanceof Response) {
 				throw error;
 			}
 			
-			console.error('Admin login error:', error);
-			form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อ'];
+			// Only set error if it's actually an error (not redirect)
+			if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+				form.errors._errors = [error.message];
+			} else {
+				form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อ'];
+			}
 			return fail(500, { form });
 		}
 	}
