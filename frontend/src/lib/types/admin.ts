@@ -1,13 +1,19 @@
 export enum AdminLevel {
 	SuperAdmin = 'SuperAdmin',
-	FacultyAdmin = 'FacultyAdmin',
+	FacultyAdmin = 'FacultyAdmin', 
 	RegularAdmin = 'RegularAdmin'
 }
+
+// For API compatibility
+export type AdminLevelAPI = 'super_admin' | 'faculty_admin' | 'regular_admin';
 
 export interface User {
 	id: number;
 	email: string;
-	name: string;
+	first_name: string;
+	last_name: string;
+	student_id?: string;
+	department_id?: string;
 	created_at: string;
 	updated_at: string;
 }
@@ -54,9 +60,13 @@ export interface AuthSession {
 
 export interface AdminDashboardStats {
 	total_users: number;
-	total_admins: number;
-	total_faculties: number;
-	recent_activities: number;
+	total_activities: number;
+	total_participations: number;
+	active_sessions: number;
+	ongoing_activities: number;
+	user_registrations_today: number;
+	recent_activities?: any[];
+	popular_activities?: any[];
 }
 
 export interface ApiResponse<T = any> {

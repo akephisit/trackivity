@@ -111,6 +111,12 @@
 	function toggleTheme() {
 		setMode(mode.current === 'light' ? 'dark' : 'light');
 	}
+
+	function getAdminLevelText(level?: string) {
+		if (level === 'SuperAdmin' || level === 'super_admin') return 'ซุปเปอร์แอดมิน';
+		if (level === 'FacultyAdmin' || level === 'faculty_admin') return 'แอดมินคณะ';
+		return 'แอดมินทั่วไป';
+	}
 </script>
 
 {#if isLoginPage}
@@ -131,7 +137,7 @@
 	{/if}
 
 	<!-- Sidebar -->
-	<div class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out md:translate-x-0 {sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:inset-0">
+	<div class="fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transform transition-transform duration-300 ease-in-out md:translate-x-0 {sidebarOpen ? 'translate-x-0' : '-translate-x-full'}">
 		<div class="flex flex-col h-full">
 			<!-- Header -->
 			<div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
@@ -152,18 +158,16 @@
 					<div class="flex-shrink-0">
 						<div class="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
 							<span class="text-white font-medium">
-								{hasUser ? data.user.name?.charAt(0).toUpperCase() : 'A'}
+								{hasUser ? (data.user.first_name?.charAt(0) || data.user.email?.charAt(0))?.toUpperCase() : 'A'}
 							</span>
 						</div>
 					</div>
 					<div class="flex-1 min-w-0">
 						<p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-							{hasUser ? data.user.name : 'Admin'}
+							{hasUser ? `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim() || data.user.email : 'Admin'}
 						</p>
 						<p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-							{data.admin_role?.admin_level === AdminLevel.SuperAdmin ? 'ซุปเปอร์แอดมิน' :
-							 data.admin_role?.admin_level === AdminLevel.FacultyAdmin ? 'แอดมินคณะ' :
-							 'แอดมินทั่วไป'}
+							{getAdminLevelText(data.admin_role?.admin_level)}
 						</p>
 					</div>
 				</div>

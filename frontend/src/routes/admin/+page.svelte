@@ -99,7 +99,7 @@
 				แดชบอร์ด
 			</h1>
 			<p class="mt-2 text-gray-600 dark:text-gray-400">
-				ยินดีต้อนรับ, {data.user.name}
+				ยินดีต้อนรับ, {data.user.first_name} {data.user.last_name}
 			</p>
 		</div>
 		<div class="mt-4 sm:mt-0">
@@ -281,7 +281,7 @@
 					</div>
 					<div class="text-center">
 						<div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
-							{(data.stats.recent_activities / 24).toFixed(1)}
+							{((data.stats?.recent_activities?.length || 0) / 24).toFixed(1)}
 						</div>
 						<div class="text-sm text-gray-500 dark:text-gray-400">
 							กิจกรรมต่อชั่วโมง
@@ -289,10 +289,10 @@
 					</div>
 					<div class="text-center">
 						<div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
-							{Math.round(data.stats.total_users / data.stats.total_faculties || 0)}
+							{data.stats?.user_registrations_today || 0}
 						</div>
 						<div class="text-sm text-gray-500 dark:text-gray-400">
-							ผู้ใช้เฉลี่ยต่อคณะ
+							ผู้ใช้ลงทะเบียนวันนี้
 						</div>
 					</div>
 				</div>
