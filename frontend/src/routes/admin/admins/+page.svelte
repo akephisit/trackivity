@@ -58,13 +58,19 @@
 	// Update form data when select values change
 	$effect(() => {
 		if (selectedAdminLevel) {
-			$formData.admin_level = selectedAdminLevel;
+			// Ensure we set the enum value directly, not string
+			const enumValue = selectedAdminLevel as AdminLevel;
+			$formData.admin_level = enumValue;
 		}
 	});
 
 	$effect(() => {
 		if (selectedFaculty) {
-			$formData.faculty_id = selectedFaculty;
+			// Convert string to number for faculty_id
+			const facultyId = parseInt(selectedFaculty, 10);
+			if (!isNaN(facultyId)) {
+				$formData.faculty_id = facultyId;
+			}
 		}
 	});
 
@@ -445,7 +451,7 @@
 							</Select.Trigger>
 							<Select.Content>
 								{#each adminLevelOptions as option}
-									<Select.Item value={option.value.toString()}>
+									<Select.Item value={option.value}>
 										{option.label}
 									</Select.Item>
 								{/each}
@@ -463,7 +469,7 @@
 							<Label for={props.id}>คณะ</Label>
 							<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
 								<Select.Trigger>
-									{facultyOptions.find(opt => opt.value === selectedFaculty)?.label ?? "เลือกคณะ"}
+									{facultyOptions.find(opt => opt.value.toString() === selectedFaculty)?.label ?? "เลือกคณะ"}
 								</Select.Trigger>
 								<Select.Content>
 									{#each facultyOptions as option}
@@ -538,7 +544,7 @@
 						</Select.Trigger>
 						<Select.Content>
 							{#each adminLevelOptions as option}
-								<Select.Item value={option.value.toString()}>
+								<Select.Item value={option.value}>
 									{option.label}
 								</Select.Item>
 							{/each}
