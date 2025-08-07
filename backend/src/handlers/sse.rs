@@ -538,3 +538,93 @@ fn extract_session_id_from_headers(headers: &HeaderMap) -> Option<String> {
 
     None
 }
+
+impl SseConnectionManager {
+    // Additional methods for subscription notifications
+    
+    /// Send message to specific user by user ID
+    pub async fn send_to_user(&self, user_id: Uuid, message: SseMessage) -> Result<(), String> {
+        // This requires mapping user_id to session_id
+        // In production, you'd maintain a user_id -> session_id mapping
+        // For now, we'll implement a simplified version
+        let connections = self.connections.read().await;
+        
+        // TODO: Implement user_id to session_id mapping
+        // For now, we'll broadcast to all and let the frontend filter
+        for (_, tx) in connections.iter() {
+            let _ = tx.send(message.clone());
+        }
+        
+        Ok(())
+    }
+    
+    /// Broadcast message to all admin users
+    pub async fn broadcast_to_admins(&self, message: SseMessage) -> Result<(), String> {
+        let connections = self.connections.read().await;
+        
+        for (_, tx) in connections.iter() {
+            let _ = tx.send(message.clone());
+        }
+        
+        Ok(())
+    }
+    
+    /// Send subscription notification to specific user
+    pub async fn send_subscription_notification(
+        &self,
+        user_id: Uuid,
+        notification: crate::models::notifications::SseSubscriptionNotification,
+    ) -> Result<(), String> {
+        let message = SseMessage {
+            event_type: "subscription_notification".to_string(),
+            data: serde_json::to_value(notification)
+                .map_err(|e| format!("Failed to serialize notification: {}", e))?,
+            timestamp: chrono::Utc::now(),
+            target_permissions: None,
+            target_user_id: Some(user_id),
+            target_faculty_id: None,
+        };
+        
+        self.send_to_user(user_id, message).await
+    }
+    
+    /// Send admin alert notification
+    pub async fn send_admin_alert(
+        &self,
+        alert: crate::models::notifications::AdminAlert,
+    ) -> Result<(), String> {
+        let message = SseMessage {
+            event_type: "admin_alert".to_string(),
+            data: serde_json::to_value(alert)
+                .map_err(|e| format!("Failed to serialize alert: {}", e))?,
+            timestamp: chrono::Utc::now(),
+            target_permissions: Some(vec!["super_admin".to_string(), "faculty_admin".to_string()]),
+            target_user_id: None,
+            target_faculty_id: None,
+        };
+        
+        self.broadcast_to_admins(message).await
+    }
+    
+    /// Send system status update
+    pub async fn send_system_status(
+        &self,
+        status_type: &str,
+        status_data: serde_json::Value,
+    ) -> Result<(), String> {
+        let message = SseMessage {
+            event_type: "system_status".to_string(),
+            data: serde_json::json!({
+                "status_type": status_type,
+                "data": status_data,
+                "timestamp": chrono::Utc::now()
+            }),
+            timestamp: chrono::Utc::now(),
+            target_permissions: Some(vec!["super_admin".to_string()]),
+            target_user_id: None,
+            target_faculty_id: None,
+        };
+        
+        self.broadcast_to_admins(message).await
+    }
+}

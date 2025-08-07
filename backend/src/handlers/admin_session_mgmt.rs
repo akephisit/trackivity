@@ -15,7 +15,7 @@ use crate::models::{
     session::{
         AdminSessionInfo, AdminSessionMonitor, BatchSessionRevocationRequest,
         BatchSessionRevocationResponse, ForceLogoutFacultyRequest, ForceLogoutUserRequest,
-        Permission, SessionAnalytics, SessionRevocationRequest, SessionType, SuspiciousActivity,
+        SessionAnalytics, SessionRevocationRequest,
     },
     user::User,
 };

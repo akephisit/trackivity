@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod admin;
+pub mod admin_dashboard;
 pub mod admin_session;
 pub mod admin_session_mgmt;
 pub mod auth;

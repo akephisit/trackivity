@@ -6,11 +6,8 @@ use uuid::Uuid;
 
 use crate::models::admin_role::AdminLevel;
 use crate::models::session::{
-    AdminSessionInfo, AdminSessionMonitor, BatchSessionRevocationRequest,
-    BatchSessionRevocationResponse, CreateSession, DeviceInfo, ForceLogoutFacultyRequest,
-    ForceLogoutUserRequest, HourlyActivity, LoginMethod, Session, SessionActivity,
-    SessionActivityType, SessionAnalytics, SessionType, SessionValidation, SuspiciousActivity,
-    SuspiciousSeverity, UserActivity,
+    BatchSessionRevocationRequest, BatchSessionRevocationResponse, CreateSession, LoginMethod, Session, SessionActivity,
+    SessionActivityType, SessionValidation, SessionType, ForceLogoutUserRequest, ForceLogoutFacultyRequest,
 };
 
 pub struct RedisSessionStore {
