@@ -5,19 +5,19 @@ edition = "2021"
 
 [dependencies]
 # Web framework
-axum = { version = "0.7", features = ["macros", "tokio", "tower-log"] }
-tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
-tower-cookies = "0.10"
+axum = { version = "0.8", features = ["macros", "tokio", "tower-log"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+tower-cookies = "0.11"
 
 # Async runtime
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.47", features = ["full"] }
 
 # Database
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate", "bigdecimal"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate", "bigdecimal"] }
 
 # Redis
-redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "0.26", features = ["tokio-comp", "connection-manager"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -45,6 +45,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Security
 rand = "0.8"
+
+# Async trait
+async-trait = "0.1"
 
 # QR Code generation
 qrcode = "0.14"

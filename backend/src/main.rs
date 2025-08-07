@@ -101,8 +101,7 @@ async fn main() -> anyhow::Result<()> {
                             HeaderName::from_static("accept-language")
                         ])
                         .allow_credentials(true),
-                )
-                .into_inner(),
+                ),
         )
         .with_state(session_state);
 

@@ -266,7 +266,6 @@ fn is_admin_level_sufficient(user_level: &AdminLevel, required_level: &AdminLeve
 }
 
 // Extractor for SessionUser from request
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for SessionUser
 where
     S: Send + Sync,
@@ -285,7 +284,6 @@ where
 // Optional SessionUser extractor
 pub struct OptionalSessionUser(pub Option<SessionUser>);
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for OptionalSessionUser
 where
     S: Send + Sync,
@@ -304,7 +302,6 @@ pub struct AdminUser {
     pub admin_role: AdminRole,
 }
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for AdminUser
 where
     S: Send + Sync,
@@ -334,7 +331,6 @@ pub struct SuperAdminUser {
     pub admin_role: AdminRole,
 }
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for SuperAdminUser
 where
     S: Send + Sync,
@@ -361,7 +357,6 @@ pub struct FacultyAdminUser {
     pub faculty_id: Option<Uuid>,
 }
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for FacultyAdminUser
 where
     S: Send + Sync,

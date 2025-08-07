@@ -1,4 +1,5 @@
 use axum::{
+    debug_handler,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Json,
@@ -71,6 +72,7 @@ pub struct SessionInfo {
 }
 
 // Student login - no admin privileges required
+#[debug_handler]
 pub async fn student_login(
     State(session_state): State<SessionState>,
     cookies: Cookies,
@@ -238,6 +240,7 @@ pub async fn student_login(
 }
 
 // Admin login - requires admin privileges
+#[debug_handler]
 pub async fn admin_login(
     State(session_state): State<SessionState>,
     cookies: Cookies,
@@ -453,6 +456,7 @@ pub async fn student_register(
 }
 
 // Logout - revoke current session
+#[debug_handler]
 pub async fn logout(
     State(session_state): State<SessionState>,
     session_user: SessionUser,
@@ -481,6 +485,7 @@ pub async fn me(session_user: SessionUser) -> Result<Json<SessionUser>, StatusCo
 }
 
 // Admin logout
+#[debug_handler]
 pub async fn admin_logout(
     State(session_state): State<SessionState>,
     admin_user: AdminUser,
