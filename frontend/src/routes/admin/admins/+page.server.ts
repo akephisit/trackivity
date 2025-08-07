@@ -63,13 +63,27 @@ export const actions: Actions = {
 
 		try {
 			const sessionId = cookies.get('session_id');
-			const response = await fetch(`${API_BASE_URL}/api/users`, {
+			
+			// Transform form data to match backend expectations
+			const transformedData = {
+				student_id: `A${Date.now()}`, // Generate temporary student_id for admin with prefix
+				email: form.data.email,
+				password: 'TempPass123!', // Temporary password - should be changed on first login
+				first_name: form.data.name.split(' ')[0] || form.data.name,
+				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
+				department_id: null,
+				admin_level: form.data.admin_level,
+				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,
+				permissions: form.data.permissions || []
+			};
+			
+			const response = await fetch(`${API_BASE_URL}/api/admin/create`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'Cookie': `session_id=${sessionId}`
 				},
-				body: JSON.stringify(form.data)
+				body: JSON.stringify(transformedData)
 			});
 
 			const result = await response.json();
@@ -87,7 +101,15 @@ export const actions: Actions = {
 			}
 		} catch (error) {
 			console.error('Create admin error:', error);
-			form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อ'];
+			
+			// ตรวจสอบประเภทของ error เพื่อให้ข้อความที่เหมาะสม
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาตรวจสอบว่า Backend Server กำลังทำงานอยู่'];
+			} else if (error instanceof Error) {
+				form.errors._errors = [`เกิดข้อผิดพลาด: ${error.message}`];
+			} else {
+				form.errors._errors = ['เกิดข้อผิดพลาดไม่ทราบสาเหตุในการสร้างแอดมิน'];
+			}
 			return fail(500, { form });
 		}
 	},

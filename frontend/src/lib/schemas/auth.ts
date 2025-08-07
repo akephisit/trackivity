@@ -85,15 +85,17 @@ export const adminCreateSchema = z.object({
 			message: 'กรุณาเลือกระดับแอดมิน'
 		}),
 	faculty_id: z
-		.number()
-		.positive('กรุณาเลือกคณะ')
-		.optional(),
+		.string()
+		.optional()
+		.refine(val => !val || val === '' || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val), {
+			message: 'รูปแบบ Faculty ID ไม่ถูกต้อง'
+		}),
 	permissions: z
 		.array(z.string())
 		.default([])
 }).refine(data => {
 	// FacultyAdmin ต้องมี faculty_id
-	if (data.admin_level === AdminLevel.FacultyAdmin && !data.faculty_id) {
+	if (data.admin_level === AdminLevel.FacultyAdmin && (!data.faculty_id || data.faculty_id === '')) {
 		return false;
 	}
 	return true;

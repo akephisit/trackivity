@@ -66,11 +66,11 @@
 
 	$effect(() => {
 		if (selectedFaculty) {
-			// Convert string to number for faculty_id
-			const facultyId = parseInt(selectedFaculty, 10);
-			if (!isNaN(facultyId)) {
-				$formData.faculty_id = facultyId;
-			}
+			// Use faculty UUID string directly
+			$formData.faculty_id = selectedFaculty;
+		} else {
+			// Clear faculty_id when no faculty is selected
+			$formData.faculty_id = '';
 		}
 	});
 
@@ -469,11 +469,11 @@
 							<Label for={props.id}>คณะ</Label>
 							<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
 								<Select.Trigger>
-									{facultyOptions.find(opt => opt.value.toString() === selectedFaculty)?.label ?? "เลือกคณะ"}
+									{facultyOptions.find(opt => opt.value === selectedFaculty)?.label ?? "เลือกคณะ"}
 								</Select.Trigger>
 								<Select.Content>
 									{#each facultyOptions as option}
-										<Select.Item value={option.value.toString()}>
+										<Select.Item value={option.value}>
 											{option.label}
 										</Select.Item>
 									{/each}
