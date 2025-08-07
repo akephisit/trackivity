@@ -23,8 +23,49 @@ export const load: PageServerLoad = async (event) => {
 
 		if (response.ok) {
 			const result = await response.json();
-			if (result.status === 'success' && result.data && Array.isArray(result.data)) {
-				admins = result.data;
+			if (result.status === 'success' && result.data) {
+				// API ส่งข้อมูลในรูปแบบ { users: [], ... } ไม่ใช่ array โดยตรง
+				const adminUsers = result.data.users || [];
+				
+				// Helper function to convert API AdminLevel to Frontend AdminLevel
+				const mapAdminLevel = (apiLevel: string) => {
+					switch (apiLevel) {
+						case 'SuperAdmin':
+							return 'SuperAdmin';
+						case 'FacultyAdmin':
+							return 'FacultyAdmin';
+						case 'RegularAdmin':
+							return 'RegularAdmin';
+						default:
+							return 'RegularAdmin';
+					}
+				};
+
+				// แปลงข้อมูลจาก AdminUserInfo ให้เป็น AdminRole format ที่ frontend ใช้
+				admins = adminUsers
+					.filter((user: any) => user.admin_role) // เฉพาะ user ที่มี admin role
+					.map((user: any) => ({
+						id: user.admin_role.id,
+						user_id: user.id,
+						admin_level: mapAdminLevel(user.admin_role.admin_level),
+						faculty_id: user.admin_role.faculty_id,
+						permissions: user.admin_role.permissions || [],
+						created_at: user.admin_role.created_at,
+						updated_at: user.admin_role.updated_at,
+						// เพิ่มข้อมูล user เข้าไปด้วยเพื่อให้ UI แสดงได้
+						user: {
+							id: user.id,
+							student_id: user.student_id,
+							email: user.email,
+							first_name: user.first_name,
+							last_name: user.last_name,
+							department_id: user.department_id,
+							created_at: user.created_at
+						},
+						// เพิ่ม faculty ข้อมูลถ้ามี
+						faculty: user.admin_role.faculty_id ? 
+							faculties.find(f => f.id === user.admin_role.faculty_id) : undefined
+					}));
 			}
 		}
 	} catch (error) {
@@ -76,6 +117,7 @@ export const actions: Actions = {
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,
 				permissions: form.data.permissions || []
 			};
+
 			
 			const response = await fetch(`${API_BASE_URL}/api/admin/create`, {
 				method: 'POST',

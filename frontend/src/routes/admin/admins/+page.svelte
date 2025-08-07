@@ -15,17 +15,39 @@
 	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail, IconToggleLeft, IconToggleRight } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { AdminLevel, type AdminRole } from '$lib/types/admin';
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, invalidate } from '$app/navigation';
 
 	let { data } = $props();
+	let refreshing = $state(false);
 
 	const form = superForm(data.form, {
 		validators: zodClient(adminCreateSchema),
-		onResult: ({ result }) => {
+		onResult: async ({ result }) => {
 			if (result.type === 'success') {
 				toast.success('สร้างแอดมินสำเร็จ');
 				dialogOpen = false;
-				invalidateAll();
+				
+				// รอสักครู่แล้วค่อย invalidate เพื่อให้เซิร์ฟเวอร์ commit ข้อมูล
+				// เพิ่ม delay เพื่อให้ database transaction commit เสร็จก่อน
+				setTimeout(async () => {
+					try {
+						refreshing = true;
+						console.log('Refreshing admin list after create...');
+						
+						// ใช้ invalidate แทน invalidateAll เพื่อ performance ดีกว่า
+						await invalidate('app:page-data');
+						// fallback ไป invalidateAll 
+						await invalidateAll();
+						
+						console.log('Admin list refreshed successfully');
+						refreshing = false;
+					} catch (error) {
+						console.error('Failed to refresh data:', error);
+						refreshing = false;
+						// force page reload ถ้า invalidation ล้มเหลว
+						window.location.reload();
+					}
+				}, 500);
 			} else if (result.type === 'failure') {
 				toast.error('เกิดข้อผิดพลาดในการสร้างแอดมิน');
 			}
@@ -125,7 +147,15 @@
 
 			if (result.type === 'success') {
 				toast.success('ลบแอดมินสำเร็จ');
-				invalidateAll();
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data after delete:', error);
+						window.location.reload();
+					}
+				}, 500);
 			} else {
 				toast.error('เกิดข้อผิดพลาดในการลบแอดมิน');
 			}
@@ -182,7 +212,15 @@
 			if (result.type === 'success') {
 				toast.success('แก้ไขแอดมินสำเร็จ');
 				editDialogOpen = false;
-				invalidateAll();
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data after update:', error);
+						window.location.reload();
+					}
+				}, 500);
 			} else {
 				toast.error('เกิดข้อผิดพลาดในการแก้ไขแอดมิน');
 			}
@@ -214,7 +252,15 @@
 
 			if (result.type === 'success') {
 				toast.success(`${actionText}แอดมินสำเร็จ`);
-				invalidateAll();
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data after toggle status:', error);
+						window.location.reload();
+					}
+				}, 500);
 			} else {
 				toast.error(`เกิดข้อผิดพลาดในการ${actionText}แอดมิน`);
 			}
@@ -297,7 +343,12 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent>
-			{#if (data.admins || []).length > 0}
+			{#if refreshing}
+				<div class="flex items-center justify-center py-8">
+					<IconLoader class="h-6 w-6 animate-spin mr-2" />
+					<span class="text-gray-600">กำลังรีเฟรชข้อมูล...</span>
+				</div>
+			{:else if (data.admins || []).length > 0}
 				<div class="rounded-md border">
 					<Table.Root>
 						<Table.Header>
