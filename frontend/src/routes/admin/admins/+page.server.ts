@@ -23,7 +23,7 @@ export const load: PageServerLoad = async (event) => {
 
 		if (response.ok) {
 			const result = await response.json();
-			if (result.status === 'success' && result.data) {
+			if (result.status === 'success' && result.data && Array.isArray(result.data)) {
 				admins = result.data;
 			}
 		}

@@ -253,7 +253,7 @@
 				<IconUsers class="h-4 w-4 text-muted-foreground" />
 			</CardHeader>
 			<CardContent>
-				<div class="text-2xl font-bold">{data.admins.length}</div>
+				<div class="text-2xl font-bold">{(data.admins || []).length}</div>
 			</CardContent>
 		</Card>
 
@@ -264,7 +264,7 @@
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-red-600">
-					{data.admins.filter(a => a.admin_level === AdminLevel.SuperAdmin).length}
+					{(data.admins || []).filter(a => a.admin_level === AdminLevel.SuperAdmin).length}
 				</div>
 			</CardContent>
 		</Card>
@@ -276,7 +276,7 @@
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-blue-600">
-					{data.admins.filter(a => a.admin_level === AdminLevel.FacultyAdmin).length}
+					{(data.admins || []).filter(a => a.admin_level === AdminLevel.FacultyAdmin).length}
 				</div>
 			</CardContent>
 		</Card>
@@ -291,7 +291,7 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent>
-			{#if data.admins.length > 0}
+			{#if (data.admins || []).length > 0}
 				<div class="rounded-md border">
 					<Table.Root>
 						<Table.Header>
@@ -306,7 +306,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each data.admins as admin}
+							{#each (data.admins || []) as admin}
 								<Table.Row>
 									<Table.Cell class="font-medium">
 										{admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ'}
