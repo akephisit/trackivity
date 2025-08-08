@@ -812,12 +812,24 @@ async fn get_user_admin_role(
     session_state: &SessionState,
     user_id: Uuid,
 ) -> Result<Option<AdminRole>, anyhow::Error> {
+    // Check if admin exists and is active (has non-empty permissions array)
     let admin_role = sqlx::query_as::<_, AdminRole>("SELECT * FROM admin_roles WHERE user_id = $1")
         .bind(user_id)
         .fetch_optional(&session_state.db_pool)
         .await?;
 
-    Ok(admin_role)
+    // If admin role exists, check if it's active (has permissions)
+    match admin_role {
+        Some(role) => {
+            if role.permissions.is_empty() {
+                // Admin is disabled (no permissions)
+                Ok(None)
+            } else {
+                Ok(Some(role))
+            }
+        }
+        None => Ok(None)
+    }
 }
 
 async fn store_session_metadata(
