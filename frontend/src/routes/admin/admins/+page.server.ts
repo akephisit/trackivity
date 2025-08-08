@@ -184,5 +184,161 @@ export const actions: Actions = {
 			console.error('Delete admin error:', error);
 			return fail(500, { error: 'เกิดข้อผิดพลาดในการเชื่อมต่อ' });
 		}
+	},
+
+	toggleStatus: async ({ request, cookies }) => {
+		const formData = await request.formData();
+		const adminId = formData.get('adminId') as string;
+		const isActive = formData.get('isActive') === 'true';
+
+		if (!adminId) {
+			return fail(400, { error: 'ไม่พบ ID ของแอดมิน' });
+		}
+
+		try {
+			const sessionId = cookies.get('session_id');
+			
+			// สำหรับการเปลี่ยนสถานะ เราจะใช้การอัพเดต permissions
+			// ถ้าเป็น active จะมี permissions เต็ม ถ้าไม่ active จะเป็น array ว่าง
+			const updateData = {
+				permissions: isActive ? ['read', 'write', 'delete'] : [] // ถ้า activate ให้มี permissions พื้นฐาน, ถ้า deactivate ให้เป็น empty array
+			};
+
+			const response = await fetch(`${API_BASE_URL}/api/admin/users/${adminId}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					'Cookie': `session_id=${sessionId}`
+				},
+				body: JSON.stringify(updateData)
+			});
+
+			if (!response.ok) {
+				const result = await response.json();
+				return fail(400, { 
+					error: result.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
+				});
+			}
+
+			const result = await response.json();
+
+			if (result.status === 'success') {
+				return { 
+					success: true, 
+					message: `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ` 
+				};
+			} else {
+				return fail(400, { 
+					error: result.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
+				});
+			}
+		} catch (error) {
+			console.error('Toggle admin status error:', error);
+			
+			// ให้ error handling ที่ดีขึ้น
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				return fail(500, { error: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์' });
+			} else if (error instanceof Error) {
+				return fail(500, { error: `เกิดข้อผิดพลาด: ${error.message}` });
+			} else {
+				return fail(500, { error: 'เกิดข้อผิดพลาดไม่ทราบสาเหตุในการเปลี่ยนสถานะแอดมิน' });
+			}
+		}
+	},
+
+	update: async ({ request, cookies }) => {
+		const formData = await request.formData();
+		const adminId = formData.get('adminId') as string;
+		const updateDataString = formData.get('updateData') as string;
+
+		if (!adminId) {
+			return fail(400, { error: 'ไม่พบ ID ของแอดมิน' });
+		}
+
+		if (!updateDataString) {
+			return fail(400, { error: 'ไม่พบข้อมูลที่ต้องการอัพเดต' });
+		}
+
+		let updateData;
+		try {
+			updateData = JSON.parse(updateDataString);
+		} catch (error) {
+			return fail(400, { error: 'ข้อมูลที่ส่งมาไม่ถูกต้อง' });
+		}
+
+		try {
+			const sessionId = cookies.get('session_id');
+			
+			// ตรวจสอบว่ามีข้อมูลที่จำเป็นครบถ้วน
+			const requiredFields = ['first_name', 'last_name', 'email'];
+			const missingFields = requiredFields.filter(field => !updateData[field]);
+			
+			if (missingFields.length > 0) {
+				return fail(400, { 
+					error: `ข้อมูลไม่ครบถ้วน: ${missingFields.join(', ')}` 
+				});
+			}
+
+			// เตรียมข้อมูลสำหรับส่งไป backend
+			const preparedData = {
+				first_name: updateData.first_name,
+				last_name: updateData.last_name,
+				email: updateData.email,
+				...(updateData.admin_level && { admin_level: updateData.admin_level }),
+				...(updateData.faculty_id !== undefined && { faculty_id: updateData.faculty_id || null }),
+				...(updateData.permissions && { permissions: updateData.permissions })
+			};
+
+			const response = await fetch(`${API_BASE_URL}/api/admin/users/${adminId}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					'Cookie': `session_id=${sessionId}`
+				},
+				body: JSON.stringify(preparedData)
+			});
+
+			if (!response.ok) {
+				const result = await response.json();
+				
+				// Handle specific error cases
+				if (response.status === 404) {
+					return fail(404, { error: 'ไม่พบแอดมินที่ต้องการอัพเดต' });
+				} else if (response.status === 409) {
+					return fail(409, { error: 'อีเมลนี้มีผู้ใช้แล้ว' });
+				}
+				
+				return fail(response.status, { 
+					error: result.message || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
+				});
+			}
+
+			const result = await response.json();
+
+			if (result.status === 'success') {
+				return { 
+					success: true, 
+					message: 'อัพเดตข้อมูลแอดมินสำเร็จ',
+					data: result.data 
+				};
+			} else {
+				return fail(400, { 
+					error: result.message || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
+				});
+			}
+		} catch (error) {
+			console.error('Update admin error:', error);
+			
+			// ให้ error handling ที่ดีขึ้น
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				return fail(500, { error: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาตรวจสอบว่า Backend Server กำลังทำงานอยู่' });
+			} else if (error instanceof SyntaxError) {
+				return fail(500, { error: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลจากเซิร์ฟเวอร์' });
+			} else if (error instanceof Error) {
+				return fail(500, { error: `เกิดข้อผิดพลาด: ${error.message}` });
+			} else {
+				return fail(500, { error: 'เกิดข้อผิดพลาดไม่ทราบสาเหตุในการอัพเดตข้อมูลแอดมิน' });
+			}
+		}
 	}
 };
