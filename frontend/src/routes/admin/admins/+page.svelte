@@ -82,32 +82,25 @@
 	// Update form data when select values change - using separate effects to prevent loops
 	$effect(() => {
 		if (selectedAdminLevel !== undefined) {
-			// Only update if actually different to prevent loops
-			if ($formData.admin_level !== selectedAdminLevel) {
-				$formData.admin_level = selectedAdminLevel;
-				console.log('Updated formData.admin_level to:', selectedAdminLevel);
-			}
+			// Always update admin_level immediately when selectedAdminLevel changes
+			$formData.admin_level = selectedAdminLevel;
+			console.log('Updated formData.admin_level to:', selectedAdminLevel);
 			
 			// Clear faculty selection when changing to SuperAdmin or RegularAdmin
 			if (selectedAdminLevel === AdminLevel.SuperAdmin || selectedAdminLevel === AdminLevel.RegularAdmin) {
-				if (selectedFaculty !== undefined) {
-					selectedFaculty = undefined;
-				}
-				if ($formData.faculty_id !== undefined) {
-					$formData.faculty_id = undefined;
-				}
+				selectedFaculty = undefined;
+				$formData.faculty_id = undefined;
+				console.log('Cleared faculty_id because admin_level is:', selectedAdminLevel);
 			}
 		}
 	});
 	
 	// Separate effect for faculty changes
 	$effect(() => {
-		if (selectedAdminLevel === AdminLevel.FacultyAdmin) {
-			// Only update faculty_id if it's actually different
-			if ($formData.faculty_id !== selectedFaculty) {
-				$formData.faculty_id = selectedFaculty;
-				console.log('Updated formData.faculty_id to:', selectedFaculty);
-			}
+		if (selectedAdminLevel === AdminLevel.FacultyAdmin && selectedFaculty !== undefined) {
+			// Update faculty_id when we have both FacultyAdmin level and selected faculty
+			$formData.faculty_id = selectedFaculty;
+			console.log('Updated formData.faculty_id to:', selectedFaculty, 'for FacultyAdmin');
 		}
 	});
 
@@ -168,10 +161,11 @@
 			email: '',
 			name: '',
 			password: '',
-			admin_level: AdminLevel.RegularAdmin,
+			admin_level: AdminLevel.RegularAdmin, // This will be overridden when user selects
 			faculty_id: undefined,
 			permissions: []
 		};
+		console.log('Form reset with default admin_level:', AdminLevel.RegularAdmin);
 	}
 
 	function openDialog() {
@@ -879,7 +873,9 @@
 							bind:value={selectedAdminLevel} 
 							disabled={$submitting}
 							onValueChange={(value) => {
-								selectedAdminLevel = value as AdminLevel;
+								const newLevel = value as AdminLevel;
+								console.log('Admin level changed to:', newLevel);
+								selectedAdminLevel = newLevel;
 							}}
 						>
 							<Select.Trigger>
@@ -909,7 +905,9 @@
 								disabled={$submitting} 
 								required
 								onValueChange={(value) => {
-									selectedFaculty = value as string;
+									const newFaculty = value as string;
+									console.log('Faculty changed to:', newFaculty);
+									selectedFaculty = newFaculty;
 								}}
 							>
 								<Select.Trigger class={!selectedFaculty ? "border-red-300" : ""}>
@@ -926,8 +924,12 @@
 							{#if selectedAdminLevel === AdminLevel.FacultyAdmin && !selectedFaculty}
 								<p class="text-sm text-red-600 mt-1">กรุณาเลือกคณะสำหรับแอดมินระดับคณะ</p>
 							{/if}
-							<!-- Hidden input to send faculty_id to server -->
-							<input type="hidden" name="faculty_id" bind:value={$formData.faculty_id} />
+							<!-- Debug info -->
+							{#if selectedAdminLevel === AdminLevel.FacultyAdmin}
+								<div class="text-xs text-gray-500 mt-1 p-2 bg-gray-50 rounded border">
+									Debug: selectedFaculty = {selectedFaculty}, formData.faculty_id = {$formData.faculty_id}
+								</div>
+							{/if}
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
@@ -952,6 +954,21 @@
 				</div>
 			{/if}
 
+			<!-- Hidden inputs to ensure form data is sent correctly -->
+			<input type="hidden" name="admin_level" bind:value={$formData.admin_level} />
+			{#if $formData.faculty_id}
+				<input type="hidden" name="faculty_id" bind:value={$formData.faculty_id} />
+			{/if}
+
+			<!-- Debug section for development -->
+			<div class="text-xs text-gray-500 p-2 bg-gray-50 rounded border mt-4">
+				<div><strong>Debug Information:</strong></div>
+				<div>Selected Admin Level: {selectedAdminLevel}</div>
+				<div>Selected Faculty: {selectedFaculty}</div>
+				<div>Form Data Admin Level: {$formData.admin_level}</div>
+				<div>Form Data Faculty ID: {$formData.faculty_id}</div>
+			</div>
+
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => dialogOpen = false}>
 					ยกเลิก
@@ -960,11 +977,13 @@
 					type="submit" 
 					disabled={$submitting || (selectedAdminLevel === AdminLevel.FacultyAdmin && !selectedFaculty)}
 					onclick={() => {
-						console.log('Submitting form with data:', {
-							selectedAdminLevel,
-							selectedFaculty,
-							formData: $formData
-						});
+						console.log('=== FORM SUBMISSION DEBUG ===');
+						console.log('selectedAdminLevel:', selectedAdminLevel);
+						console.log('selectedFaculty:', selectedFaculty);
+						console.log('$formData:', $formData);
+						console.log('admin_level in formData:', $formData.admin_level);
+						console.log('faculty_id in formData:', $formData.faculty_id);
+						console.log('===============================');
 					}}
 				>
 					{#if $submitting}
