@@ -136,7 +136,7 @@ export const actions: Actions = {
 			const transformedData = {
 				student_id: `A${Date.now()}`, // Generate temporary student_id for admin with prefix
 				email: form.data.email,
-				password: 'TempPass123!', // Temporary password - should be changed on first login
+				password: form.data.password || 'TempPass123!', // Use provided password or temp password
 				first_name: form.data.name.split(' ')[0] || form.data.name,
 				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
 				department_id: null,
@@ -148,7 +148,9 @@ export const actions: Actions = {
 			console.log('Creating admin with data:', {
 				admin_level: transformedData.admin_level,
 				faculty_id: transformedData.faculty_id,
-				permissions: transformedData.permissions
+				permissions: transformedData.permissions,
+				form_data_admin_level: form.data.admin_level,
+				form_data_faculty_id: form.data.faculty_id
 			});
 
 			

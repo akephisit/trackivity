@@ -121,4 +121,12 @@
     @apply bg-background text-foreground;
     font-family: 'Kanit', sans-serif;
   }
+  
+  /* Ensure Kanit font is used for notifications */
+  .toaster .sonner-toast,
+  .toaster .sonner-toast-content,
+  .toaster .sonner-toast-title,
+  .toaster .sonner-toast-description {
+    font-family: 'Kanit', sans-serif !important;
+  }
 }

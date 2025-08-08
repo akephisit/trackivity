@@ -85,6 +85,7 @@
 			// Only update if actually different to prevent loops
 			if ($formData.admin_level !== selectedAdminLevel) {
 				$formData.admin_level = selectedAdminLevel;
+				console.log('Updated formData.admin_level to:', selectedAdminLevel);
 			}
 			
 			// Clear faculty selection when changing to SuperAdmin or RegularAdmin
@@ -105,6 +106,7 @@
 			// Only update faculty_id if it's actually different
 			if ($formData.faculty_id !== selectedFaculty) {
 				$formData.faculty_id = selectedFaculty;
+				console.log('Updated formData.faculty_id to:', selectedFaculty);
 			}
 		}
 	});
@@ -165,6 +167,7 @@
 		$formData = {
 			email: '',
 			name: '',
+			password: '',
 			admin_level: AdminLevel.RegularAdmin,
 			faculty_id: undefined,
 			permissions: []
@@ -848,6 +851,25 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
+			<Form.Field {form} name="password">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>รหัสผ่าน</Label>
+						<Input
+							{...props}
+							type="password"
+							bind:value={$formData.password}
+							placeholder="กรุณาใส่รหัสผ่าน"
+							disabled={$submitting}
+						/>
+						<div class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+							รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร ประกอบด้วยตัวพิมพ์เล็ก พิมพ์ใหญ่ และตัวเลข
+						</div>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
 			<Form.Field {form} name="admin_level">
 				<Form.Control>
 					{#snippet children({ props })}
@@ -936,7 +958,11 @@
 					type="submit" 
 					disabled={$submitting || (selectedAdminLevel === AdminLevel.FacultyAdmin && !selectedFaculty)}
 					onclick={() => {
-						// Form will be submitted normally
+						console.log('Submitting form with data:', {
+							selectedAdminLevel,
+							selectedFaculty,
+							formData: $formData
+						});
 					}}
 				>
 					{#if $submitting}
