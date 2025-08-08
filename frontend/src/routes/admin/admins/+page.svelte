@@ -231,8 +231,7 @@
 
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminId); // admin role id
-			formData.append('userId', userId); // user id สำหรับ /api/users endpoint
+			formData.append('adminId', adminId); // admin role id for the new endpoint
 			formData.append('isActive', newStatus.toString());
 
 			const response = await fetch('?/toggleStatus', {
@@ -244,6 +243,7 @@
 
 			if (result.type === 'success') {
 				toast.success(`${actionText}แอดมินสำเร็จ`);
+				// รีเฟรชข้อมูลทันทีเพื่อให้ UI อัพเดต
 				setTimeout(async () => {
 					try {
 						await invalidate('app:page-data');
@@ -252,9 +252,9 @@
 						console.error('Failed to refresh data after toggle status:', error);
 						window.location.reload();
 					}
-				}, 500);
+				}, 300);
 			} else {
-				toast.error(`เกิดข้อผิดพลาดในการ${actionText}แอดมิน`);
+				toast.error(result.error || `เกิดข้อผิดพลาดในการ${actionText}แอดมิน`);
 			}
 		} catch (error) {
 			console.error('Toggle status error:', error);
@@ -389,7 +389,7 @@
 				<span class="text-lg text-gray-600 dark:text-gray-300">กำลังรีเฟรชข้อมูล...</span>
 			</div>
 		{:else if (data.admins || []).length === 0}
-			<div class="text-center py-16 text-gray-500 dark:text-gray-400" role="region" aria-labelledby="no-admins-heading">
+			<div class="text-center py-16 text-gray-500 dark:text-gray-400" aria-labelledby="no-admins-heading">
 				<IconShield class="h-16 w-16 mx-auto mb-6 opacity-50" />
 				<h3 id="no-admins-heading" class="text-xl font-semibold mb-2">ยังไม่มีแอดมินในระบบ</h3>
 				<p class="text-gray-400 mb-6">เริ่มต้นด้วยการเพิ่มผู้ดูแลระบบคนแรก</p>
@@ -401,7 +401,7 @@
 		{:else}
 			<!-- Super Admins Section -->
 			{#if groupedAdmins.superAdmins.length > 0}
-				<section role="region" aria-labelledby="super-admin-heading">
+				<section aria-labelledby="super-admin-heading">
 					<Card class="border-red-200 shadow-sm">
 						<CardHeader class="bg-red-50/50 dark:bg-red-950/20">
 							<CardTitle id="super-admin-heading" class="flex items-center gap-3">
@@ -555,7 +555,7 @@
 										</CardTitle>
 										<Collapsible.Trigger 
 											class="flex items-center justify-center w-8 h-8 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors [&[data-state=open]>svg]:rotate-180"
-											aria-label="{facultyGroup.faculty?.name ? `ขยาย/หดแอดมินคณะ${facultyGroup.faculty.name}` : 'ขยาย/หดแอดมินที่ไม่ได้มอบหมายคณะ'}"
+											aria-label={facultyGroup.faculty?.name ? `ขยาย/หดแอดมินคณะ${facultyGroup.faculty.name}` : 'ขยาย/หดแอดมินที่ไม่ได้มอบหมายคณะ'}
 											title="คลิกเพื่อขยาย/หดรายการแอดมิน"
 										>
 											<IconChevronDown class="h-4 w-4 text-blue-600 dark:text-blue-400 transition-transform duration-200" aria-hidden="true" />
@@ -678,7 +678,7 @@
 					</div>
 				{/if}
 				
-				<section role="region" aria-labelledby="regular-admin-heading">
+				<section aria-labelledby="regular-admin-heading">
 					<Card class="border-gray-200 shadow-sm">
 						<CardHeader class="bg-gray-50/50 dark:bg-gray-800/50">
 							<CardTitle id="regular-admin-heading" class="flex items-center gap-3">

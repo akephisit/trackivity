@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
@@ -803,4 +803,115 @@ pub async fn create_admin(
     });
 
     Ok(Json(response))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ToggleAdminStatusRequest {
+    pub is_active: bool,
+}
+
+/// Toggle admin status by managing permissions
+pub async fn toggle_admin_status(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+    Path(admin_role_id): Path<Uuid>,
+    Json(request): Json<ToggleAdminStatusRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Get the admin role first
+    let admin_role_result = sqlx::query_as::<_, AdminRole>(
+        "SELECT * FROM admin_roles WHERE id = $1"
+    )
+    .bind(admin_role_id)
+    .fetch_optional(&session_state.db_pool)
+    .await;
+
+    let admin_role = match admin_role_result {
+        Ok(Some(role)) => role,
+        Ok(None) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Admin role not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to fetch admin role"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Define default permissions based on admin level
+    let default_permissions = match admin_role.admin_level {
+        AdminLevel::SuperAdmin => vec![
+            "ManageUsers".to_string(),
+            "ManageAdmins".to_string(),
+            "ManageActivities".to_string(),
+            "ViewDashboard".to_string(),
+            "ManageFaculties".to_string(),
+            "ManageSessions".to_string(),
+        ],
+        AdminLevel::FacultyAdmin => vec![
+            "ViewDashboard".to_string(),
+            "ManageActivities".to_string(),
+            "ManageUsers".to_string(),
+        ],
+        AdminLevel::RegularAdmin => vec![
+            "ViewDashboard".to_string(),
+            "ManageActivities".to_string(),
+        ],
+    };
+
+    // Set permissions based on active status
+    let new_permissions = if request.is_active {
+        default_permissions
+    } else {
+        vec![] // Empty permissions means inactive
+    };
+
+    // Update the admin role permissions
+    let update_result = sqlx::query_as::<_, AdminRole>(
+        r#"
+        UPDATE admin_roles 
+        SET permissions = $1, updated_at = NOW() 
+        WHERE id = $2
+        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        "#
+    )
+    .bind(&new_permissions)
+    .bind(admin_role_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match update_result {
+        Ok(updated_role) => {
+            // If deactivating, also revoke any active sessions for this user
+            if !request.is_active {
+                // Note: For now we skip session revocation as we'd need to implement
+                // a method to find all sessions for a user and revoke them individually
+                // This is a future enhancement
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "admin_role": updated_role,
+                    "is_active": request.is_active,
+                    "action": if request.is_active { "activated" } else { "deactivated" }
+                },
+                "message": format!("Admin status {} successfully", 
+                    if request.is_active { "activated" } else { "deactivated" })
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error", 
+                "message": format!("Failed to update admin status: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
 }

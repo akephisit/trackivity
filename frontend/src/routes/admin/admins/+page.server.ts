@@ -105,6 +105,33 @@ export const actions: Actions = {
 		try {
 			const sessionId = cookies.get('session_id');
 			
+			// Define default permissions based on admin level
+			const getDefaultPermissions = (adminLevel: string, facultyId?: string) => {
+				switch (adminLevel) {
+					case 'SuperAdmin':
+						return [
+							'ManageUsers',
+							'ManageAdmins',
+							'ManageActivities',
+							'ViewDashboard',
+							'ManageFaculties',
+							'ManageSessions'
+						];
+					case 'FacultyAdmin':
+						return [
+							'ViewDashboard',
+							'ManageActivities',
+							'ManageUsers'
+						];
+					case 'RegularAdmin':
+					default:
+						return [
+							'ViewDashboard',
+							'ManageActivities'
+						];
+				}
+			};
+
 			// Transform form data to match backend expectations
 			const transformedData = {
 				student_id: `A${Date.now()}`, // Generate temporary student_id for admin with prefix
@@ -113,10 +140,16 @@ export const actions: Actions = {
 				first_name: form.data.name.split(' ')[0] || form.data.name,
 				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
 				department_id: null,
-				admin_level: form.data.admin_level,
+				admin_level: form.data.admin_level, // ใช้ admin_level ที่ส่งมาจาก form โดยตรง
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,
-				permissions: form.data.permissions || []
+				permissions: getDefaultPermissions(form.data.admin_level, form.data.faculty_id)
 			};
+
+			console.log('Creating admin with data:', {
+				admin_level: transformedData.admin_level,
+				faculty_id: transformedData.faculty_id,
+				permissions: transformedData.permissions
+			});
 
 			
 			const response = await fetch(`${API_BASE_URL}/api/admin/create`, {
@@ -226,39 +259,28 @@ export const actions: Actions = {
 
 	toggleStatus: async ({ request, cookies }) => {
 		const formData = await request.formData();
-		const adminId = formData.get('adminId') as string;
-		const userId = formData.get('userId') as string; // รับ user_id แทน admin_id
+		const adminId = formData.get('adminId') as string; // admin role id
 		const isActive = formData.get('isActive') === 'true';
 
-		if (!adminId && !userId) {
+		if (!adminId) {
 			return fail(400, { error: 'ไม่พบ ID ของแอดมิน' });
 		}
-
-		// ใช้ userId หากมี, ถ้าไม่มีให้ใช้ adminId
-		const targetUserId = userId || adminId;
 
 		try {
 			const sessionId = cookies.get('session_id');
 			
-			// สำหรับการเปลี่ยนสถานะ เราจะอัพเดตผ่าน user endpoint
-			// เนื่องจาก backend ไม่มี admin-specific toggle status endpoint
-			const updateData = {
-				// ใช้ field ที่ backend user update รองรับ
-				// ตามโครงสร้างที่เห็นใน backend user handler
-			};
-
-			// ใช้ user endpoint เพื่อ simulate การ toggle status
-			// ในระบบนี้เราจะจัดการผ่าน admin role permissions
-			const response = await fetch(`${API_BASE_URL}/api/users/${targetUserId}`, {
+			// ใช้ admin toggle status endpoint ที่เพิ่งสร้างขึ้น
+			const response = await fetch(`${API_BASE_URL}/api/admin/roles/${adminId}/toggle-status`, {
 				method: 'PUT',
 				headers: {
 					'Content-Type': 'application/json',
 					'Cookie': `session_id=${sessionId}`
 				},
-				body: JSON.stringify(updateData)
+				body: JSON.stringify({
+					is_active: isActive
+				})
 			});
 
-			// ตรวจสอบว่า response มี content หรือไม่
 			const contentType = response.headers.get('content-type');
 			let result;
 			
@@ -266,26 +288,17 @@ export const actions: Actions = {
 				try {
 					result = await response.json();
 				} catch (parseError) {
-					// หากไม่สามารถ parse JSON ได้
-					result = {
-						status: response.ok ? 'success' : 'error',
-						message: response.ok ? 'User updated successfully' : 'Failed to update user'
-					};
-				}
-			} else {
-				// ถ้าไม่มี JSON response หรือ response ว่าง
-				const responseText = await response.text();
-				if (!responseText.trim()) {
-					// Response ว่าง - อาจเป็น "Unexpected end of JSON input" error
+					console.error('Failed to parse JSON response:', parseError);
 					return fail(500, { 
-						error: 'เซิร์ฟเวอร์ตอบกลับข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้ง' 
+						error: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลจากเซิร์ฟเวอร์' 
 					});
 				}
-				
-				result = {
-					status: response.ok ? 'success' : 'error',
-					message: response.ok ? 'Status updated successfully' : responseText
-				};
+			} else {
+				const responseText = await response.text();
+				console.error('Non-JSON response received:', responseText);
+				return fail(500, { 
+					error: 'เซิร์ฟเวอร์ตอบกลับข้อมูลในรูปแบบที่ไม่ถูกต้อง' 
+				});
 			}
 
 			if (!response.ok) {
@@ -295,16 +308,15 @@ export const actions: Actions = {
 					return fail(403, { error: 'ไม่มีสิทธิ์ในการเปลี่ยนสถานะแอดมินนี้' });
 				}
 				return fail(response.status, { 
-					error: result.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
+					error: result?.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
 				});
 			}
 
-			// สำหรับตอนนี้ เราจะ return success เสมอหาก API call สำเร็จ
-			// เนื่องจากระบบยังไม่มี toggle status แบบ built-in
-			if (result.status === 'success' || response.ok) {
+			if (result.status === 'success') {
 				return { 
 					success: true, 
-					message: `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ` 
+					message: result.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ`,
+					data: result.data
 				};
 			} else {
 				return fail(400, { 
@@ -314,7 +326,6 @@ export const actions: Actions = {
 		} catch (error) {
 			console.error('Toggle admin status error:', error);
 			
-			// ให้ error handling ที่ดีขึ้น
 			if (error instanceof TypeError && error.message.includes('fetch')) {
 				return fail(500, { error: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์' });
 			} else if (error instanceof SyntaxError) {

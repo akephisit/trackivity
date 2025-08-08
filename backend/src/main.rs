@@ -82,8 +82,10 @@ async fn main() -> anyhow::Result<()> {
                     CorsLayer::new()
                         .allow_origin([
                             "http://localhost:5173".parse().unwrap(),
+                            "http://localhost:5174".parse().unwrap(),
                             "http://localhost:3000".parse().unwrap(),
-                            "http://127.0.0.1:5173".parse().unwrap()
+                            "http://127.0.0.1:5173".parse().unwrap(),
+                            "http://127.0.0.1:5174".parse().unwrap()
                         ])
                         .allow_methods([
                             Method::GET,
