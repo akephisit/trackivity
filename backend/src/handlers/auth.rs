@@ -155,6 +155,23 @@ pub async fn student_login(
         }));
     }
 
+    // Check if the user's faculty is active
+    let user_faculty_id = get_user_faculty_id(&session_state, user.id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let faculty_is_active = check_faculty_is_active(&session_state, user_faculty_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !faculty_is_active {
+        return Ok(Json(LoginResponse {
+            success: false,
+            session: None,
+            message: "Access denied. Your faculty is currently inactive.".to_string(),
+        }));
+    }
+
     // Check existing sessions and enforce limits
     let existing_sessions = session_state
         .redis_store
@@ -316,6 +333,22 @@ pub async fn admin_login(
             session: None,
             message: "Access denied. Admin privileges required.".to_string(),
         }));
+    }
+
+    // For faculty admins, check if their faculty is active
+    let admin_role_ref = admin_role.as_ref().unwrap();
+    if admin_role_ref.faculty_id.is_some() {
+        let faculty_is_active = check_faculty_is_active(&session_state, admin_role_ref.faculty_id)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if !faculty_is_active {
+            return Ok(Json(LoginResponse {
+                success: false,
+                session: None,
+                message: "Access denied. Your faculty is currently inactive.".to_string(),
+            }));
+        }
     }
 
     // Check existing sessions and enforce limits
@@ -830,6 +863,48 @@ async fn get_user_admin_role(
         }
         None => Ok(None)
     }
+}
+
+async fn check_faculty_is_active(
+    session_state: &SessionState,
+    faculty_id: Option<Uuid>,
+) -> Result<bool, anyhow::Error> {
+    // If no faculty_id provided, consider it as inactive
+    let faculty_id = match faculty_id {
+        Some(id) => id,
+        None => return Ok(false),
+    };
+
+    // Query faculty status from database
+    let is_active = sqlx::query_scalar::<_, bool>(
+        "SELECT status FROM faculties WHERE id = $1"
+    )
+    .bind(faculty_id)
+    .fetch_optional(&session_state.db_pool)
+    .await?;
+
+    // Return false if faculty doesn't exist or is inactive
+    Ok(is_active.unwrap_or(false))
+}
+
+async fn get_user_faculty_id(
+    session_state: &SessionState, 
+    user_id: Uuid,
+) -> Result<Option<Uuid>, anyhow::Error> {
+    // Get faculty_id through user's department
+    let faculty_id = sqlx::query_scalar::<_, Option<Uuid>>(
+        r#"
+        SELECT d.faculty_id 
+        FROM users u
+        INNER JOIN departments d ON u.department_id = d.id
+        WHERE u.id = $1
+        "#
+    )
+    .bind(user_id)
+    .fetch_optional(&session_state.db_pool)
+    .await?;
+
+    Ok(faculty_id.flatten())
 }
 
 async fn store_session_metadata(
