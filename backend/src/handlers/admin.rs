@@ -237,7 +237,7 @@ pub async fn get_admin_users(
     let search = params.get("search").cloned();
 
     let mut query = r#"
-        SELECT 
+        SELECT DISTINCT
             u.id,
             u.student_id,
             u.email,
@@ -251,18 +251,18 @@ pub async fn get_admin_users(
             ar.permissions,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
-            s.last_accessed as last_login,
-            CASE WHEN s.id IS NOT NULL THEN true ELSE false END as is_active
+            (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) as last_login,
+            CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) THEN true ELSE false END as is_active
         FROM users u
         LEFT JOIN admin_roles ar ON u.id = ar.user_id
-        LEFT JOIN sessions s ON u.id = s.user_id AND s.is_active = true
+        WHERE ar.id IS NOT NULL
     "#
     .to_string();
 
-    let mut count_query = "SELECT COUNT(*) FROM users u".to_string();
+    let mut count_query = "SELECT COUNT(*) FROM users u LEFT JOIN admin_roles ar ON u.id = ar.user_id WHERE ar.id IS NOT NULL".to_string();
 
     if let Some(_search_term) = &search {
-        let where_clause = " WHERE (u.first_name ILIKE $3 OR u.last_name ILIKE $3 OR u.email ILIKE $3 OR u.student_id ILIKE $3)";
+        let where_clause = " AND (u.first_name ILIKE $3 OR u.last_name ILIKE $3 OR u.email ILIKE $3 OR u.student_id ILIKE $3)";
         query.push_str(where_clause);
         count_query.push_str(where_clause);
     }

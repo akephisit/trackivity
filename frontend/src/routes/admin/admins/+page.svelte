@@ -293,17 +293,17 @@
 	let groupedAdmins = $derived.by(() => {
 		const admins = data.admins || [];
 		
-		// Create a map to track unique admin IDs and detect duplicates
+		// Create a map to track unique admin IDs and filter duplicates silently
 		const adminMap = new Map();
-		const uniqueAdmins = admins.filter((admin, index) => {
+		const uniqueAdmins = admins.filter((admin) => {
+			// Create a unique key using admin role ID and user ID
 			const adminKey = `${admin.id}-${admin.user_id}`;
 			
+			// If already seen this admin, skip it
 			if (adminMap.has(adminKey)) {
-				if (import.meta.env.DEV) {
-					console.warn(`Duplicate admin detected at index ${index}:`, admin);
-				}
 				return false;
 			}
+			
 			adminMap.set(adminKey, admin);
 			return true;
 		});
