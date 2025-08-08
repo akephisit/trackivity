@@ -12,8 +12,10 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Table from '$lib/components/ui/table';
+	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Badge } from '$lib/components/ui/badge';
-	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail, IconToggleLeft, IconToggleRight } from '@tabler/icons-svelte/icons';
+	import { Separator } from '$lib/components/ui/separator';
+	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail, IconToggleLeft, IconToggleRight, IconChevronDown } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { AdminLevel, type AdminRole } from '$lib/types/admin';
 	import { invalidateAll, invalidate } from '$app/navigation';
@@ -67,7 +69,7 @@
 
 	// State for delete confirmation
 	let deleteDialogOpen = $state(false);
-	let adminToDelete = $state<{id: string, name: string} | null>(null);
+	let adminToDelete = $state<{id: string, userId: string, name: string} | null>(null);
 
 	// State for toggle loading
 	let toggleLoading = $state<{[key: string]: boolean}>({});
@@ -104,31 +106,6 @@
 		}
 	});
 
-	function getAdminLevelText(level: AdminLevel): string {
-		switch (level) {
-			case AdminLevel.SuperAdmin:
-				return 'ซุปเปอร์แอดมิน';
-			case AdminLevel.FacultyAdmin:
-				return 'แอดมินคณะ';
-			case AdminLevel.RegularAdmin:
-				return 'แอดมินทั่วไป';
-			default:
-				return 'ไม่ระบุ';
-		}
-	}
-
-	function getAdminLevelBadgeVariant(level: AdminLevel): 'default' | 'secondary' | 'destructive' | 'outline' {
-		switch (level) {
-			case AdminLevel.SuperAdmin:
-				return 'destructive';
-			case AdminLevel.FacultyAdmin:
-				return 'default';
-			case AdminLevel.RegularAdmin:
-				return 'secondary';
-			default:
-				return 'outline';
-		}
-	}
 
 	function getFacultyName(admin: AdminRole): string {
 		if (!admin.faculty_id) return '-';
@@ -137,8 +114,8 @@
 		return faculty?.name || 'ไม่พบข้อมูล';
 	}
 
-	function openDeleteDialog(adminId: string, adminName: string) {
-		adminToDelete = { id: adminId, name: adminName };
+	function openDeleteDialog(adminId: string, userId: string, adminName: string) {
+		adminToDelete = { id: adminId, userId: userId, name: adminName };
 		deleteDialogOpen = true;
 	}
 
@@ -147,7 +124,8 @@
 
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminToDelete.id);
+			formData.append('adminId', adminToDelete.userId); // ใช้ userId เพื่อส่งไปยัง /api/users endpoint
+			formData.append('userId', adminToDelete.userId); // ส่ง userId เพิ่มเติมเพื่อความชัดเจน
 
 			const response = await fetch('?/delete', {
 				method: 'POST',
@@ -202,7 +180,7 @@
 		editDialogOpen = true;
 	}
 
-	async function handleUpdate(adminId: string, updateData: {
+	async function handleUpdate(adminId: string, userId: string, updateData: {
 		first_name: string;
 		last_name: string;
 		email: string;
@@ -212,7 +190,8 @@
 	}) {
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminId);
+			formData.append('adminId', adminId); // เก็บ admin role id 
+			formData.append('userId', userId); // ส่ง user id เพื่อใช้กับ /api/users endpoint
 			formData.append('updateData', JSON.stringify(updateData));
 
 			const response = await fetch('?/update', {
@@ -243,7 +222,7 @@
 		}
 	}
 
-	async function handleToggleStatus(adminId: string, currentStatus: boolean, adminName: string) {
+	async function handleToggleStatus(adminId: string, userId: string, currentStatus: boolean) {
 		const newStatus = !currentStatus;
 		const actionText = newStatus ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
 
@@ -252,7 +231,8 @@
 
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminId);
+			formData.append('adminId', adminId); // admin role id
+			formData.append('userId', userId); // user id สำหรับ /api/users endpoint
 			formData.append('isActive', newStatus.toString());
 
 			const response = await fetch('?/toggleStatus', {
@@ -289,6 +269,58 @@
 		// Check if admin has any permissions (empty permissions means deactivated)
 		return admin.permissions && admin.permissions.length > 0;
 	}
+
+	// Group admins by level and faculty
+	let groupedAdmins = $derived.by(() => {
+		const admins = data.admins || [];
+		
+		// Create a set to track unique admin IDs to prevent duplicates
+		const seenAdminIds = new Set();
+		const uniqueAdmins = admins.filter(admin => {
+			if (seenAdminIds.has(admin.id)) {
+				console.warn(`Duplicate admin ID detected: ${admin.id}`);
+				return false;
+			}
+			seenAdminIds.add(admin.id);
+			return true;
+		});
+		
+		// Separate super admins
+		const superAdmins = uniqueAdmins.filter(admin => admin.admin_level === AdminLevel.SuperAdmin);
+		
+		// Group faculty admins by faculty
+		const facultyAdmins = uniqueAdmins.filter(admin => admin.admin_level === AdminLevel.FacultyAdmin);
+		const facultyGroups: { [key: string]: { faculty: { id: string; name: string } | null; admins: AdminRole[] } } = {};
+		
+		facultyAdmins.forEach(admin => {
+			const facultyId = admin.faculty_id || 'unassigned';
+			const facultyName = admin.faculty?.name || getFacultyName(admin) || 'ไม่ได้มอบหมายคณะ';
+			
+			if (!facultyGroups[facultyId]) {
+				facultyGroups[facultyId] = {
+					faculty: admin.faculty_id ? 
+						{ id: admin.faculty_id, name: facultyName } : 
+						null,
+					admins: []
+				};
+			}
+			facultyGroups[facultyId].admins.push(admin);
+		});
+		
+		// Get regular admins
+		const regularAdmins = uniqueAdmins.filter(admin => admin.admin_level === AdminLevel.RegularAdmin);
+		
+		return {
+			superAdmins,
+			facultyGroups: Object.entries(facultyGroups).sort(([aKey, aGroup], [bKey, bGroup]) => {
+				// Sort unassigned last, then by faculty name
+				if (aKey === 'unassigned') return 1;
+				if (bKey === 'unassigned') return -1;
+				return (aGroup.faculty?.name || '').localeCompare(bGroup.faculty?.name || '');
+			}),
+			regularAdmins
+		};
+	});
 </script>
 
 <svelte:head>
@@ -299,15 +331,15 @@
 	<!-- Header -->
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+			<h1 id="admin-management-heading" class="text-4xl font-bold text-gray-900 dark:text-white">
 				จัดการแอดมิน
 			</h1>
-			<p class="mt-2 text-gray-600 dark:text-gray-400">
-				จัดการผู้ดูแลระบบและกำหนดสิทธิ์การเข้าถึง
+			<p class="mt-3 text-lg text-gray-600 dark:text-gray-400">
+				จัดการผู้ดูแลระบบและกำหนดสิทธิ์การเข้าถึง แยกตามระดับและคณะ
 			</p>
 		</div>
-		<Button onclick={openDialog}>
-			<IconPlus class="h-4 w-4 mr-2" />
+		<Button onclick={openDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
+			<IconPlus class="h-5 w-5 mr-2" />
 			เพิ่มแอดมิน
 		</Button>
 	</div>
@@ -320,7 +352,7 @@
 				<IconUsers class="h-4 w-4 text-muted-foreground" />
 			</CardHeader>
 			<CardContent>
-				<div class="text-2xl font-bold">{(data.admins || []).length}</div>
+				<div class="text-2xl font-bold">{groupedAdmins.superAdmins.length + groupedAdmins.facultyGroups.reduce((acc, [, group]) => acc + group.admins.length, 0) + groupedAdmins.regularAdmins.length}</div>
 			</CardContent>
 		</Card>
 
@@ -331,7 +363,7 @@
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-red-600">
-					{(data.admins || []).filter(a => a.admin_level === AdminLevel.SuperAdmin).length}
+					{groupedAdmins.superAdmins.length}
 				</div>
 			</CardContent>
 		</Card>
@@ -343,121 +375,420 @@
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-blue-600">
-					{(data.admins || []).filter(a => a.admin_level === AdminLevel.FacultyAdmin).length}
+					{groupedAdmins.facultyGroups.reduce((acc, [, group]) => acc + group.admins.length, 0)}
 				</div>
 			</CardContent>
 		</Card>
 	</div>
 
-	<!-- Admins Table -->
-	<Card>
-		<CardHeader>
-			<CardTitle>รายการแอดมิน</CardTitle>
-			<CardDescription>
-				รายชื่อผู้ดูแลระบบทั้งหมดและสิทธิ์การเข้าถึง
-			</CardDescription>
-		</CardHeader>
-		<CardContent>
-			{#if refreshing}
-				<div class="flex items-center justify-center py-8">
-					<IconLoader class="h-6 w-6 animate-spin mr-2" />
-					<span class="text-gray-600">กำลังรีเฟรชข้อมูล...</span>
-				</div>
-			{:else if (data.admins || []).length > 0}
-				<div class="rounded-md border">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row>
-								<Table.Head>ชื่อ</Table.Head>
-								<Table.Head>อีเมล</Table.Head>
-								<Table.Head>ระดับ</Table.Head>
-								<Table.Head>คณะ</Table.Head>
-								<Table.Head>สถานะ</Table.Head>
-								<Table.Head>สิทธิ์</Table.Head>
-								<Table.Head class="text-right">การดำเนินการ</Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each (data.admins || []) as admin}
-								<Table.Row>
-									<Table.Cell class="font-medium">
-										{admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ'}
-									</Table.Cell>
-									<Table.Cell>
-										<div class="flex items-center gap-2">
-											<IconMail class="h-4 w-4 text-gray-400" />
-											{admin.user?.email || 'ไม่ระบุ'}
+	<!-- Admin Groups -->
+	<div class="space-y-8" role="main" aria-labelledby="admin-management-heading">
+		{#if refreshing}
+			<div class="flex items-center justify-center py-12" role="status" aria-live="polite">
+				<IconLoader class="h-8 w-8 animate-spin mr-3 text-blue-500" />
+				<span class="text-lg text-gray-600 dark:text-gray-300">กำลังรีเฟรชข้อมูล...</span>
+			</div>
+		{:else if (data.admins || []).length === 0}
+			<div class="text-center py-16 text-gray-500 dark:text-gray-400" role="region" aria-labelledby="no-admins-heading">
+				<IconShield class="h-16 w-16 mx-auto mb-6 opacity-50" />
+				<h3 id="no-admins-heading" class="text-xl font-semibold mb-2">ยังไม่มีแอดมินในระบบ</h3>
+				<p class="text-gray-400 mb-6">เริ่มต้นด้วยการเพิ่มผู้ดูแลระบบคนแรก</p>
+				<Button onclick={openDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3">
+					<IconPlus class="h-5 w-5 mr-2" />
+					เพิ่มแอดมินคนแรก
+				</Button>
+			</div>
+		{:else}
+			<!-- Super Admins Section -->
+			{#if groupedAdmins.superAdmins.length > 0}
+				<section role="region" aria-labelledby="super-admin-heading">
+					<Card class="border-red-200 shadow-sm">
+						<CardHeader class="bg-red-50/50 dark:bg-red-950/20">
+							<CardTitle id="super-admin-heading" class="flex items-center gap-3">
+								<IconShield class="h-6 w-6 text-red-600" aria-hidden="true" />
+								<span class="text-xl font-bold text-red-700 dark:text-red-400">ซุปเปอร์แอดมิน</span>
+								<Badge variant="destructive" class="ml-2 px-3 py-1 text-sm font-semibold">
+									{groupedAdmins.superAdmins.length} คน
+								</Badge>
+							</CardTitle>
+							<CardDescription class="text-red-600 dark:text-red-300 mt-2">
+								ผู้ดูแลระบบระดับสูงสุดที่มีสิทธิ์เข้าถึงและจัดการทุกส่วนของระบบ
+							</CardDescription>
+						</CardHeader>
+						<CardContent class="p-0">
+							<div class="overflow-hidden">
+								<Table.Root>
+									<Table.Header>
+										<Table.Row class="bg-gray-50 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800">
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">ชื่อ-นามสกุล</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">อีเมล</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สถานะ</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สิทธิ์</Table.Head>
+											<Table.Head class="text-right font-semibold text-gray-900 dark:text-gray-100">การดำเนินการ</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each groupedAdmins.superAdmins as admin (`super-${admin.id}`)}
+											<Table.Row class="hover:bg-red-50/30 dark:hover:bg-red-950/10 transition-colors">
+												<Table.Cell class="font-medium py-4">
+													<div class="flex items-center gap-3">
+														<div class="w-8 h-8 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+															<IconShield class="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+														</div>
+														<span class="text-gray-900 dark:text-gray-100">
+															{admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}`.trim() : 'ไม่ระบุชื่อ'}
+														</span>
+													</div>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<div class="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+														<IconMail class="h-4 w-4 text-gray-400" aria-hidden="true" />
+														<span class="text-sm">{admin.user?.email || 'ไม่ระบุอีเมล'}</span>
+													</div>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<Badge 
+														variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}
+														class={getAdminActiveStatus(admin) ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+													>
+														<span class="w-2 h-2 rounded-full mr-2" class:bg-green-500={getAdminActiveStatus(admin)} class:bg-gray-400={!getAdminActiveStatus(admin)} aria-hidden="true"></span>
+														{getAdminActiveStatus(admin) ? 'ใช้งานอยู่' : 'ไม่ใช้งาน'}
+													</Badge>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+														{admin.permissions?.length || 0} สิทธิ์
+													</div>
+												</Table.Cell>
+												<Table.Cell class="text-right py-4">
+													<div class="flex items-center gap-1 justify-end" role="group" aria-label="การดำเนินการสำหรับ {admin.user?.first_name || 'ไม่ระบุชื่อ'}">
+														<Button 
+															variant="ghost" 
+															size="sm" 
+															onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminActiveStatus(admin))}
+															disabled={toggleLoading[admin.id] || false}
+															class="{getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+															aria-label="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} {admin.user?.first_name || 'แอดมิน'}"
+															title="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}แอดมิน"
+														>
+															{#if toggleLoading[admin.id]}
+																<IconLoader class="h-4 w-4 animate-spin" aria-hidden="true" />
+															{:else if getAdminActiveStatus(admin)}
+																<IconToggleLeft class="h-4 w-4" aria-hidden="true" />
+															{:else}
+																<IconToggleRight class="h-4 w-4" aria-hidden="true" />
+															{/if}
+														</Button>
+														<Button 
+															variant="ghost" 
+															size="sm" 
+															onclick={() => openEditDialog(admin)}
+															class="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+															aria-label="แก้ไข {admin.user?.first_name || 'แอดมิน'}"
+															title="แก้ไขแอดมิน"
+														>
+															<IconEdit class="h-4 w-4" aria-hidden="true" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															onclick={() => openDeleteDialog(admin.id, admin.user_id || admin.user?.id || '', admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}`.trim() : 'ไม่ระบุชื่อ')}
+															class="text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+															aria-label="ลบ {admin.user?.first_name || 'แอดมิน'}"
+															title="ลบแอดมิน"
+														>
+															<IconTrash class="h-4 w-4" aria-hidden="true" />
+														</Button>
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							</div>
+						</CardContent>
+					</Card>
+				</section>
+			{/if}
+
+			<!-- Faculty Admins Section -->
+			{#if groupedAdmins.facultyGroups.length > 0}
+				{#if groupedAdmins.superAdmins.length > 0}
+					<div class="relative my-12">
+						<div class="absolute inset-0 flex items-center">
+							<div class="w-full border-t border-gray-200 dark:border-gray-700"></div>
+						</div>
+						<div class="relative flex justify-center text-sm">
+							<span class="px-4 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-medium">แอดมินระดับคณะ</span>
+						</div>
+					</div>
+				{/if}
+				
+				<div class="space-y-6" role="region" aria-labelledby="faculty-admins-heading">
+					<h2 id="faculty-admins-heading" class="sr-only">แอดมินระดับคณะ จัดกลุ่มตามคณะ</h2>
+					{#each groupedAdmins.facultyGroups as [facultyId, facultyGroup] (facultyId)}
+						<Collapsible.Root open class="group">
+							<Card class="border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+								<CardHeader class="bg-blue-50/50 dark:bg-blue-950/20 pb-4">
+									<div class="flex items-center justify-between">
+										<CardTitle class="flex items-center gap-3">
+											<div class="flex items-center gap-3">
+												<div class="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+													<IconShield class="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+												</div>
+												<div>
+													<h3 class="text-lg font-bold text-blue-700 dark:text-blue-300">
+														{facultyGroup.faculty?.name || 'ไม่ได้มอบหมายคณะ'}
+													</h3>
+													<div class="flex items-center gap-2 mt-1">
+														<Badge variant="default" class="bg-blue-100 text-blue-800 hover:bg-blue-100 px-2 py-1">
+															{facultyGroup.admins.length} คน
+														</Badge>
+														{#if facultyGroup.faculty?.id}
+															<span class="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">
+																ID: {facultyGroup.faculty.id.slice(-8)}
+															</span>
+														{/if}
+													</div>
+												</div>
+											</div>
+										</CardTitle>
+										<Collapsible.Trigger 
+											class="flex items-center justify-center w-8 h-8 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors [&[data-state=open]>svg]:rotate-180"
+											aria-label="{facultyGroup.faculty?.name ? `ขยาย/หดแอดมินคณะ${facultyGroup.faculty.name}` : 'ขยาย/หดแอดมินที่ไม่ได้มอบหมายคณะ'}"
+											title="คลิกเพื่อขยาย/หดรายการแอดมิน"
+										>
+											<IconChevronDown class="h-4 w-4 text-blue-600 dark:text-blue-400 transition-transform duration-200" aria-hidden="true" />
+										</Collapsible.Trigger>
+									</div>
+									<CardDescription class="text-blue-600 dark:text-blue-300 mt-3 ml-13">
+										ผู้ดูแลระบบระดับคณะ {facultyGroup.faculty?.name ? `มีสิทธิ์จัดการข้อมูลในคณะ${facultyGroup.faculty.name}` : 'ที่ยังไม่ได้รับมอบหมายคณะที่รับผิดชอบ'}
+									</CardDescription>
+								</CardHeader>
+								<Collapsible.Content class="data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
+									<CardContent class="p-0">
+										<div class="overflow-hidden border-t border-blue-100 dark:border-blue-800">
+											<Table.Root>
+												<Table.Header>
+													<Table.Row class="bg-blue-25 dark:bg-blue-950/10 hover:bg-blue-25 dark:hover:bg-blue-950/10">
+														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">ชื่อ-นามสกุล</Table.Head>
+														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">อีเมล</Table.Head>
+														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สถานะ</Table.Head>
+														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สิทธิ์</Table.Head>
+														<Table.Head class="text-right font-semibold text-gray-900 dark:text-gray-100">การดำเนินการ</Table.Head>
+													</Table.Row>
+												</Table.Header>
+												<Table.Body>
+													{#each facultyGroup.admins as admin (`faculty-${facultyId}-${admin.id}`)}
+														<Table.Row class="hover:bg-blue-50/30 dark:hover:bg-blue-950/10 transition-colors">
+															<Table.Cell class="font-medium py-4">
+																<div class="flex items-center gap-3">
+																	<div class="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+																		<IconUsers class="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+																	</div>
+																	<span class="text-gray-900 dark:text-gray-100">
+																		{admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}`.trim() : 'ไม่ระบุชื่อ'}
+																	</span>
+																</div>
+															</Table.Cell>
+															<Table.Cell class="py-4">
+																<div class="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+																	<IconMail class="h-4 w-4 text-gray-400" aria-hidden="true" />
+																	<span class="text-sm">{admin.user?.email || 'ไม่ระบุอีเมล'}</span>
+																</div>
+															</Table.Cell>
+															<Table.Cell class="py-4">
+																<Badge 
+																	variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}
+																	class={getAdminActiveStatus(admin) ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+																>
+																	<span class="w-2 h-2 rounded-full mr-2" class:bg-green-500={getAdminActiveStatus(admin)} class:bg-gray-400={!getAdminActiveStatus(admin)} aria-hidden="true"></span>
+																	{getAdminActiveStatus(admin) ? 'ใช้งานอยู่' : 'ไม่ใช้งาน'}
+																</Badge>
+															</Table.Cell>
+															<Table.Cell class="py-4">
+																<div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+																	{admin.permissions?.length || 0} สิทธิ์
+																</div>
+															</Table.Cell>
+															<Table.Cell class="text-right py-4">
+																<div class="flex items-center gap-1 justify-end" role="group" aria-label="การดำเนินการสำหรับ {admin.user?.first_name || 'ไม่ระบุชื่อ'}">
+																	<Button 
+																		variant="ghost" 
+																		size="sm" 
+																		onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminActiveStatus(admin))}
+																		disabled={toggleLoading[admin.id] || false}
+																		class="{getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+																		aria-label="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} {admin.user?.first_name || 'แอดมิน'}"
+																		title="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}แอดมิน"
+																	>
+																		{#if toggleLoading[admin.id]}
+																			<IconLoader class="h-4 w-4 animate-spin" aria-hidden="true" />
+																		{:else if getAdminActiveStatus(admin)}
+																			<IconToggleLeft class="h-4 w-4" aria-hidden="true" />
+																		{:else}
+																			<IconToggleRight class="h-4 w-4" aria-hidden="true" />
+																		{/if}
+																	</Button>
+																	<Button 
+																		variant="ghost" 
+																		size="sm" 
+																		onclick={() => openEditDialog(admin)}
+																		class="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+																		aria-label="แก้ไข {admin.user?.first_name || 'แอดมิน'}"
+																		title="แก้ไขแอดมิน"
+																	>
+																		<IconEdit class="h-4 w-4" aria-hidden="true" />
+																	</Button>
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		onclick={() => openDeleteDialog(admin.id, admin.user_id || admin.user?.id || '', admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}`.trim() : 'ไม่ระบุชื่อ')}
+																		class="text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+																		aria-label="ลบ {admin.user?.first_name || 'แอดมิน'}"
+																		title="ลบแอดมิน"
+																	>
+																		<IconTrash class="h-4 w-4" aria-hidden="true" />
+																	</Button>
+																</div>
+															</Table.Cell>
+														</Table.Row>
+													{/each}
+												</Table.Body>
+											</Table.Root>
 										</div>
-									</Table.Cell>
-									<Table.Cell>
-										<Badge variant={getAdminLevelBadgeVariant(admin.admin_level)}>
-											{getAdminLevelText(admin.admin_level)}
-										</Badge>
-									</Table.Cell>
-									<Table.Cell>
-										{getFacultyName(admin)}
-									</Table.Cell>
-									<Table.Cell>
-										<Badge variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}>
-											{getAdminActiveStatus(admin) ? 'ใช้งาน' : 'ไม่ใช้งาน'}
-										</Badge>
-									</Table.Cell>
-									<Table.Cell>
-										<div class="text-sm text-gray-500">
-											{admin.permissions?.length || 0} สิทธิ์
-										</div>
-									</Table.Cell>
-									<Table.Cell class="text-right">
-										<div class="flex items-center gap-2 justify-end">
-											<Button 
-												variant="ghost" 
-												size="sm" 
-												onclick={() => handleToggleStatus(
-													admin.id, 
-													getAdminActiveStatus(admin), 
-													admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ'
-												)}
-												disabled={toggleLoading[admin.id] || false}
-												class={getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
-											>
-												{#if toggleLoading[admin.id]}
-													<IconLoader class="h-4 w-4 animate-spin" />
-												{:else if getAdminActiveStatus(admin)}
-													<IconToggleLeft class="h-4 w-4" />
-												{:else}
-													<IconToggleRight class="h-4 w-4" />
-												{/if}
-											</Button>
-											<Button variant="ghost" size="sm" onclick={() => openEditDialog(admin)}>
-												<IconEdit class="h-4 w-4" />
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onclick={() => openDeleteDialog(admin.id, admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ')}
-												class="text-red-600 hover:text-red-700"
-											>
-												<IconTrash class="h-4 w-4" />
-											</Button>
-										</div>
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
-				</div>
-			{:else}
-				<div class="text-center py-8 text-gray-500 dark:text-gray-400">
-					<IconShield class="h-12 w-12 mx-auto mb-4 opacity-50" />
-					<p>ยังไม่มีแอดมินในระบบ</p>
-					<Button onclick={openDialog} class="mt-4">
-						<IconPlus class="h-4 w-4 mr-2" />
-						เพิ่มแอดมินคนแรก
-					</Button>
+									</CardContent>
+								</Collapsible.Content>
+							</Card>
+						</Collapsible.Root>
+					{/each}
 				</div>
 			{/if}
-		</CardContent>
-	</Card>
+
+			<!-- Regular Admins Section -->
+			{#if groupedAdmins.regularAdmins.length > 0}
+				{#if groupedAdmins.superAdmins.length > 0 || groupedAdmins.facultyGroups.length > 0}
+					<div class="relative my-12">
+						<div class="absolute inset-0 flex items-center">
+							<div class="w-full border-t border-gray-200 dark:border-gray-700"></div>
+						</div>
+						<div class="relative flex justify-center text-sm">
+							<span class="px-4 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 font-medium">แอดมินทั่วไป</span>
+						</div>
+					</div>
+				{/if}
+				
+				<section role="region" aria-labelledby="regular-admin-heading">
+					<Card class="border-gray-200 shadow-sm">
+						<CardHeader class="bg-gray-50/50 dark:bg-gray-800/50">
+							<CardTitle id="regular-admin-heading" class="flex items-center gap-3">
+								<IconUsers class="h-6 w-6 text-gray-600" aria-hidden="true" />
+								<span class="text-xl font-bold text-gray-700 dark:text-gray-300">แอดมินทั่วไป</span>
+								<Badge variant="secondary" class="ml-2 bg-gray-100 text-gray-700 hover:bg-gray-100 px-3 py-1 text-sm font-semibold">
+									{groupedAdmins.regularAdmins.length} คน
+								</Badge>
+							</CardTitle>
+							<CardDescription class="text-gray-600 dark:text-gray-400 mt-2">
+								ผู้ดูแลระบบทั่วไปที่มีสิทธิ์เข้าถึงและจัดการบางส่วนของระบบ
+							</CardDescription>
+						</CardHeader>
+						<CardContent class="p-0">
+							<div class="overflow-hidden">
+								<Table.Root>
+									<Table.Header>
+										<Table.Row class="bg-gray-50 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800">
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">ชื่อ-นามสกุล</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">อีเมล</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สถานะ</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สิทธิ์</Table.Head>
+											<Table.Head class="text-right font-semibold text-gray-900 dark:text-gray-100">การดำเนินการ</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each groupedAdmins.regularAdmins as admin (`regular-${admin.id}`)}
+											<Table.Row class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
+												<Table.Cell class="font-medium py-4">
+													<div class="flex items-center gap-3">
+														<div class="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+															<IconUsers class="h-4 w-4 text-gray-600 dark:text-gray-400" aria-hidden="true" />
+														</div>
+														<span class="text-gray-900 dark:text-gray-100">
+															{admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}`.trim() : 'ไม่ระบุชื่อ'}
+														</span>
+													</div>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<div class="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+														<IconMail class="h-4 w-4 text-gray-400" aria-hidden="true" />
+														<span class="text-sm">{admin.user?.email || 'ไม่ระบุอีเมล'}</span>
+													</div>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<Badge 
+														variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}
+														class={getAdminActiveStatus(admin) ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+													>
+														<span class="w-2 h-2 rounded-full mr-2" class:bg-green-500={getAdminActiveStatus(admin)} class:bg-gray-400={!getAdminActiveStatus(admin)} aria-hidden="true"></span>
+														{getAdminActiveStatus(admin) ? 'ใช้งานอยู่' : 'ไม่ใช้งาน'}
+													</Badge>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+														{admin.permissions?.length || 0} สิทธิ์
+													</div>
+												</Table.Cell>
+												<Table.Cell class="text-right py-4">
+													<div class="flex items-center gap-1 justify-end" role="group" aria-label="การดำเนินการสำหรับ {admin.user?.first_name || 'ไม่ระบุชื่อ'}">
+														<Button 
+															variant="ghost" 
+															size="sm" 
+															onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminActiveStatus(admin))}
+															disabled={toggleLoading[admin.id] || false}
+															class="{getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+															aria-label="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} {admin.user?.first_name || 'แอดมิน'}"
+															title="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}แอดมิน"
+														>
+															{#if toggleLoading[admin.id]}
+																<IconLoader class="h-4 w-4 animate-spin" aria-hidden="true" />
+															{:else if getAdminActiveStatus(admin)}
+																<IconToggleLeft class="h-4 w-4" aria-hidden="true" />
+															{:else}
+																<IconToggleRight class="h-4 w-4" aria-hidden="true" />
+															{/if}
+														</Button>
+														<Button 
+															variant="ghost" 
+															size="sm" 
+															onclick={() => openEditDialog(admin)}
+															class="text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
+															aria-label="แก้ไข {admin.user?.first_name || 'แอดมิน'}"
+															title="แก้ไขแอดมิน"
+														>
+															<IconEdit class="h-4 w-4" aria-hidden="true" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															onclick={() => openDeleteDialog(admin.id, admin.user_id || admin.user?.id || '', admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}`.trim() : 'ไม่ระบุชื่อ')}
+															class="text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+															aria-label="ลบ {admin.user?.first_name || 'แอดมิน'}"
+															title="ลบแอดมิน"
+														>
+															<IconTrash class="h-4 w-4" aria-hidden="true" />
+														</Button>
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							</div>
+						</CardContent>
+					</Card>
+				</section>
+			{/if}
+		{/if}
+	</div>
 </div>
 
 <!-- Create Admin Dialog -->
@@ -647,7 +978,7 @@
 						type="button" 
 						onclick={() => {
 							if (editingAdmin && editingAdmin.user && editSelectedAdminLevel) {
-								handleUpdate(editingAdmin.id, {
+								handleUpdate(editingAdmin.id, editingAdmin.user_id || editingAdmin.user.id, {
 									first_name: editingAdmin.user.first_name,
 									last_name: editingAdmin.user.last_name,
 									email: editingAdmin.user.email,
