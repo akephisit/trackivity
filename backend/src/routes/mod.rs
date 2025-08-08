@@ -31,6 +31,7 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/faculties", post(faculty::create_faculty))
         .route("/api/faculties/{id}", put(faculty::update_faculty))
         .route("/api/faculties/{id}", delete(faculty::delete_faculty))
+        .route("/api/faculties/{id}/toggle-status", put(faculty::toggle_faculty_status))
         // User routes
         .route("/api/users", get(user::get_users))
         .route("/api/users/{id}", get(user::get_user))

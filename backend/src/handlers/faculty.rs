@@ -20,6 +20,7 @@ pub struct CreateFacultyRequest {
     pub name: String,
     pub code: String,
     pub description: Option<String>,
+    pub status: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,6 +28,7 @@ pub struct UpdateFacultyRequest {
     pub name: Option<String>,
     pub code: Option<String>,
     pub description: Option<String>,
+    pub status: Option<bool>,
 }
 
 /// Get all faculties
@@ -35,7 +37,7 @@ pub async fn get_faculties(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     // Query all faculties from database
     let query_result = sqlx::query_as::<_, Faculty>(
-        "SELECT id, name, code, description, created_at, updated_at FROM faculties ORDER BY name",
+        "SELECT id, name, code, description, status, created_at, updated_at FROM faculties ORDER BY name",
     )
     .fetch_all(&session_state.db_pool)
     .await;
@@ -66,7 +68,7 @@ pub async fn get_faculty(
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let query_result = sqlx::query_as::<_, Faculty>(
-        "SELECT id, name, code, description, created_at, updated_at FROM faculties WHERE id = $1",
+        "SELECT id, name, code, description, status, created_at, updated_at FROM faculties WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&session_state.db_pool)
@@ -103,11 +105,12 @@ pub async fn create_faculty(
     Json(request): Json<CreateFacultyRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let query_result = sqlx::query_as::<_, Faculty>(
-        "INSERT INTO faculties (name, code, description) VALUES ($1, $2, $3) RETURNING id, name, code, description, created_at, updated_at"
+        "INSERT INTO faculties (name, code, description, status) VALUES ($1, $2, $3, $4) RETURNING id, name, code, description, status, created_at, updated_at"
     )
     .bind(&request.name)
     .bind(&request.code)
     .bind(&request.description)
+    .bind(request.status.unwrap_or(true))
     .fetch_one(&session_state.db_pool)
     .await;
 
@@ -138,37 +141,52 @@ pub async fn update_faculty(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     // Build dynamic update query
     let mut query = "UPDATE faculties SET updated_at = NOW()".to_string();
-    let mut params: Vec<String> = vec![];
     let mut param_count = 1;
+    let mut query_builder = sqlx::query_as::<_, Faculty>("");
 
     if let Some(name) = &request.name {
         query.push_str(&format!(", name = ${}", param_count));
-        params.push(name.clone());
         param_count += 1;
     }
 
     if let Some(code) = &request.code {
         query.push_str(&format!(", code = ${}", param_count));
-        params.push(code.clone());
         param_count += 1;
     }
 
     if let Some(description) = &request.description {
         query.push_str(&format!(", description = ${}", param_count));
-        params.push(description.clone());
+        param_count += 1;
+    }
+
+    if let Some(_) = &request.status {
+        query.push_str(&format!(", status = ${}", param_count));
         param_count += 1;
     }
 
     query.push_str(&format!(
-        " WHERE id = ${} RETURNING id, name, code, description, created_at, updated_at",
+        " WHERE id = ${} RETURNING id, name, code, description, status, created_at, updated_at",
         param_count
     ));
 
-    let mut query_builder = sqlx::query_as::<_, Faculty>(&query);
+    query_builder = sqlx::query_as::<_, Faculty>(&query);
 
-    for param in params {
-        query_builder = query_builder.bind(param);
+    if let Some(name) = &request.name {
+        query_builder = query_builder.bind(name);
     }
+
+    if let Some(code) = &request.code {
+        query_builder = query_builder.bind(code);
+    }
+
+    if let Some(description) = &request.description {
+        query_builder = query_builder.bind(description);
+    }
+
+    if let Some(status) = &request.status {
+        query_builder = query_builder.bind(status);
+    }
+
     query_builder = query_builder.bind(id);
 
     match query_builder.fetch_one(&session_state.db_pool).await {
@@ -401,6 +419,46 @@ pub async fn get_faculty_students(
             let error_response = json!({
                 "status": "error",
                 "message": format!("Failed to fetch students: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Toggle faculty status
+pub async fn toggle_faculty_status(
+    State(session_state): State<SessionState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let query_result = sqlx::query_as::<_, Faculty>(
+        "UPDATE faculties SET status = NOT status, updated_at = NOW() 
+         WHERE id = $1 
+         RETURNING id, name, code, description, status, created_at, updated_at"
+    )
+    .bind(id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match query_result {
+        Ok(faculty) => {
+            let response = json!({
+                "status": "success",
+                "message": "Faculty status toggled successfully",
+                "data": faculty
+            });
+            Ok(Json(response))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Faculty not found"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to toggle faculty status: {}", e)
             });
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }

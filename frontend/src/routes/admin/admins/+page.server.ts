@@ -12,6 +12,18 @@ export const load: PageServerLoad = async (event) => {
 	const user = await requireSuperAdmin(event);
 	const sessionId = event.cookies.get('session_id');
 
+	// โหลดรายการคณะก่อน
+	let faculties: Faculty[] = [];
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/faculties`);
+		if (response.ok) {
+			const result = await response.json();
+			faculties = result.data?.faculties || result.data || [];
+		}
+	} catch (error) {
+		console.error('Failed to load faculties:', error);
+	}
+
 	// โหลดรายการแอดมิน
 	let admins: AdminRole[] = [];
 	try {
@@ -70,18 +82,6 @@ export const load: PageServerLoad = async (event) => {
 		}
 	} catch (error) {
 		console.error('Failed to load admins:', error);
-	}
-
-	// โหลดรายการคณะ
-	let faculties: Faculty[] = [];
-	try {
-		const response = await fetch(`${API_BASE_URL}/api/faculties`);
-		if (response.ok) {
-			const result = await response.json();
-			faculties = result.data?.faculties || result.data || [];
-		}
-	} catch (error) {
-		console.error('Failed to load faculties:', error);
 	}
 
 	const form = await superValidate(zod(adminCreateSchema));

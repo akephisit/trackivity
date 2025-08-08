@@ -14,7 +14,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import * as Collapsible from '$lib/components/ui/collapsible';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Separator } from '$lib/components/ui/separator';
+	// import { Separator } from '$lib/components/ui/separator';
 	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail, IconToggleLeft, IconToggleRight, IconChevronDown } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { AdminLevel, type AdminRole } from '$lib/types/admin';
@@ -61,8 +61,8 @@
 
 	let dialogOpen = $state(false);
 	let editDialogOpen = $state(false);
-	let selectedAdminLevel = $state(undefined);
-	let selectedFaculty = $state(undefined);
+	let selectedAdminLevel = $state<AdminLevel | undefined>(undefined);
+	let selectedFaculty = $state<string | undefined>(undefined);
 	let editingAdmin = $state<AdminRole | null>(null);
 	let editSelectedAdminLevel = $state<AdminLevel | undefined>(undefined);
 	let editSelectedFaculty = $state<string | undefined>(undefined);
@@ -89,20 +89,33 @@
 
 	// Update form data when select values change
 	$effect(() => {
+		// Debug logging (remove in production)
+		if (import.meta.env.DEV) {
+			console.log('Effect triggered - selectedAdminLevel:', selectedAdminLevel, 'selectedFaculty:', selectedFaculty);
+		}
+		
 		if (selectedAdminLevel) {
 			// Ensure we set the enum value directly, not string
 			const enumValue = selectedAdminLevel as AdminLevel;
 			$formData.admin_level = enumValue;
+			
+			// Clear faculty selection when changing to SuperAdmin or RegularAdmin
+			if (enumValue === AdminLevel.SuperAdmin || enumValue === AdminLevel.RegularAdmin) {
+				selectedFaculty = undefined;
+				$formData.faculty_id = undefined;
+			} else if (enumValue === AdminLevel.FacultyAdmin) {
+				// For FacultyAdmin, set faculty_id if selected
+				if (selectedFaculty) {
+					$formData.faculty_id = selectedFaculty;
+				} else {
+					$formData.faculty_id = undefined;
+				}
+			}
 		}
-	});
-
-	$effect(() => {
-		if (selectedFaculty) {
-			// Use faculty UUID string directly
-			$formData.faculty_id = selectedFaculty;
-		} else {
-			// Clear faculty_id when no faculty is selected
-			$formData.faculty_id = '';
+		
+		// Debug logging (remove in production)
+		if (import.meta.env.DEV) {
+			console.log('Final form data:', $formData);
 		}
 	});
 
@@ -157,6 +170,9 @@
 	}
 
 	function resetForm() {
+		if (import.meta.env.DEV) {
+			console.log('Resetting form...');
+		}
 		selectedAdminLevel = undefined;
 		selectedFaculty = undefined;
 		$formData = {
@@ -166,6 +182,9 @@
 			faculty_id: undefined,
 			permissions: []
 		};
+		if (import.meta.env.DEV) {
+			console.log('Form reset completed, formData:', $formData);
+		}
 	}
 
 	function openDialog() {
@@ -222,7 +241,7 @@
 		}
 	}
 
-	async function handleToggleStatus(adminId: string, userId: string, currentStatus: boolean) {
+	async function handleToggleStatus(adminId: string, _userId: string, currentStatus: boolean) {
 		const newStatus = !currentStatus;
 		const actionText = newStatus ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
 
@@ -274,14 +293,18 @@
 	let groupedAdmins = $derived.by(() => {
 		const admins = data.admins || [];
 		
-		// Create a set to track unique admin IDs to prevent duplicates
-		const seenAdminIds = new Set();
-		const uniqueAdmins = admins.filter(admin => {
-			if (seenAdminIds.has(admin.id)) {
-				console.warn(`Duplicate admin ID detected: ${admin.id}`);
+		// Create a map to track unique admin IDs and detect duplicates
+		const adminMap = new Map();
+		const uniqueAdmins = admins.filter((admin, index) => {
+			const adminKey = `${admin.id}-${admin.user_id}`;
+			
+			if (adminMap.has(adminKey)) {
+				if (import.meta.env.DEV) {
+					console.warn(`Duplicate admin detected at index ${index}:`, admin);
+				}
 				return false;
 			}
-			seenAdminIds.add(admin.id);
+			adminMap.set(adminKey, admin);
 			return true;
 		});
 		
@@ -428,7 +451,7 @@
 										</Table.Row>
 									</Table.Header>
 									<Table.Body>
-										{#each groupedAdmins.superAdmins as admin (`super-${admin.id}`)}
+										{#each groupedAdmins.superAdmins as admin (`super-${admin.id}-${admin.user_id}`)}
 											<Table.Row class="hover:bg-red-50/30 dark:hover:bg-red-950/10 transition-colors">
 												<Table.Cell class="font-medium py-4">
 													<div class="flex items-center gap-3">
@@ -579,7 +602,7 @@
 													</Table.Row>
 												</Table.Header>
 												<Table.Body>
-													{#each facultyGroup.admins as admin (`faculty-${facultyId}-${admin.id}`)}
+													{#each facultyGroup.admins as admin (`faculty-${facultyId}-${admin.id}-${admin.user_id}`)}
 														<Table.Row class="hover:bg-blue-50/30 dark:hover:bg-blue-950/10 transition-colors">
 															<Table.Cell class="font-medium py-4">
 																<div class="flex items-center gap-3">
@@ -705,7 +728,7 @@
 										</Table.Row>
 									</Table.Header>
 									<Table.Body>
-										{#each groupedAdmins.regularAdmins as admin (`regular-${admin.id}`)}
+										{#each groupedAdmins.regularAdmins as admin (`regular-${admin.id}-${admin.user_id}`)}
 											<Table.Row class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
 												<Table.Cell class="font-medium py-4">
 													<div class="flex items-center gap-3">
@@ -845,7 +868,17 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Label for={props.id}>ระดับแอดมิน</Label>
-						<Select.Root type="single" bind:value={selectedAdminLevel} disabled={$submitting}>
+						<Select.Root 
+							type="single" 
+							bind:value={selectedAdminLevel} 
+							disabled={$submitting}
+							onValueChange={(value) => {
+								if (import.meta.env.DEV) {
+									console.log('Admin level changed to:', value);
+								}
+								selectedAdminLevel = value as AdminLevel;
+							}}
+						>
 							<Select.Trigger>
 								{adminLevelOptions.find(opt => opt.value === selectedAdminLevel)?.label ?? "เลือกระดับแอดมิน"}
 							</Select.Trigger>
@@ -866,10 +899,21 @@
 				<Form.Field {form} name="faculty_id">
 					<Form.Control>
 						{#snippet children({ props })}
-							<Label for={props.id}>คณะ</Label>
-							<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
-								<Select.Trigger>
-									{facultyOptions.find(opt => opt.value === selectedFaculty)?.label ?? "เลือกคณะ"}
+							<Label for={props.id}>คณะ <span class="text-red-500">*</span></Label>
+							<Select.Root 
+								type="single" 
+								bind:value={selectedFaculty} 
+								disabled={$submitting} 
+								required
+								onValueChange={(value) => {
+									if (import.meta.env.DEV) {
+										console.log('Faculty changed to:', value);
+									}
+									selectedFaculty = value as string;
+								}}
+							>
+								<Select.Trigger class={!selectedFaculty ? "border-red-300" : ""}>
+									{facultyOptions.find(opt => opt.value === selectedFaculty)?.label ?? "เลือกคณะที่รับผิดชอบ"}
 								</Select.Trigger>
 								<Select.Content>
 									{#each facultyOptions as option}
@@ -879,17 +923,48 @@
 									{/each}
 								</Select.Content>
 							</Select.Root>
+							{#if selectedAdminLevel === AdminLevel.FacultyAdmin && !selectedFaculty}
+								<p class="text-sm text-red-600 mt-1">กรุณาเลือกคณะสำหรับแอดมินระดับคณะ</p>
+							{/if}
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
 				</Form.Field>
+			{:else if selectedAdminLevel === AdminLevel.SuperAdmin}
+				<div class="rounded-md bg-blue-50 dark:bg-blue-950/20 p-3">
+					<div class="flex items-center">
+						<IconShield class="h-5 w-5 text-blue-500 mr-2" />
+						<p class="text-sm text-blue-700 dark:text-blue-300">
+							ซุปเปอร์แอดมินมีสิทธิ์เข้าถึงทุกคณะ ไม่จำเป็นต้องระบุคณะเฉพาะ
+						</p>
+					</div>
+				</div>
+			{:else if selectedAdminLevel === AdminLevel.RegularAdmin}
+				<div class="rounded-md bg-gray-50 dark:bg-gray-800/50 p-3">
+					<div class="flex items-center">
+						<IconUsers class="h-5 w-5 text-gray-500 mr-2" />
+						<p class="text-sm text-gray-600 dark:text-gray-300">
+							แอดมินทั่วไปจะได้รับสิทธิ์พื้นฐานในการจัดการระบบ
+						</p>
+					</div>
+				</div>
 			{/if}
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" onclick={() => dialogOpen = false}>
 					ยกเลิก
 				</Button>
-				<Button type="submit" disabled={$submitting}>
+				<Button 
+					type="submit" 
+					disabled={$submitting || (selectedAdminLevel === AdminLevel.FacultyAdmin && !selectedFaculty)}
+					onclick={() => {
+						if (import.meta.env.DEV) {
+							console.log('Form submitted with data:', $formData);
+							console.log('Selected admin level:', selectedAdminLevel);
+							console.log('Selected faculty:', selectedFaculty);
+						}
+					}}
+				>
 					{#if $submitting}
 						<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 						กำลังสร้าง...

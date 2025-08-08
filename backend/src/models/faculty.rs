@@ -9,6 +9,7 @@ pub struct Faculty {
     pub name: String,
     pub code: String,
     pub description: Option<String>,
+    pub status: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -18,6 +19,7 @@ pub struct CreateFaculty {
     pub name: String,
     pub code: String,
     pub description: Option<String>,
+    pub status: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,4 +27,5 @@ pub struct UpdateFaculty {
     pub name: Option<String>,
     pub code: Option<String>,
     pub description: Option<String>,
+    pub status: Option<bool>,
 }
