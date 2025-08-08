@@ -10,7 +10,7 @@ use sqlx::Row;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::middleware::session::{AdminUser, SessionState, SuperAdminUser};
+use crate::middleware::session::{AdminUser, SessionState, SuperAdminUser, FacultyAdminUser};
 use crate::models::{
     activity::ActivityStatus,
     admin_role::{AdminLevel, AdminRole},
@@ -73,7 +73,22 @@ pub struct AdminActivityInfo {
 /// Get admin dashboard statistics
 pub async fn get_dashboard(
     State(session_state): State<SessionState>,
-    _admin: AdminUser,
+    admin: AdminUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check admin level and get appropriate statistics
+    match admin.admin_role.admin_level {
+        AdminLevel::SuperAdmin => {
+            get_super_admin_dashboard_stats(session_state).await
+        }
+        AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+            get_faculty_admin_dashboard_stats(session_state, admin.admin_role.faculty_id).await
+        }
+    }
+}
+
+/// Get dashboard statistics for SuperAdmin (system-wide)
+async fn get_super_admin_dashboard_stats(
+    session_state: SessionState,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Get total users count
     let total_users_result = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
@@ -214,6 +229,197 @@ pub async fn get_dashboard(
                 "message": "Failed to retrieve dashboard statistics"
             });
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get dashboard statistics for Faculty Admin (faculty-specific)
+async fn get_faculty_admin_dashboard_stats(
+    session_state: SessionState,
+    faculty_id: Option<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Ensure faculty_id is provided for FacultyAdmin
+    let faculty_id = match faculty_id {
+        Some(id) => id,
+        None => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Faculty ID is required for faculty admin"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    // Get faculty-specific user count (users in departments belonging to this faculty)
+    let total_users_result = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(DISTINCT u.id)
+        FROM users u
+        JOIN departments d ON u.department_id = d.id
+        WHERE d.faculty_id = $1
+        "#
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get faculty-specific activities count
+    let total_activities_result = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM activities WHERE faculty_id = $1"
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get faculty-specific ongoing activities count
+    let ongoing_activities_result = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM activities WHERE faculty_id = $1 AND status = 'ongoing'"
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get faculty-specific participations count
+    let total_participations_result = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(DISTINCT p.id)
+        FROM participations p
+        JOIN activities a ON p.activity_id = a.id
+        WHERE a.faculty_id = $1
+        "#
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get active sessions count from users in this faculty
+    // Note: This is tricky with Redis, so we'll approximate or use all sessions for now
+    let active_sessions = match session_state.redis_store.get_session_count().await {
+        Ok(count) => count as i64,
+        Err(_) => 0,
+    };
+
+    // Get faculty-specific user registrations today
+    let user_registrations_today_result = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(DISTINCT u.id)
+        FROM users u
+        JOIN departments d ON u.department_id = d.id
+        WHERE d.faculty_id = $1 AND u.created_at >= CURRENT_DATE
+        "#
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get recent activities for this faculty (last 5)
+    let recent_activities_result = sqlx::query(
+        r#"
+        SELECT 
+            a.id,
+            a.title,
+            a.start_time,
+            a.status,
+            COALESCE(COUNT(p.id), 0) as participant_count
+        FROM activities a
+        LEFT JOIN participations p ON a.id = p.activity_id
+        WHERE a.faculty_id = $1 AND a.created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY a.id, a.title, a.start_time, a.status
+        ORDER BY a.created_at DESC
+        LIMIT 5
+        "#,
+    )
+    .bind(faculty_id)
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    // Get popular activities for this faculty (most participants)
+    let popular_activities_result = sqlx::query(
+        r#"
+        SELECT 
+            a.id,
+            a.title,
+            a.start_time,
+            a.status,
+            COALESCE(COUNT(p.id), 0) as participant_count
+        FROM activities a
+        LEFT JOIN participations p ON a.id = p.activity_id
+        WHERE a.faculty_id = $1
+        GROUP BY a.id, a.title, a.start_time, a.status
+        ORDER BY participant_count DESC
+        LIMIT 5
+        "#,
+    )
+    .bind(faculty_id)
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    // Process results
+    match (
+        total_users_result,
+        total_activities_result,
+        ongoing_activities_result,
+        total_participations_result,
+        user_registrations_today_result,
+        recent_activities_result,
+        popular_activities_result,
+    ) {
+        (
+            Ok(total_users),
+            Ok(total_activities),
+            Ok(ongoing_activities),
+            Ok(total_participations),
+            Ok(user_registrations_today),
+            Ok(recent_activities_data),
+            Ok(popular_activities_data),
+        ) => {
+            let recent_activities = recent_activities_data
+                .into_iter()
+                .map(|row| ActivitySummary {
+                    id: row.get("id"),
+                    title: row.get("title"),
+                    start_time: row.get("start_time"),
+                    participant_count: row.get::<i64, _>("participant_count"),
+                    status: row.get("status"),
+                })
+                .collect();
+
+            let popular_activities = popular_activities_data
+                .into_iter()
+                .map(|row| ActivitySummary {
+                    id: row.get("id"),
+                    title: row.get("title"),
+                    start_time: row.get("start_time"),
+                    participant_count: row.get::<i64, _>("participant_count"),
+                    status: row.get("status"),
+                })
+                .collect();
+
+            let dashboard_stats = DashboardStats {
+                total_users,
+                total_activities,
+                ongoing_activities,
+                total_participations,
+                active_sessions,
+                recent_activities,
+                user_registrations_today,
+                popular_activities,
+            };
+
+            let response = json!({
+                "status": "success",
+                "data": dashboard_stats,
+                "message": "Faculty dashboard statistics retrieved successfully"
+            });
+
+            return Ok(Json(response));
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve faculty dashboard statistics"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
         }
     }
 }
