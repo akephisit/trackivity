@@ -10,6 +10,7 @@
 	import * as Form from '$lib/components/ui/form';
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { IconLoader, IconPlus, IconEdit, IconTrash, IconShield, IconUsers, IconMail, IconToggleLeft, IconToggleRight } from '@tabler/icons-svelte/icons';
@@ -64,6 +65,13 @@
 	let editSelectedAdminLevel = $state<AdminLevel | undefined>(undefined);
 	let editSelectedFaculty = $state<string | undefined>(undefined);
 
+	// State for delete confirmation
+	let deleteDialogOpen = $state(false);
+	let adminToDelete = $state<{id: string, name: string} | null>(null);
+
+	// State for toggle loading
+	let toggleLoading = $state<{[key: string]: boolean}>({});
+
 	// Admin Level options
 	const adminLevelOptions = [
 		{ value: AdminLevel.RegularAdmin, label: 'แอดมินทั่วไป' },
@@ -73,7 +81,7 @@
 
 	// Faculty options
 	let facultyOptions = $derived(data.faculties.map(faculty => ({
-		value: faculty.id,
+		value: faculty.id, // Keep as string (UUID)
 		label: faculty.name
 	})));
 
@@ -129,14 +137,17 @@
 		return faculty?.name || 'ไม่พบข้อมูล';
 	}
 
-	async function handleDelete(adminId: number, adminName: string) {
-		if (!confirm(`คุณแน่ใจหรือไม่ที่จะลบแอดมิน "${adminName}"?`)) {
-			return;
-		}
+	function openDeleteDialog(adminId: string, adminName: string) {
+		adminToDelete = { id: adminId, name: adminName };
+		deleteDialogOpen = true;
+	}
+
+	async function handleDelete() {
+		if (!adminToDelete) return;
 
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminId.toString());
+			formData.append('adminId', adminToDelete.id);
 
 			const response = await fetch('?/delete', {
 				method: 'POST',
@@ -147,6 +158,8 @@
 
 			if (result.type === 'success') {
 				toast.success('ลบแอดมินสำเร็จ');
+				deleteDialogOpen = false;
+				adminToDelete = null;
 				setTimeout(async () => {
 					try {
 						await invalidate('app:page-data');
@@ -185,21 +198,21 @@
 	function openEditDialog(admin: AdminRole) {
 		editingAdmin = admin;
 		editSelectedAdminLevel = admin.admin_level;
-		editSelectedFaculty = admin.faculty_id ? admin.faculty_id.toString() : undefined;
+		editSelectedFaculty = admin.faculty_id; // already string (UUID)
 		editDialogOpen = true;
 	}
 
-	async function handleUpdate(adminId: number, updateData: {
+	async function handleUpdate(adminId: string, updateData: {
 		first_name: string;
 		last_name: string;
 		email: string;
 		admin_level: AdminLevel;
-		faculty_id?: number;
+		faculty_id?: string;
 		permissions: string[];
 	}) {
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminId.toString());
+			formData.append('adminId', adminId);
 			formData.append('updateData', JSON.stringify(updateData));
 
 			const response = await fetch('?/update', {
@@ -230,17 +243,16 @@
 		}
 	}
 
-	async function handleToggleStatus(adminId: number, currentStatus: boolean, adminName: string) {
+	async function handleToggleStatus(adminId: string, currentStatus: boolean, adminName: string) {
 		const newStatus = !currentStatus;
 		const actionText = newStatus ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
-		
-		if (!confirm(`คุณต้องการ${actionText}แอดมิน "${adminName}" หรือไม่?`)) {
-			return;
-		}
+
+		// Set loading state for this specific admin
+		toggleLoading = { ...toggleLoading, [adminId]: true };
 
 		try {
 			const formData = new FormData();
-			formData.append('adminId', adminId.toString());
+			formData.append('adminId', adminId);
 			formData.append('isActive', newStatus.toString());
 
 			const response = await fetch('?/toggleStatus', {
@@ -267,6 +279,9 @@
 		} catch (error) {
 			console.error('Toggle status error:', error);
 			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		} finally {
+			// Clear loading state
+			toggleLoading = { ...toggleLoading, [adminId]: false };
 		}
 	}
 
@@ -402,9 +417,12 @@
 													getAdminActiveStatus(admin), 
 													admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ'
 												)}
+												disabled={toggleLoading[admin.id] || false}
 												class={getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
 											>
-												{#if getAdminActiveStatus(admin)}
+												{#if toggleLoading[admin.id]}
+													<IconLoader class="h-4 w-4 animate-spin" />
+												{:else if getAdminActiveStatus(admin)}
 													<IconToggleLeft class="h-4 w-4" />
 												{:else}
 													<IconToggleRight class="h-4 w-4" />
@@ -416,7 +434,7 @@
 											<Button
 												variant="ghost"
 												size="sm"
-												onclick={() => handleDelete(admin.id, admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ')}
+												onclick={() => openDeleteDialog(admin.id, admin.user?.first_name ? `${admin.user.first_name} ${admin.user.last_name || ''}` : 'ไม่ระบุ')}
 												class="text-red-600 hover:text-red-700"
 											>
 												<IconTrash class="h-4 w-4" />
@@ -608,11 +626,11 @@
 						<Label>คณะ</Label>
 						<Select.Root type="single" bind:value={editSelectedFaculty}>
 							<Select.Trigger>
-								{facultyOptions.find(opt => opt.value === (editSelectedFaculty ? parseInt(editSelectedFaculty) : undefined))?.label ?? "เลือกคณะ"}
+								{facultyOptions.find(opt => opt.value === editSelectedFaculty)?.label ?? "เลือกคณะ"}
 							</Select.Trigger>
 							<Select.Content>
 								{#each facultyOptions as option}
-									<Select.Item value={option.value.toString()}>
+									<Select.Item value={option.value}>
 										{option.label}
 									</Select.Item>
 								{/each}
@@ -634,7 +652,7 @@
 									last_name: editingAdmin.user.last_name,
 									email: editingAdmin.user.email,
 									admin_level: editSelectedAdminLevel,
-									faculty_id: editSelectedFaculty ? parseInt(editSelectedFaculty) : undefined,
+									faculty_id: editSelectedFaculty,
 									permissions: editingAdmin.permissions || []
 								});
 							}
@@ -647,3 +665,34 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<!-- Delete Admin Confirmation Dialog -->
+<AlertDialog.Root bind:open={deleteDialogOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>ยืนยันการลบแอดมิน</AlertDialog.Title>
+			<AlertDialog.Description>
+				{#if adminToDelete}
+					คุณแน่ใจหรือไม่ที่จะลบแอดมิน "{adminToDelete.name}"?<br />
+					การดำเนินการนี้ไม่สามารถยกเลิกได้ และจะลบข้อมูลของแอดมินออกจากระบบถาวร
+				{:else}
+					กำลังโหลดข้อมูล...
+				{/if}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel onclick={() => {
+				deleteDialogOpen = false;
+				adminToDelete = null;
+			}}>
+				ยกเลิก
+			</AlertDialog.Cancel>
+			<AlertDialog.Action 
+				onclick={handleDelete}
+				class="bg-red-600 hover:bg-red-700 text-white"
+			>
+				ลบแอดมิน
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
