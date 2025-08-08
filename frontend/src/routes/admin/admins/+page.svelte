@@ -31,23 +31,15 @@
 				dialogOpen = false;
 				
 				// รอสักครู่แล้วค่อย invalidate เพื่อให้เซิร์ฟเวอร์ commit ข้อมูล
-				// เพิ่ม delay เพื่อให้ database transaction commit เสร็จก่อน
 				setTimeout(async () => {
 					try {
 						refreshing = true;
-						console.log('Refreshing admin list after create...');
-						
-						// ใช้ invalidate แทน invalidateAll เพื่อ performance ดีกว่า
 						await invalidate('app:page-data');
-						// fallback ไป invalidateAll 
 						await invalidateAll();
-						
-						console.log('Admin list refreshed successfully');
 						refreshing = false;
 					} catch (error) {
 						console.error('Failed to refresh data:', error);
 						refreshing = false;
-						// force page reload ถ้า invalidation ล้มเหลว
 						window.location.reload();
 					}
 				}, 500);
@@ -87,35 +79,33 @@
 		label: faculty.name
 	})));
 
-	// Update form data when select values change
+	// Update form data when select values change - using separate effects to prevent loops
 	$effect(() => {
-		// Debug logging (remove in production)
-		if (import.meta.env.DEV) {
-			console.log('Effect triggered - selectedAdminLevel:', selectedAdminLevel, 'selectedFaculty:', selectedFaculty);
-		}
-		
-		if (selectedAdminLevel) {
-			// Ensure we set the enum value directly, not string
-			const enumValue = selectedAdminLevel as AdminLevel;
-			$formData.admin_level = enumValue;
+		if (selectedAdminLevel !== undefined) {
+			// Only update if actually different to prevent loops
+			if ($formData.admin_level !== selectedAdminLevel) {
+				$formData.admin_level = selectedAdminLevel;
+			}
 			
 			// Clear faculty selection when changing to SuperAdmin or RegularAdmin
-			if (enumValue === AdminLevel.SuperAdmin || enumValue === AdminLevel.RegularAdmin) {
-				selectedFaculty = undefined;
-				$formData.faculty_id = undefined;
-			} else if (enumValue === AdminLevel.FacultyAdmin) {
-				// For FacultyAdmin, set faculty_id if selected
-				if (selectedFaculty) {
-					$formData.faculty_id = selectedFaculty;
-				} else {
+			if (selectedAdminLevel === AdminLevel.SuperAdmin || selectedAdminLevel === AdminLevel.RegularAdmin) {
+				if (selectedFaculty !== undefined) {
+					selectedFaculty = undefined;
+				}
+				if ($formData.faculty_id !== undefined) {
 					$formData.faculty_id = undefined;
 				}
 			}
 		}
-		
-		// Debug logging (remove in production)
-		if (import.meta.env.DEV) {
-			console.log('Final form data:', $formData);
+	});
+	
+	// Separate effect for faculty changes
+	$effect(() => {
+		if (selectedAdminLevel === AdminLevel.FacultyAdmin) {
+			// Only update faculty_id if it's actually different
+			if ($formData.faculty_id !== selectedFaculty) {
+				$formData.faculty_id = selectedFaculty;
+			}
 		}
 	});
 
@@ -170,9 +160,6 @@
 	}
 
 	function resetForm() {
-		if (import.meta.env.DEV) {
-			console.log('Resetting form...');
-		}
 		selectedAdminLevel = undefined;
 		selectedFaculty = undefined;
 		$formData = {
@@ -182,9 +169,6 @@
 			faculty_id: undefined,
 			permissions: []
 		};
-		if (import.meta.env.DEV) {
-			console.log('Form reset completed, formData:', $formData);
-		}
 	}
 
 	function openDialog() {
@@ -873,9 +857,6 @@
 							bind:value={selectedAdminLevel} 
 							disabled={$submitting}
 							onValueChange={(value) => {
-								if (import.meta.env.DEV) {
-									console.log('Admin level changed to:', value);
-								}
 								selectedAdminLevel = value as AdminLevel;
 							}}
 						>
@@ -906,9 +887,6 @@
 								disabled={$submitting} 
 								required
 								onValueChange={(value) => {
-									if (import.meta.env.DEV) {
-										console.log('Faculty changed to:', value);
-									}
 									selectedFaculty = value as string;
 								}}
 							>
@@ -958,11 +936,7 @@
 					type="submit" 
 					disabled={$submitting || (selectedAdminLevel === AdminLevel.FacultyAdmin && !selectedFaculty)}
 					onclick={() => {
-						if (import.meta.env.DEV) {
-							console.log('Form submitted with data:', $formData);
-							console.log('Selected admin level:', selectedAdminLevel);
-							console.log('Selected faculty:', selectedFaculty);
-						}
+						// Form will be submitted normally
 					}}
 				>
 					{#if $submitting}
