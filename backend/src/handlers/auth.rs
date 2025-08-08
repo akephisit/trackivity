@@ -160,11 +160,16 @@ pub async fn student_login(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    println!("Student login - User {} faculty_id: {:?}", user.email, user_faculty_id);
+
     let faculty_is_active = check_faculty_is_active(&session_state, user_faculty_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    println!("Student login - Faculty active: {}", faculty_is_active);
+
     if !faculty_is_active {
+        println!("Student login blocked - Faculty inactive for user: {}", user.email);
         return Ok(Json(LoginResponse {
             success: false,
             session: None,

@@ -35,7 +35,7 @@ CREATE TABLE users (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     qr_secret VARCHAR(255) NOT NULL UNIQUE,
-    department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+    department_id UUID NOT NULL REFERENCES departments(id) ON DELETE RESTRICT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
