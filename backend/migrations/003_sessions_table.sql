@@ -17,9 +17,18 @@ CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX idx_sessions_is_active ON sessions(is_active);
 CREATE INDEX idx_sessions_last_accessed ON sessions(last_accessed);
 
+-- Create function for updating last_accessed on sessions
+CREATE OR REPLACE FUNCTION update_sessions_last_accessed_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.last_accessed = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
 -- Create trigger for updating last_accessed
 CREATE TRIGGER update_sessions_last_accessed BEFORE UPDATE ON sessions
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION update_sessions_last_accessed_column();
 
 -- Add session-related permissions to admin_roles if needed
 -- This allows tracking which sessions are associated with admin operations
