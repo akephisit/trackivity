@@ -6,7 +6,7 @@
 
 echo "Creating super admin account..."
 
-curl -X POST http://localhost:8000/api/admin/bootstrap \
+curl -X POST http://localhost:3000/api/admin/bootstrap \
     -H "Content-Type: application/json" \
     -d '{
       "student_id": "ADMIN001",

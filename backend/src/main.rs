@@ -39,8 +39,8 @@ async fn main() -> anyhow::Result<()> {
     // Initialize database
     let database = Database::new(&config.database_url).await?;
 
-    // Run migrations
-    database.migrate().await?;
+    // Run migrations if needed (auto-setup on first run)
+    database.migrate_if_needed().await?;
 
     // Initialize Redis connection
     let redis_client = redis::Client::open(config.redis_url.clone())?;

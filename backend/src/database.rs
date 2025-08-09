@@ -42,6 +42,35 @@ impl Database {
         Ok(Database { pool })
     }
 
+    /// Check if database has been migrated (by checking if users table exists)
+    pub async fn is_migrated(&self) -> Result<bool> {
+        let result = sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'users'
+            "#
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        
+        Ok(result > 0)
+    }
+
+    /// Run migrations only if not already migrated
+    pub async fn migrate_if_needed(&self) -> Result<()> {
+        if !self.is_migrated().await? {
+            tracing::info!("Database not initialized. Running migrations...");
+            sqlx::migrate!("./migrations").run(&self.pool).await?;
+            tracing::info!("Database migrations completed successfully");
+        } else {
+            tracing::info!("Database already initialized. Skipping migrations.");
+        }
+        Ok(())
+    }
+
+    /// Force run migrations (for manual migration)
     pub async fn migrate(&self) -> Result<()> {
         sqlx::migrate!("./migrations").run(&self.pool).await?;
         Ok(())
