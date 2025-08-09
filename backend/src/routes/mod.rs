@@ -10,6 +10,8 @@ use crate::middleware::session::SessionState;
 
 pub fn create_routes() -> Router<SessionState> {
     Router::new()
+        // Bootstrap route (no auth required)
+        .route("/api/admin/bootstrap", post(admin::bootstrap_admin))
         // Student Authentication routes
         .route("/api/auth/login", post(auth::student_login))
         .route("/api/auth/register", post(auth::student_register))

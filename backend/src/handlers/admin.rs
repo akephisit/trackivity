@@ -1121,3 +1121,198 @@ pub async fn toggle_admin_status(
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BootstrapAdminRequest {
+    pub student_id: String,
+    pub email: String,
+    pub password: String,
+    pub first_name: String,
+    pub last_name: String,
+}
+
+/// Bootstrap initial super admin account (only works when no super admin exists)
+pub async fn bootstrap_admin(
+    State(session_state): State<SessionState>,
+    Json(request): Json<BootstrapAdminRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check if any super admin already exists
+    let super_admin_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM admin_roles WHERE admin_level = 'super_admin'",
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match super_admin_count {
+        Ok(count) if count > 0 => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Super admin already exists. Bootstrap is disabled."
+            });
+            return Err((StatusCode::CONFLICT, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check existing super admins"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+        _ => {}
+    }
+
+    // Check if user already exists
+    let existing_user = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM users WHERE email = $1 OR student_id = $2",
+    )
+    .bind(&request.email)
+    .bind(&request.student_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match existing_user {
+        Ok(count) if count > 0 => {
+            let error_response = json!({
+                "status": "error",
+                "message": "User with this email or student ID already exists"
+            });
+            return Err((StatusCode::CONFLICT, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check existing user"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+        _ => {}
+    }
+
+    // Hash password
+    let password_hash = match bcrypt::hash(&request.password, bcrypt::DEFAULT_COST) {
+        Ok(hash) => hash,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to hash password"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Generate QR secret
+    let qr_secret = Uuid::new_v4().to_string();
+
+    // Start transaction
+    let mut tx = match session_state.db_pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to start transaction"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Create super admin user (with null department_id)
+    let user_result = sqlx::query_as::<_, User>(
+        r#"
+        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, NULL)
+        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        "#
+    )
+    .bind(&request.student_id)
+    .bind(&request.email)
+    .bind(&password_hash)
+    .bind(&request.first_name)
+    .bind(&request.last_name)
+    .bind(&qr_secret)
+    .fetch_one(&mut *tx)
+    .await;
+
+    let user = match user_result {
+        Ok(user) => user,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create super admin user: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Define super admin permissions
+    let super_admin_permissions = vec![
+        "ViewSystemReports".to_string(),
+        "ManageAllFaculties".to_string(), 
+        "ManageUsers".to_string(),
+        "ManageActivities".to_string(),
+        "ManageAdmins".to_string(),
+        "ManageSessions".to_string(),
+        "ViewAllReports".to_string(),
+    ];
+
+    // Create super admin role (with null faculty_id)
+    let admin_role_result = sqlx::query_as::<_, AdminRole>(
+        r#"
+        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions)
+        VALUES ($1, 'super_admin', NULL, $2)
+        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        "#
+    )
+    .bind(user.id)
+    .bind(&super_admin_permissions)
+    .fetch_one(&mut *tx)
+    .await;
+
+    let admin_role = match admin_role_result {
+        Ok(role) => role,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create super admin role: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Commit transaction
+    if let Err(_) = tx.commit().await {
+        let error_response = json!({
+            "status": "error",
+            "message": "Failed to commit transaction"
+        });
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+    }
+
+    let response = json!({
+        "status": "success",
+        "data": {
+            "user": {
+                "id": user.id,
+                "student_id": user.student_id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "department_id": user.department_id,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at
+            },
+            "admin_role": {
+                "id": admin_role.id,
+                "admin_level": admin_role.admin_level,
+                "faculty_id": admin_role.faculty_id,
+                "permissions": admin_role.permissions,
+                "created_at": admin_role.created_at,
+                "updated_at": admin_role.updated_at
+            }
+        },
+        "message": "Super admin bootstrap completed successfully"
+    });
+
+    Ok(Json(response))
+}
