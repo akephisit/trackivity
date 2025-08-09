@@ -267,9 +267,9 @@
 				<!-- Department Filter -->
 				{#if filteredDepartments.length > 0}
 					<div>
-						<label class="text-sm font-medium mb-2 block">สาขา/ภาควิชา</label>
+						<label for="department-select" class="text-sm font-medium mb-2 block">สาขา/ภาควิชา</label>
 						<Select.Root bind:selected={selectedDepartment}>
-							<Select.Trigger>
+							<Select.Trigger id="department-select">
 								<Select.Value placeholder="เลือกสาขา" />
 							</Select.Trigger>
 							<Select.Content>
@@ -284,10 +284,11 @@
 
 				<!-- Date Range Filters -->
 				<div>
-					<label class="text-sm font-medium mb-2 block">สมัครหลังจากวันที่</label>
+					<label for="created-after-select" class="text-sm font-medium mb-2 block">สมัครหลังจากวันที่</label>
 					<Popover.Root>
 						<Popover.Trigger asChild let:builder>
 							<Button
+								id="created-after-select"
 								variant="outline"
 								class="w-full justify-start text-left font-normal {!createdAfter ? 'text-muted-foreground' : ''}"
 								builders={[builder]}
@@ -306,10 +307,11 @@
 				</div>
 
 				<div>
-					<label class="text-sm font-medium mb-2 block">สมัครก่อนวันที่</label>
+					<label for="created-before-select" class="text-sm font-medium mb-2 block">สมัครก่อนวันที่</label>
 					<Popover.Root>
 						<Popover.Trigger asChild let:builder>
 							<Button
+								id="created-before-select"
 								variant="outline"
 								class="w-full justify-start text-left font-normal {!createdBefore ? 'text-muted-foreground' : ''}"
 								builders={[builder]}

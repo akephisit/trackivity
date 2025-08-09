@@ -2,13 +2,16 @@ import { requireAdmin } from '$lib/server/auth';
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { AdminLevel } from '$lib/types/admin';
+import { PUBLIC_API_URL } from '$env/static/public';
 
 export const GET: RequestHandler = async (event) => {
+    // Extract facultyId outside try block to make it available in catch block
+    const { params } = event;
+    const facultyId = params.id;
+    
     try {
         // Require authentication
         const user = await requireAdmin(event);
-        const { params } = event;
-        const facultyId = params.id;
         
         // Get query parameters
         const url = event.url;
@@ -36,9 +39,15 @@ export const GET: RequestHandler = async (event) => {
             faculty_id: facultyId
         });
         
+        // Validate backend URL configuration
+        if (!PUBLIC_API_URL) {
+            console.error('PUBLIC_API_URL environment variable is not configured');
+            throw error(500, 'API configuration error: Backend URL not configured');
+        }
+        
         // Make request to backend API
-        const backendUrl = `${process.env.BACKEND_URL}/api/admin/users?${queryParams.toString()}`;
-        const response = await fetch(backendUrl, {
+        const backendUrl = `${PUBLIC_API_URL}/api/admin/users?${queryParams.toString()}`;
+        const response = await event.fetch(backendUrl, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${event.cookies.get('auth_token')}`,
@@ -47,28 +56,61 @@ export const GET: RequestHandler = async (event) => {
         });
         
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Backend API error:', response.status, errorText);
+            let errorText: string;
+            try {
+                errorText = await response.text();
+            } catch (textError) {
+                errorText = 'Failed to read error response';
+            }
+            
+            console.error('Backend API error:', {
+                url: backendUrl,
+                status: response.status,
+                statusText: response.statusText,
+                error: errorText
+            });
             
             if (response.status === 404) {
                 throw error(404, 'Faculty not found or has no users');
             } else if (response.status === 403) {
                 throw error(403, 'Access denied');
+            } else if (response.status === 401) {
+                throw error(401, 'Authentication required');
+            } else if (response.status >= 500) {
+                throw error(502, 'Backend service unavailable');
             } else {
                 throw error(response.status, `Failed to fetch users: ${errorText}`);
             }
         }
         
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            console.error('Failed to parse response JSON:', parseError);
+            throw error(502, 'Invalid response from backend service');
+        }
+        
         return json(data);
         
     } catch (err: any) {
-        console.error('Error in faculty users API:', err);
+        console.error('Error in faculty users API:', {
+            error: err,
+            facultyId,
+            url: event.url.pathname
+        });
         
+        // Re-throw SvelteKit errors (these have a status property)
         if (err.status) {
-            throw err; // Re-throw SvelteKit errors
+            throw err;
         }
         
+        // Handle network or other fetch errors
+        if (err.name === 'TypeError' && err.message.includes('fetch')) {
+            throw error(503, 'Unable to connect to backend service');
+        }
+        
+        // Generic fallback error
         throw error(500, 'Failed to fetch users');
     }
 };
