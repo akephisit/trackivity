@@ -4,7 +4,7 @@ use axum::{
 };
 
 use crate::handlers::{
-    activity, admin, admin_session, admin_session_mgmt, auth, faculty, sse, user,
+    activity, admin, admin_session, admin_session_mgmt, auth, department, faculty, sse, user, user_management,
 };
 use crate::middleware::session::SessionState;
 
@@ -34,6 +34,23 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/faculties/{id}", put(faculty::update_faculty))
         .route("/api/faculties/{id}", delete(faculty::delete_faculty))
         .route("/api/faculties/{id}/toggle-status", put(faculty::toggle_faculty_status))
+        // Enhanced faculty management (SuperAdmin only)
+        .route("/api/admin/faculties/stats", get(faculty::get_faculties_with_stats))
+        .route("/api/admin/faculties/overview", get(faculty::get_faculty_overview))
+        // Department routes
+        .route("/api/faculties/{faculty_id}/departments", get(department::get_faculty_departments))
+        .route("/api/faculties/{faculty_id}/departments", post(department::create_faculty_department))
+        .route("/api/departments/{id}", put(department::update_department))
+        .route("/api/departments/{id}", delete(department::delete_department))
+        // Department admin management routes (Faculty Admin or SuperAdmin only)
+        .route("/api/departments/{department_id}/admins", get(department::get_department_admins))
+        .route("/api/departments/{department_id}/admins", post(department::assign_department_admin))
+        .route("/api/departments/{department_id}/admins/{admin_role_id}", delete(department::remove_department_admin))
+        .route("/api/departments/{source_department_id}/transfer-admin", post(department::transfer_department_admin))
+        // Faculty-scoped admin operations
+        .route("/api/faculties/{faculty_id}/admins", get(admin::get_faculty_admins))
+        .route("/api/faculties/{faculty_id}/users", get(admin::get_faculty_users))
+        .route("/api/faculties/{faculty_id}/admins", post(admin::create_faculty_admin))
         // User routes
         .route("/api/users", get(user::get_users))
         .route("/api/users/{id}", get(user::get_user))
@@ -62,6 +79,14 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/admin/activities", get(admin::get_admin_activities))
         .route("/api/admin/create", post(admin::create_admin))
         .route("/api/admin/roles/{id}/toggle-status", put(admin::toggle_admin_status))
+        .route("/api/admin/roles/{id}", put(admin::update_admin_role))
+        // Enhanced admin management routes (SuperAdmin only)
+        .route("/api/admin/system-admins", get(admin::get_all_system_admins))
+        .route("/api/admin/bulk-operations", post(admin::bulk_admin_operations))
+        // Enhanced user management routes (SuperAdmin only)
+        .route("/api/admin/system-users", get(user_management::get_system_users))
+        .route("/api/admin/user-statistics", get(user_management::get_user_statistics))
+        .route("/api/admin/user-bulk-operations", post(user_management::bulk_user_operations))
         // Admin session management routes (Super Admin only)
         .route("/api/admin/sessions", get(auth::get_all_sessions))
         .route(

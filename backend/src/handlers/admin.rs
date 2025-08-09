@@ -1316,3 +1316,1008 @@ pub async fn bootstrap_admin(
 
     Ok(Json(response))
 }
+
+/// Get admins in a faculty with proper authorization
+/// FacultyAdmin+ for their faculty, SuperAdmin for any
+pub async fn get_faculty_admins(
+    State(session_state): State<SessionState>,
+    Path(faculty_id): Path<Uuid>,
+    admin: FacultyAdminUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check authorization - FacultyAdmin can only access their own faculty
+    if admin.admin_role.admin_level != AdminLevel::SuperAdmin {
+        if admin.admin_role.faculty_id != Some(faculty_id) {
+            let error_response = json!({
+                "status": "error",
+                "message": "Access denied: You can only access admins in your faculty"
+            });
+            return Err((StatusCode::FORBIDDEN, Json(error_response)));
+        }
+    }
+
+    // Verify faculty exists
+    let faculty_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM faculties WHERE id = $1)"
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await
+    .unwrap_or(false);
+
+    if !faculty_exists {
+        let error_response = json!({
+            "status": "error",
+            "message": "Faculty not found"
+        });
+        return Err((StatusCode::NOT_FOUND, Json(error_response)));
+    }
+
+    let limit = params
+        .get("limit")
+        .and_then(|l| l.parse::<i64>().ok())
+        .unwrap_or(50);
+
+    let offset = params
+        .get("offset")
+        .and_then(|o| o.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    let search = params.get("search").cloned();
+
+    let mut query = r#"
+        SELECT DISTINCT
+            u.id,
+            u.student_id,
+            u.email,
+            u.first_name,
+            u.last_name,
+            u.department_id,
+            u.created_at,
+            ar.id as admin_role_id,
+            ar.admin_level,
+            ar.faculty_id,
+            ar.permissions,
+            ar.created_at as role_created_at,
+            ar.updated_at as role_updated_at,
+            (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) as last_login,
+            CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) THEN true ELSE false END as is_active
+        FROM users u
+        LEFT JOIN admin_roles ar ON u.id = ar.user_id
+        WHERE ar.id IS NOT NULL AND ar.faculty_id = $3
+    "#
+    .to_string();
+
+    let mut count_query = "SELECT COUNT(*) FROM users u LEFT JOIN admin_roles ar ON u.id = ar.user_id WHERE ar.id IS NOT NULL AND ar.faculty_id = $1".to_string();
+
+    if let Some(_search_term) = &search {
+        let where_clause = " AND (u.first_name ILIKE $4 OR u.last_name ILIKE $4 OR u.email ILIKE $4 OR u.student_id ILIKE $4)";
+        query.push_str(where_clause);
+        count_query.push_str(" AND (u.first_name ILIKE $2 OR u.last_name ILIKE $2 OR u.email ILIKE $2 OR u.student_id ILIKE $2)");
+    }
+
+    query.push_str(" ORDER BY u.created_at DESC LIMIT $1 OFFSET $2");
+
+    let users_result = if let Some(search_term) = &search {
+        let search_pattern = format!("%{}%", search_term);
+        sqlx::query(&query)
+            .bind(limit)
+            .bind(offset)
+            .bind(faculty_id)
+            .bind(search_pattern.clone())
+            .fetch_all(&session_state.db_pool)
+            .await
+    } else {
+        sqlx::query(&query)
+            .bind(limit)
+            .bind(offset)
+            .bind(faculty_id)
+            .fetch_all(&session_state.db_pool)
+            .await
+    };
+
+    let total_count_result = if let Some(search_term) = &search {
+        let search_pattern = format!("%{}%", search_term);
+        sqlx::query_scalar::<_, i64>(&count_query)
+            .bind(faculty_id)
+            .bind(search_pattern)
+            .fetch_one(&session_state.db_pool)
+            .await
+    } else {
+        sqlx::query_scalar::<_, i64>(&count_query)
+            .bind(faculty_id)
+            .fetch_one(&session_state.db_pool)
+            .await
+    };
+
+    match (users_result, total_count_result) {
+        (Ok(rows), Ok(total_count)) => {
+            let mut admin_users = Vec::new();
+
+            for row in rows {
+                let admin_role = match row.get::<Option<Uuid>, _>("admin_role_id") {
+                    Some(role_id) => Some(AdminRole {
+                        id: role_id,
+                        user_id: row.get("id"),
+                        admin_level: row
+                            .get::<Option<AdminLevel>, _>("admin_level")
+                            .unwrap_or(AdminLevel::RegularAdmin),
+                        faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
+                        permissions: row
+                            .get::<Option<Vec<String>>, _>("permissions")
+                            .unwrap_or_else(|| vec![]),
+                        created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
+                        updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
+                    }),
+                    None => None,
+                };
+
+                let admin_user = AdminUserInfo {
+                    id: row.get("id"),
+                    student_id: row.get("student_id"),
+                    email: row.get("email"),
+                    first_name: row.get("first_name"),
+                    last_name: row.get("last_name"),
+                    department_id: row.get::<Option<Uuid>, _>("department_id"),
+                    admin_role,
+                    created_at: row.get::<Option<DateTime<Utc>>, _>("created_at"),
+                    last_login: row.get::<Option<DateTime<Utc>>, _>("last_login"),
+                    is_active: row.get::<Option<bool>, _>("is_active").unwrap_or(false),
+                };
+
+                admin_users.push(admin_user);
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "admins": admin_users,
+                    "faculty_id": faculty_id,
+                    "total_count": total_count,
+                    "limit": limit,
+                    "offset": offset
+                },
+                "message": "Faculty admins retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve faculty admins"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get users in a faculty with proper authorization
+/// FacultyAdmin+ for their faculty, SuperAdmin for any
+pub async fn get_faculty_users(
+    State(session_state): State<SessionState>,
+    Path(faculty_id): Path<Uuid>,
+    admin: FacultyAdminUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Check authorization - FacultyAdmin can only access their own faculty
+    if admin.admin_role.admin_level != AdminLevel::SuperAdmin {
+        if admin.admin_role.faculty_id != Some(faculty_id) {
+            let error_response = json!({
+                "status": "error",
+                "message": "Access denied: You can only access users in your faculty"
+            });
+            return Err((StatusCode::FORBIDDEN, Json(error_response)));
+        }
+    }
+
+    // Verify faculty exists
+    let faculty_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM faculties WHERE id = $1)"
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await
+    .unwrap_or(false);
+
+    if !faculty_exists {
+        let error_response = json!({
+            "status": "error",
+            "message": "Faculty not found"
+        });
+        return Err((StatusCode::NOT_FOUND, Json(error_response)));
+    }
+
+    let limit = params
+        .get("limit")
+        .and_then(|l| l.parse::<i64>().ok())
+        .unwrap_or(50);
+
+    let offset = params
+        .get("offset")
+        .and_then(|o| o.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    let search = params.get("search").cloned();
+    let include_admins = params
+        .get("include_admins")
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
+    let mut query = r#"
+        SELECT DISTINCT
+            u.id,
+            u.student_id,
+            u.email,
+            u.first_name,
+            u.last_name,
+            u.department_id,
+            u.created_at,
+            u.updated_at,
+            d.name as department_name,
+            ar.id as admin_role_id,
+            ar.admin_level,
+            ar.permissions
+        FROM users u
+        JOIN departments d ON u.department_id = d.id
+        LEFT JOIN admin_roles ar ON u.id = ar.user_id
+        WHERE d.faculty_id = $3
+    "#
+    .to_string();
+
+    let mut count_query = r#"
+        SELECT COUNT(DISTINCT u.id)
+        FROM users u
+        JOIN departments d ON u.department_id = d.id
+        LEFT JOIN admin_roles ar ON u.id = ar.user_id
+        WHERE d.faculty_id = $1
+    "#.to_string();
+
+    // Filter out admin users if not requested
+    if !include_admins {
+        let admin_filter = " AND ar.id IS NULL";
+        query.push_str(admin_filter);
+        count_query.push_str(admin_filter);
+    }
+
+    if let Some(_search_term) = &search {
+        let where_clause = " AND (u.first_name ILIKE $4 OR u.last_name ILIKE $4 OR u.email ILIKE $4 OR u.student_id ILIKE $4)";
+        query.push_str(where_clause);
+        count_query.push_str(" AND (u.first_name ILIKE $2 OR u.last_name ILIKE $2 OR u.email ILIKE $2 OR u.student_id ILIKE $2)");
+    }
+
+    query.push_str(" ORDER BY u.last_name, u.first_name LIMIT $1 OFFSET $2");
+
+    let users_result = if let Some(search_term) = &search {
+        let search_pattern = format!("%{}%", search_term);
+        sqlx::query(&query)
+            .bind(limit)
+            .bind(offset)
+            .bind(faculty_id)
+            .bind(search_pattern.clone())
+            .fetch_all(&session_state.db_pool)
+            .await
+    } else {
+        sqlx::query(&query)
+            .bind(limit)
+            .bind(offset)
+            .bind(faculty_id)
+            .fetch_all(&session_state.db_pool)
+            .await
+    };
+
+    let total_count_result = if let Some(search_term) = &search {
+        let search_pattern = format!("%{}%", search_term);
+        sqlx::query_scalar::<_, i64>(&count_query)
+            .bind(faculty_id)
+            .bind(search_pattern)
+            .fetch_one(&session_state.db_pool)
+            .await
+    } else {
+        sqlx::query_scalar::<_, i64>(&count_query)
+            .bind(faculty_id)
+            .fetch_one(&session_state.db_pool)
+            .await
+    };
+
+    match (users_result, total_count_result) {
+        (Ok(rows), Ok(total_count)) => {
+            let mut users = Vec::new();
+
+            for row in rows {
+                let user_info = json!({
+                    "id": row.get::<Uuid, _>("id"),
+                    "student_id": row.get::<String, _>("student_id"),
+                    "email": row.get::<String, _>("email"),
+                    "first_name": row.get::<String, _>("first_name"),
+                    "last_name": row.get::<String, _>("last_name"),
+                    "department_id": row.get::<Option<Uuid>, _>("department_id"),
+                    "department_name": row.get::<Option<String>, _>("department_name"),
+                    "created_at": row.get::<Option<DateTime<Utc>>, _>("created_at"),
+                    "updated_at": row.get::<Option<DateTime<Utc>>, _>("updated_at"),
+                    "is_admin": row.get::<Option<Uuid>, _>("admin_role_id").is_some(),
+                    "admin_level": row.get::<Option<AdminLevel>, _>("admin_level"),
+                    "permissions": row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_else(|| vec![])
+                });
+
+                users.push(user_info);
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "users": users,
+                    "faculty_id": faculty_id,
+                    "total_count": total_count,
+                    "limit": limit,
+                    "offset": offset,
+                    "include_admins": include_admins
+                },
+                "message": "Faculty users retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve faculty users"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Create admin in faculty (SuperAdmin only, must set faculty_id)
+pub async fn create_faculty_admin(
+    State(session_state): State<SessionState>,
+    Path(faculty_id): Path<Uuid>,
+    _admin: SuperAdminUser,
+    Json(mut request): Json<CreateAdminRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Verify faculty exists
+    let faculty_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM faculties WHERE id = $1)"
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await
+    .unwrap_or(false);
+
+    if !faculty_exists {
+        let error_response = json!({
+            "status": "error",
+            "message": "Faculty not found"
+        });
+        return Err((StatusCode::NOT_FOUND, Json(error_response)));
+    }
+
+    // Force the faculty_id to match the path parameter
+    request.faculty_id = Some(faculty_id);
+
+    // Validate admin level is appropriate for faculty
+    match request.admin_level {
+        AdminLevel::SuperAdmin => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Cannot create SuperAdmin with faculty assignment"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+        AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+            // These are valid for faculty assignment
+        }
+    }
+
+    // Check if user already exists
+    let existing_user = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM users WHERE email = $1 OR student_id = $2",
+    )
+    .bind(&request.email)
+    .bind(&request.student_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match existing_user {
+        Ok(count) if count > 0 => {
+            let error_response = json!({
+                "status": "error",
+                "message": "User with this email or student ID already exists"
+            });
+            return Err((StatusCode::CONFLICT, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to check existing user"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+        _ => {}
+    }
+
+    // Hash password
+    let password_hash = match bcrypt::hash(&request.password, bcrypt::DEFAULT_COST) {
+        Ok(hash) => hash,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to hash password"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Generate QR secret
+    let qr_secret = Uuid::new_v4().to_string();
+
+    // Start transaction
+    let mut tx = match session_state.db_pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to start transaction"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Create user
+    let user_result = sqlx::query_as::<_, User>(
+        r#"
+        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        "#
+    )
+    .bind(&request.student_id)
+    .bind(&request.email)
+    .bind(&password_hash)
+    .bind(&request.first_name)
+    .bind(&request.last_name)
+    .bind(&qr_secret)
+    .bind(request.department_id)
+    .fetch_one(&mut *tx)
+    .await;
+
+    let user = match user_result {
+        Ok(user) => user,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create user: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Create admin role
+    let admin_role_result = sqlx::query_as::<_, AdminRole>(
+        r#"
+        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        "#
+    )
+    .bind(user.id)
+    .bind(&request.admin_level)
+    .bind(request.faculty_id)
+    .bind(&request.permissions)
+    .fetch_one(&mut *tx)
+    .await;
+
+    let admin_role = match admin_role_result {
+        Ok(role) => role,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to create admin role: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Commit transaction
+    if let Err(_) = tx.commit().await {
+        let error_response = json!({
+            "status": "error",
+            "message": "Failed to commit transaction"
+        });
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+    }
+
+    let response = json!({
+        "status": "success",
+        "data": {
+            "user": {
+                "id": user.id,
+                "student_id": user.student_id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "department_id": user.department_id,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at
+            },
+            "admin_role": {
+                "id": admin_role.id,
+                "admin_level": admin_role.admin_level,
+                "faculty_id": admin_role.faculty_id,
+                "permissions": admin_role.permissions,
+                "created_at": admin_role.created_at,
+                "updated_at": admin_role.updated_at
+            }
+        },
+        "message": "Faculty admin created successfully"
+    });
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateAdminRoleRequest {
+    pub admin_level: Option<AdminLevel>,
+    pub faculty_id: Option<Option<Uuid>>, // Option<Option<T>> to distinguish between not provided vs explicitly setting to null
+    pub permissions: Option<Vec<String>>,
+}
+
+/// Update admin role (SuperAdmin only)
+pub async fn update_admin_role(
+    State(session_state): State<SessionState>,
+    Path(admin_role_id): Path<Uuid>,
+    _admin: SuperAdminUser,
+    Json(request): Json<UpdateAdminRoleRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Get the current admin role
+    let current_role = sqlx::query_as::<_, AdminRole>(
+        "SELECT * FROM admin_roles WHERE id = $1"
+    )
+    .bind(admin_role_id)
+    .fetch_optional(&session_state.db_pool)
+    .await;
+
+    let current_role = match current_role {
+        Ok(Some(role)) => role,
+        Ok(None) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Admin role not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to fetch admin role"
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    // Validate the update request
+    if let Some(new_level) = &request.admin_level {
+        match new_level {
+            AdminLevel::SuperAdmin => {
+                // If changing to SuperAdmin, faculty_id should be null
+                if let Some(Some(_)) = request.faculty_id {
+                    let error_response = json!({
+                        "status": "error",
+                        "message": "SuperAdmin cannot be assigned to a specific faculty"
+                    });
+                    return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+                }
+            }
+            AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+                // Faculty admins should have a faculty_id
+                let final_faculty_id = match &request.faculty_id {
+                    Some(Some(id)) => Some(*id),
+                    Some(None) => None,
+                    None => current_role.faculty_id,
+                };
+                
+                if final_faculty_id.is_none() {
+                    let error_response = json!({
+                        "status": "error",
+                        "message": "Faculty and Regular admins must be assigned to a faculty"
+                    });
+                    return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+                }
+            }
+        }
+    }
+
+    // Build dynamic update query
+    let mut query = "UPDATE admin_roles SET updated_at = NOW()".to_string();
+    let mut param_count = 1;
+    let mut query_builder = sqlx::query_as::<_, AdminRole>("");
+
+    if let Some(_) = &request.admin_level {
+        query.push_str(&format!(", admin_level = ${}", param_count));
+        param_count += 1;
+    }
+
+    if let Some(_) = &request.faculty_id {
+        query.push_str(&format!(", faculty_id = ${}", param_count));
+        param_count += 1;
+    }
+
+    if let Some(_) = &request.permissions {
+        query.push_str(&format!(", permissions = ${}", param_count));
+        param_count += 1;
+    }
+
+    query.push_str(&format!(
+        " WHERE id = ${} RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at",
+        param_count
+    ));
+
+    query_builder = sqlx::query_as::<_, AdminRole>(&query);
+
+    if let Some(admin_level) = &request.admin_level {
+        query_builder = query_builder.bind(admin_level);
+    }
+
+    if let Some(faculty_id) = &request.faculty_id {
+        query_builder = query_builder.bind(faculty_id);
+    }
+
+    if let Some(permissions) = &request.permissions {
+        query_builder = query_builder.bind(permissions);
+    }
+
+    query_builder = query_builder.bind(admin_role_id);
+
+    match query_builder.fetch_one(&session_state.db_pool).await {
+        Ok(updated_role) => {
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "admin_role": updated_role,
+                    "updated_fields": {
+                        "admin_level_changed": request.admin_level.is_some(),
+                        "faculty_id_changed": request.faculty_id.is_some(),
+                        "permissions_changed": request.permissions.is_some()
+                    }
+                },
+                "message": "Admin role updated successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Admin role not found"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to update admin role: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get all system admins with faculty grouping (SuperAdmin only)
+pub async fn get_all_system_admins(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let search = params.get("search").cloned();
+    
+    let mut query = r#"
+        SELECT DISTINCT
+            u.id,
+            u.student_id,
+            u.email,
+            u.first_name,
+            u.last_name,
+            u.department_id,
+            u.created_at,
+            ar.id as admin_role_id,
+            ar.admin_level,
+            ar.faculty_id,
+            ar.permissions,
+            ar.created_at as role_created_at,
+            ar.updated_at as role_updated_at,
+            f.name as faculty_name,
+            f.code as faculty_code,
+            d.name as department_name,
+            d.code as department_code,
+            (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) as last_login,
+            CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) THEN true ELSE false END as is_active
+        FROM users u
+        JOIN admin_roles ar ON u.id = ar.user_id
+        LEFT JOIN faculties f ON ar.faculty_id = f.id
+        LEFT JOIN departments d ON u.department_id = d.id
+    "#.to_string();
+
+    if let Some(_search_term) = &search {
+        let where_clause = " WHERE (u.first_name ILIKE $1 OR u.last_name ILIKE $1 OR u.email ILIKE $1 OR u.student_id ILIKE $1 OR f.name ILIKE $1)";
+        query.push_str(where_clause);
+    }
+
+    query.push_str(" ORDER BY ar.admin_level, f.name NULLS FIRST, u.first_name");
+
+    let users_result = if let Some(search_term) = &search {
+        let search_pattern = format!("%{}%", search_term);
+        sqlx::query(&query)
+            .bind(search_pattern)
+            .fetch_all(&session_state.db_pool)
+            .await
+    } else {
+        sqlx::query(&query)
+            .fetch_all(&session_state.db_pool)
+            .await
+    };
+
+    match users_result {
+        Ok(rows) => {
+            let mut grouped_admins: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+            let mut super_admins = Vec::new();
+            let mut total_count = 0;
+
+            for row in rows {
+                total_count += 1;
+                let admin_level: AdminLevel = row.get("admin_level");
+                let faculty_id: Option<Uuid> = row.get("faculty_id");
+
+                let admin_info = json!({
+                    "id": row.get::<Uuid, _>("id"),
+                    "student_id": row.get::<String, _>("student_id"),
+                    "email": row.get::<String, _>("email"),
+                    "first_name": row.get::<String, _>("first_name"),
+                    "last_name": row.get::<String, _>("last_name"),
+                    "department_id": row.get::<Option<Uuid>, _>("department_id"),
+                    "department_name": row.get::<Option<String>, _>("department_name"),
+                    "department_code": row.get::<Option<String>, _>("department_code"),
+                    "created_at": row.get::<Option<DateTime<Utc>>, _>("created_at"),
+                    "admin_role": {
+                        "id": row.get::<Uuid, _>("admin_role_id"),
+                        "admin_level": admin_level,
+                        "faculty_id": faculty_id,
+                        "permissions": row.get::<Vec<String>, _>("permissions"),
+                        "created_at": row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
+                        "updated_at": row.get::<Option<DateTime<Utc>>, _>("role_updated_at")
+                    },
+                    "last_login": row.get::<Option<DateTime<Utc>>, _>("last_login"),
+                    "is_active": row.get::<bool, _>("is_active")
+                });
+
+                match admin_level {
+                    AdminLevel::SuperAdmin => {
+                        super_admins.push(admin_info);
+                    },
+                    _ => {
+                        let faculty_key = if let Some(faculty_id) = faculty_id {
+                            format!("{}|{}", 
+                                faculty_id, 
+                                row.get::<Option<String>, _>("faculty_name").unwrap_or("Unknown Faculty".to_string())
+                            )
+                        } else {
+                            "no_faculty|No Faculty Assigned".to_string()
+                        };
+                        
+                        grouped_admins.entry(faculty_key).or_insert_with(Vec::new).push(admin_info);
+                    }
+                }
+            }
+
+            // Build the response
+            let mut faculty_groups = Vec::new();
+            for (key, admins) in grouped_admins {
+                let parts: Vec<&str> = key.split('|').collect();
+                let faculty_id_str = parts[0];
+                let faculty_name = parts[1];
+                
+                let faculty_group = json!({
+                    "faculty_id": if faculty_id_str == "no_faculty" { serde_json::Value::Null } else { json!(faculty_id_str) },
+                    "faculty_name": faculty_name,
+                    "admins": admins,
+                    "admin_count": admins.len()
+                });
+                faculty_groups.push(faculty_group);
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "super_admins": super_admins,
+                    "faculty_groups": faculty_groups,
+                    "total_count": total_count
+                },
+                "message": "All system admins retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to retrieve system admins: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Bulk admin operations (SuperAdmin only)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BulkAdminOperationRequest {
+    pub operation: String, // "activate", "deactivate", "delete", "update_faculty"
+    pub admin_role_ids: Vec<Uuid>,
+    pub parameters: Option<HashMap<String, serde_json::Value>>,
+}
+
+pub async fn bulk_admin_operations(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+    Json(request): Json<BulkAdminOperationRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    if request.admin_role_ids.is_empty() {
+        let error_response = json!({
+            "status": "error",
+            "message": "No admin role IDs provided"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    let mut tx = match session_state.db_pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to start transaction: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    let mut results = Vec::new();
+
+    match request.operation.as_str() {
+        "activate" => {
+            for role_id in &request.admin_role_ids {
+                let result = sqlx::query_as::<_, AdminRole>(
+                    r#"
+                    UPDATE admin_roles 
+                    SET permissions = CASE 
+                        WHEN admin_level = 'super_admin' THEN $2
+                        WHEN admin_level = 'faculty_admin' THEN $3
+                        ELSE $4
+                    END, updated_at = NOW()
+                    WHERE id = $1
+                    RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+                    "#
+                )
+                .bind(role_id)
+                .bind(&vec!["ManageUsers".to_string(), "ManageAdmins".to_string(), "ManageActivities".to_string(), "ViewDashboard".to_string(), "ManageFaculties".to_string(), "ManageSessions".to_string()])
+                .bind(&vec!["ViewDashboard".to_string(), "ManageActivities".to_string(), "ManageUsers".to_string()])
+                .bind(&vec!["ViewDashboard".to_string(), "ManageActivities".to_string()])
+                .fetch_one(&mut *tx)
+                .await;
+
+                match result {
+                    Ok(admin_role) => results.push(json!({
+                        "role_id": role_id,
+                        "status": "success",
+                        "message": "Admin activated successfully",
+                        "admin_role": admin_role
+                    })),
+                    Err(e) => results.push(json!({
+                        "role_id": role_id,
+                        "status": "error",
+                        "message": format!("Failed to activate admin: {}", e)
+                    }))
+                }
+            }
+        }
+        "deactivate" => {
+            for role_id in &request.admin_role_ids {
+                let result = sqlx::query_as::<_, AdminRole>(
+                    r#"
+                    UPDATE admin_roles 
+                    SET permissions = '{}', updated_at = NOW()
+                    WHERE id = $1
+                    RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+                    "#
+                )
+                .bind(role_id)
+                .fetch_one(&mut *tx)
+                .await;
+
+                match result {
+                    Ok(admin_role) => results.push(json!({
+                        "role_id": role_id,
+                        "status": "success",
+                        "message": "Admin deactivated successfully",
+                        "admin_role": admin_role
+                    })),
+                    Err(e) => results.push(json!({
+                        "role_id": role_id,
+                        "status": "error",
+                        "message": format!("Failed to deactivate admin: {}", e)
+                    }))
+                }
+            }
+        }
+        "update_faculty" => {
+            let new_faculty_id = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("faculty_id"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| if s == "null" { None } else { Some(Uuid::parse_str(s).ok()) })
+                .flatten();
+
+            for role_id in &request.admin_role_ids {
+                let result = sqlx::query_as::<_, AdminRole>(
+                    r#"
+                    UPDATE admin_roles 
+                    SET faculty_id = $2, updated_at = NOW()
+                    WHERE id = $1
+                    RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+                    "#
+                )
+                .bind(role_id)
+                .bind(new_faculty_id)
+                .fetch_one(&mut *tx)
+                .await;
+
+                match result {
+                    Ok(admin_role) => results.push(json!({
+                        "role_id": role_id,
+                        "status": "success", 
+                        "message": "Faculty assignment updated successfully",
+                        "admin_role": admin_role
+                    })),
+                    Err(e) => results.push(json!({
+                        "role_id": role_id,
+                        "status": "error",
+                        "message": format!("Failed to update faculty assignment: {}", e)
+                    }))
+                }
+            }
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Invalid bulk operation"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        let error_response = json!({
+            "status": "error",
+            "message": format!("Failed to commit bulk operation: {}", e)
+        });
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+    }
+
+    let successful_count = results.iter().filter(|r| r["status"] == "success").count();
+    let failed_count = results.len() - successful_count;
+
+    let response = json!({
+        "status": "success",
+        "data": {
+            "operation": request.operation,
+            "results": results,
+            "summary": {
+                "total_attempted": request.admin_role_ids.len(),
+                "successful": successful_count,
+                "failed": failed_count
+            }
+        },
+        "message": format!("Bulk {} operation completed: {} successful, {} failed", 
+            request.operation, successful_count, failed_count)
+    });
+
+    Ok(Json(response))
+}

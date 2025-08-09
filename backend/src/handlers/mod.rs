@@ -4,9 +4,11 @@ pub mod admin_dashboard;
 pub mod admin_session;
 pub mod admin_session_mgmt;
 pub mod auth;
+pub mod department;
 pub mod faculty;
 pub mod sse;
 pub mod user;
+pub mod user_management;
 
 // pub use user::*;
 // pub use activity::*;

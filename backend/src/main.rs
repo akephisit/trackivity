@@ -6,6 +6,8 @@ mod models;
 mod routes;
 mod services;
 mod utils;
+#[cfg(test)]
+mod test_faculty_scope;
 
 use axum::{http::{HeaderName, Method}, Router};
 use std::net::SocketAddr;

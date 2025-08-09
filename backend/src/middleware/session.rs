@@ -1,10 +1,11 @@
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRequestParts, Path};
 use axum::http::request::Parts;
 use axum::{
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
+    RequestPartsExt,
 };
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -375,6 +376,172 @@ where
             _ => Err(StatusCode::FORBIDDEN),
         }
     }
+}
+
+// Faculty-scoped admin extractor
+// Validates that the admin has access to the specified faculty
+// SuperAdmin: can access any faculty
+// FacultyAdmin/RegularAdmin: can only access their assigned faculty
+pub struct FacultyScopedAdminUser {
+    pub session_user: SessionUser,
+    pub admin_role: AdminRole,
+    pub faculty_id: Uuid,
+}
+
+impl<S> FromRequestParts<S> for FacultyScopedAdminUser
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        // First, ensure we have an admin user
+        let admin_user = AdminUser::from_request_parts(parts, _state).await?;
+
+        // Extract faculty_id from path parameters
+        // Try to extract from the matched path parameters using axum's built-in Path extractor
+        let faculty_id = match parts.extract::<Path<Uuid>>().await {
+            Ok(Path(id)) => id,
+            Err(_) => {
+                // If direct extraction fails, try to parse from URI path
+                extract_faculty_id_from_path(parts.uri.path())
+                    .ok_or(StatusCode::BAD_REQUEST)?
+            }
+        };
+
+        // Validate faculty access based on admin level
+        match admin_user.admin_role.admin_level {
+            AdminLevel::SuperAdmin => {
+                // SuperAdmin can access any faculty
+                Ok(FacultyScopedAdminUser {
+                    session_user: admin_user.session_user,
+                    admin_role: admin_user.admin_role,
+                    faculty_id,
+                })
+            }
+            AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+                // Faculty/Regular admins can only access their assigned faculty
+                match admin_user.session_user.faculty_id {
+                    Some(admin_faculty_id) if admin_faculty_id == faculty_id => {
+                        Ok(FacultyScopedAdminUser {
+                            session_user: admin_user.session_user,
+                            admin_role: admin_user.admin_role,
+                            faculty_id,
+                        })
+                    }
+                    _ => Err(StatusCode::FORBIDDEN),
+                }
+            }
+        }
+    }
+}
+
+// Helper functions for faculty scope validation
+// These can be used in handlers for additional validation logic
+
+/// Validates if the session user has access to the specified faculty
+/// Returns true if access is allowed, false otherwise
+pub fn has_faculty_access(session_user: &SessionUser, faculty_id: Uuid) -> bool {
+    match &session_user.admin_role {
+        Some(admin_role) => match admin_role.admin_level {
+            AdminLevel::SuperAdmin => true, // SuperAdmin can access any faculty
+            AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+                session_user.faculty_id == Some(faculty_id)
+            }
+        },
+        None => false, // Regular users have no faculty admin access
+    }
+}
+
+/// Validates faculty access and returns appropriate error response
+/// This is a convenience function for handlers that need to check faculty access
+/// without using the FacultyScopedAdminUser extractor
+pub fn validate_faculty_access(
+    session_user: &SessionUser,
+    faculty_id: Uuid,
+) -> Result<(), StatusCode> {
+    if has_faculty_access(session_user, faculty_id) {
+        Ok(())
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
+}
+
+/// Retrieves the faculty IDs that the session user can access
+/// For SuperAdmin: returns None (indicating access to all faculties)
+/// For FacultyAdmin/RegularAdmin: returns Some(Vec) with their assigned faculty
+/// For regular users: returns Some(Vec) with empty vector
+pub fn get_accessible_faculty_ids(session_user: &SessionUser) -> Option<Vec<Uuid>> {
+    match &session_user.admin_role {
+        Some(admin_role) => match admin_role.admin_level {
+            AdminLevel::SuperAdmin => None, // Can access all faculties
+            AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+                match session_user.faculty_id {
+                    Some(faculty_id) => Some(vec![faculty_id]),
+                    None => Some(vec![]), // Admin without assigned faculty
+                }
+            }
+        },
+        None => Some(vec![]), // Regular users have no faculty access
+    }
+}
+
+/// Enhanced faculty scope middleware that works with dynamic path parameters
+/// This middleware can be used when you want to validate faculty access
+/// at the middleware level before reaching handlers
+pub fn require_faculty_access_from_path() -> impl Fn(
+    SessionUser,
+    Request,
+    Next,
+) -> Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>
+       + Clone {
+    move |session_user: SessionUser, request: Request, next: Next| {
+        Box::new(async move {
+            // Extract faculty_id from the request path
+            let uri_path = request.uri().path();
+            
+            // Try to extract faculty_id from common path patterns
+            // This supports paths like:
+            // /api/admin/faculties/{faculty_id}/...
+            // /faculties/{faculty_id}/...
+            let faculty_id = extract_faculty_id_from_path(uri_path);
+            
+            match faculty_id {
+                Some(faculty_id) => {
+                    if has_faculty_access(&session_user, faculty_id) {
+                        Ok(next.run(request).await)
+                    } else {
+                        Err(StatusCode::FORBIDDEN)
+                    }
+                }
+                None => {
+                    // If no faculty_id in path, allow request to proceed
+                    // Handler can decide if this is appropriate
+                    Ok(next.run(request).await)
+                }
+            }
+        })
+    }
+}
+
+/// Helper function to extract faculty_id from common path patterns
+fn extract_faculty_id_from_path(path: &str) -> Option<Uuid> {
+    // Common patterns for faculty_id in paths:
+    // /api/admin/faculties/{faculty_id}/...
+    // /faculties/{faculty_id}/...
+    // /api/faculties/{faculty_id}/...
+    
+    let parts: Vec<&str> = path.split('/').collect();
+    
+    for (i, part) in parts.iter().enumerate() {
+        if *part == "faculties" && i + 1 < parts.len() {
+            if let Ok(faculty_id) = Uuid::parse_str(parts[i + 1]) {
+                return Some(faculty_id);
+            }
+        }
+    }
+    
+    None
 }
 
 // Cookie helper functions (legacy support)

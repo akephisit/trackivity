@@ -5,9 +5,10 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
+use sqlx::Row;
 use uuid::Uuid;
 
-use crate::middleware::session::SessionState;
+use crate::middleware::session::{SessionState, SuperAdminUser};
 use crate::models::{
     faculty::Faculty,
     department::Department,
@@ -99,9 +100,10 @@ pub async fn get_faculty(
     }
 }
 
-/// Create new faculty
+/// Create new faculty (SuperAdmin only)
 pub async fn create_faculty(
     State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
     Json(request): Json<CreateFacultyRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let query_result = sqlx::query_as::<_, Faculty>(
@@ -133,10 +135,11 @@ pub async fn create_faculty(
     }
 }
 
-/// Update faculty
+/// Update faculty (SuperAdmin only)
 pub async fn update_faculty(
     State(session_state): State<SessionState>,
     Path(id): Path<Uuid>,
+    _admin: SuperAdminUser,
     Json(request): Json<UpdateFacultyRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     // Build dynamic update query
@@ -144,17 +147,17 @@ pub async fn update_faculty(
     let mut param_count = 1;
     let mut query_builder = sqlx::query_as::<_, Faculty>("");
 
-    if let Some(name) = &request.name {
+    if let Some(_name) = &request.name {
         query.push_str(&format!(", name = ${}", param_count));
         param_count += 1;
     }
 
-    if let Some(code) = &request.code {
+    if let Some(_code) = &request.code {
         query.push_str(&format!(", code = ${}", param_count));
         param_count += 1;
     }
 
-    if let Some(description) = &request.description {
+    if let Some(_description) = &request.description {
         query.push_str(&format!(", description = ${}", param_count));
         param_count += 1;
     }
@@ -215,10 +218,11 @@ pub async fn update_faculty(
     }
 }
 
-/// Delete faculty
+/// Delete faculty (SuperAdmin only)
 pub async fn delete_faculty(
     State(session_state): State<SessionState>,
     Path(id): Path<Uuid>,
+    _admin: SuperAdminUser,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let query_result = sqlx::query("DELETE FROM faculties WHERE id = $1")
         .bind(id)
@@ -425,10 +429,11 @@ pub async fn get_faculty_students(
     }
 }
 
-/// Toggle faculty status
+/// Toggle faculty status (SuperAdmin only)
 pub async fn toggle_faculty_status(
     State(session_state): State<SessionState>,
     Path(id): Path<Uuid>,
+    _admin: SuperAdminUser,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let query_result = sqlx::query_as::<_, Faculty>(
         "UPDATE faculties SET status = NOT status, updated_at = NOW() 
@@ -581,6 +586,187 @@ pub async fn get_faculty_analytics(
             let error_response = json!({
                 "status": "error",
                 "message": format!("Failed to fetch analytics: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get all faculties with enhanced statistics (SuperAdmin only)
+pub async fn get_faculties_with_stats(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Query all faculties with enhanced statistics
+    let query_result = sqlx::query(
+        r#"
+        SELECT 
+            f.id,
+            f.name,
+            f.code,
+            f.description,
+            f.status,
+            f.created_at,
+            f.updated_at,
+            COUNT(DISTINCT d.id) as department_count,
+            COUNT(DISTINCT u.id) as student_count,
+            COUNT(DISTINCT ar.id) as admin_count,
+            COUNT(DISTINCT a.id) as activity_count,
+            COUNT(DISTINCT CASE WHEN a.status = 'ongoing' THEN a.id END) as ongoing_activities
+        FROM faculties f
+        LEFT JOIN departments d ON f.id = d.faculty_id
+        LEFT JOIN users u ON d.id = u.department_id
+        LEFT JOIN admin_roles ar ON (ar.faculty_id = f.id AND ar.admin_level IN ('faculty_admin', 'regular_admin'))
+        LEFT JOIN activities a ON f.id = a.faculty_id
+        GROUP BY f.id, f.name, f.code, f.description, f.status, f.created_at, f.updated_at
+        ORDER BY f.name
+        "#,
+    )
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    match query_result {
+        Ok(rows) => {
+            let mut faculties_with_stats = Vec::new();
+
+            for row in rows {
+                let faculty_with_stats = json!({
+                    "id": row.get::<Uuid, _>("id"),
+                    "name": row.get::<String, _>("name"),
+                    "code": row.get::<String, _>("code"),
+                    "description": row.get::<Option<String>, _>("description"),
+                    "status": row.get::<bool, _>("status"),
+                    "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+                    "updated_at": row.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
+                    "stats": {
+                        "department_count": row.get::<i64, _>("department_count"),
+                        "student_count": row.get::<i64, _>("student_count"),
+                        "admin_count": row.get::<i64, _>("admin_count"),
+                        "activity_count": row.get::<i64, _>("activity_count"),
+                        "ongoing_activities": row.get::<i64, _>("ongoing_activities")
+                    }
+                });
+
+                faculties_with_stats.push(faculty_with_stats);
+            }
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "faculties": faculties_with_stats,
+                    "total_count": faculties_with_stats.len()
+                },
+                "message": "Faculties with statistics retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to fetch faculties with statistics: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get system-wide faculty overview (SuperAdmin only)
+pub async fn get_faculty_overview(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Get total system statistics
+    let system_stats_result = sqlx::query(
+        r#"
+        SELECT 
+            COUNT(DISTINCT f.id) as total_faculties,
+            COUNT(DISTINCT d.id) as total_departments,
+            COUNT(DISTINCT u.id) as total_students,
+            COUNT(DISTINCT ar.id) as total_admins,
+            COUNT(DISTINCT a.id) as total_activities,
+            COUNT(DISTINCT CASE WHEN f.status = true THEN f.id END) as active_faculties,
+            COUNT(DISTINCT CASE WHEN a.status = 'ongoing' THEN a.id END) as ongoing_activities
+        FROM faculties f
+        LEFT JOIN departments d ON f.id = d.faculty_id
+        LEFT JOIN users u ON d.id = u.department_id
+        LEFT JOIN admin_roles ar ON ar.faculty_id IS NOT NULL
+        LEFT JOIN activities a ON f.id = a.faculty_id
+        "#
+    )
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get faculty ranking by activity
+    let faculty_rankings_result = sqlx::query(
+        r#"
+        SELECT 
+            f.id,
+            f.name,
+            f.code,
+            f.status,
+            COUNT(DISTINCT a.id) as activity_count,
+            COUNT(DISTINCT p.id) as participation_count,
+            COUNT(DISTINCT u.id) as student_count,
+            CASE 
+                WHEN COUNT(DISTINCT u.id) > 0 
+                THEN ROUND((COUNT(DISTINCT p.id)::numeric / COUNT(DISTINCT u.id)::numeric) * 100, 2)
+                ELSE 0.0
+            END as participation_rate
+        FROM faculties f
+        LEFT JOIN departments d ON f.id = d.faculty_id
+        LEFT JOIN users u ON d.id = u.department_id
+        LEFT JOIN activities a ON f.id = a.faculty_id
+        LEFT JOIN participations p ON a.id = p.activity_id
+        GROUP BY f.id, f.name, f.code, f.status
+        ORDER BY activity_count DESC, participation_rate DESC
+        LIMIT 10
+        "#
+    )
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    match (system_stats_result, faculty_rankings_result) {
+        (Ok(stats_row), Ok(rankings_rows)) => {
+            let system_stats = json!({
+                "total_faculties": stats_row.get::<i64, _>("total_faculties"),
+                "total_departments": stats_row.get::<i64, _>("total_departments"),
+                "total_students": stats_row.get::<i64, _>("total_students"),
+                "total_admins": stats_row.get::<i64, _>("total_admins"),
+                "total_activities": stats_row.get::<i64, _>("total_activities"),
+                "active_faculties": stats_row.get::<i64, _>("active_faculties"),
+                "ongoing_activities": stats_row.get::<i64, _>("ongoing_activities")
+            });
+
+            let faculty_rankings: Vec<_> = rankings_rows
+                .into_iter()
+                .map(|row| json!({
+                    "faculty_id": row.get::<Uuid, _>("id"),
+                    "faculty_name": row.get::<String, _>("name"),
+                    "faculty_code": row.get::<String, _>("code"),
+                    "status": row.get::<bool, _>("status"),
+                    "activity_count": row.get::<i64, _>("activity_count"),
+                    "participation_count": row.get::<i64, _>("participation_count"),
+                    "student_count": row.get::<i64, _>("student_count"),
+                    "participation_rate": row.get::<f64, _>("participation_rate")
+                }))
+                .collect();
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "system_stats": system_stats,
+                    "faculty_rankings": faculty_rankings
+                },
+                "message": "Faculty overview retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve faculty overview"
             });
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }
