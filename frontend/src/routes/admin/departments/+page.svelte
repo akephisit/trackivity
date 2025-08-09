@@ -19,7 +19,7 @@
 		IconPlus, 
 		IconEdit, 
 		IconTrash, 
-		IconBuilding2,
+		IconBuilding,
 		IconToggleLeft, 
 		IconToggleRight,
 		IconUsers,
@@ -461,7 +461,7 @@
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">ภาควิชาทั้งหมด</CardTitle>
-				<IconBuilding2 class="h-4 w-4 text-muted-foreground" />
+				<IconBuilding class="h-4 w-4 text-muted-foreground" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold">{stats.total}</div>
@@ -471,7 +471,7 @@
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">เปิดใช้งาน</CardTitle>
-				<IconBuilding2 class="h-4 w-4 text-green-500" />
+				<IconBuilding class="h-4 w-4 text-green-500" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-green-600">
@@ -483,7 +483,7 @@
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">ปิดใช้งาน</CardTitle>
-				<IconBuilding2 class="h-4 w-4 text-red-500" />
+				<IconBuilding class="h-4 w-4 text-red-500" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold text-red-600">
@@ -594,7 +594,7 @@
 						ล้างการค้นหา
 					</Button>
 				{:else}
-					<IconBuilding2 class="h-16 w-16 mx-auto mb-6 opacity-50" />
+					<IconBuilding class="h-16 w-16 mx-auto mb-6 opacity-50" />
 					<h3 class="text-xl font-semibold mb-2">ยังไม่มีข้อมูลภาควิชาในระบบ</h3>
 					<p class="text-gray-400 mb-6">เริ่มต้นด้วยการเพิ่มภาควิชาแรก</p>
 					<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3">
@@ -607,7 +607,7 @@
 			<Card>
 				<CardHeader>
 					<CardTitle class="flex items-center gap-3">
-						<IconBuilding2 class="h-6 w-6 text-blue-600" />
+						<IconBuilding class="h-6 w-6 text-blue-600" />
 						รายการภาควิชา
 						<Badge variant="secondary" class="ml-2">
 							{filteredDepartments.length} รายการ
@@ -641,7 +641,7 @@
 										<Table.Cell class="font-medium py-4">
 											<div class="flex items-center gap-3">
 												<div class="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-													<IconBuilding2 class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+													<IconBuilding class="h-5 w-5 text-blue-600 dark:text-blue-400" />
 												</div>
 												<div>
 													<div class="font-semibold text-gray-900 dark:text-gray-100">
@@ -1039,7 +1039,7 @@
 				<!-- Department Info -->
 				<div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
 					<div class="flex items-center gap-2">
-						<IconBuilding2 class="h-4 w-4 text-blue-600" />
+						<IconBuilding class="h-4 w-4 text-blue-600" />
 						<span class="font-medium">{departmentForAdmin.name}</span>
 					</div>
 					{#if departmentForAdmin.description}

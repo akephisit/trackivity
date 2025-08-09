@@ -7,9 +7,9 @@ import type {
     UserListResponse, 
     UserStats,
     Faculty,
-    Department,
-    AdminLevel
+    Department
 } from '$lib/types/admin';
+import { AdminLevel } from '$lib/types/admin';
 
 /**
  * Server Load Function for Faculty-Scoped User Management

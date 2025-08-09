@@ -32,7 +32,7 @@
 		IconDownload,
 		IconRefresh,
 		IconSettings,
-		IconTrash2
+		IconTrash
 	} from '@tabler/icons-svelte/icons';
 
 	// Import our components
@@ -40,37 +40,31 @@
 	import UserTableComponents from '$lib/components/user-management/UserTableComponents.svelte';
 	import { getUserTableColumns, columnVisibilityPresets } from '$lib/components/user-table-columns';
 	import { userApi } from '$lib/services/userApi';
-	import type { User, UserFilter, UserStats, BulkUserOperation, AdminLevel } from '$lib/types/admin';
 
 	// Get data from server load function
-	export let data;
+	let { data } = $props();
 
 	// Extract data from server load
-	$: ({ users, stats, faculties, departments, filters, adminLevel, facultyId, pagination, currentUser, meta } = data);
+	const { users, stats, faculties, departments, filters, adminLevel, pagination, meta } = $derived(data);
 
 	// Component state
 	let loading = false;
-	let selectedUsers = $state<string[]>([]);
-	let showUserDialog = false;
-	let showBulkDialog = false;
-	let selectedUser: User | null = null;
-	let bulkOperation: string | null = null;
 
 	// Table state
 	let sorting = $state<SortingState>([]);
 	let columnFilters = $state<ColumnFiltersState>([]);
 	let columnVisibility = $state<VisibilityState>(columnVisibilityPresets.detailed);
 	let rowSelection = $state<RowSelectionState>({});
-	let tablePagination = $state<PaginationState>({
+	const tablePagination = $derived<PaginationState>({
 		pageIndex: pagination.page - 1,
 		pageSize: pagination.limit
 	});
 
 	// Get appropriate columns for admin level
-	$: columns = getUserTableColumns(adminLevel, adminLevel === 'FacultyAdmin');
+	const columns = $derived(getUserTableColumns(adminLevel, adminLevel === 'FacultyAdmin'));
 
 	// Create table instance
-	$: table = createSvelteTable({
+	const table = $derived(createSvelteTable({
 		get data() {
 			return users.users || [];
 		},
@@ -125,20 +119,20 @@
 				rowSelection = updater;
 			}
 		}
-	});
+	}));
 
 	// Track selected users
-	$: selectedUsers = Object.keys(rowSelection).filter(key => rowSelection[key]);
+	const selectedUsers = $derived(Object.keys(rowSelection).filter(key => rowSelection[key]));
 
 	// Permission checks
-	$: canManageUsers = adminLevel === 'SuperAdmin' || adminLevel === 'FacultyAdmin';
-	$: canViewAllFaculties = adminLevel === 'SuperAdmin';
+	const canManageUsers = $derived(adminLevel === 'SuperAdmin' || adminLevel === 'FacultyAdmin');
+	const canViewAllFaculties = $derived(adminLevel === 'SuperAdmin');
 
 	// Statistics calculations
-	$: totalUsers = stats?.total_users || 0;
-	$: activeUsers = stats?.active_users || 0;
-	$: students = stats?.students || 0;
-	$: faculty = stats?.faculty || 0;
+	const totalUsers = $derived(stats?.total_users || 0);
+	const activeUsers = $derived(stats?.active_users || 0);
+	const students = $derived(stats?.students || 0);
+	const faculty = $derived(stats?.faculty || 0);
 </script>
 
 <svelte:head>
@@ -279,7 +273,7 @@
 							ส่งออก
 						</Button>
 						<Button variant="destructive" size="sm">
-							<IconTrash2 class="mr-2 h-4 w-4" />
+							<IconTrash class="mr-2 h-4 w-4" />
 							ลบ
 						</Button>
 					</div>

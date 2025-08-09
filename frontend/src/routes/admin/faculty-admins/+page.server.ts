@@ -153,12 +153,12 @@ export const load: PageServerLoad = async (event) => {
 		}).length,
 		total_faculties: isSuperAdmin ? faculties.length : 1,
 		faculty_breakdown: faculties.map(faculty => {
-			const facultyAdmins = facultyAdmins.filter(admin => admin.faculty_id === faculty.id);
+			const facultyAdmins2 = facultyAdmins.filter(admin => admin.faculty_id === faculty.id);
 			return {
 				faculty_id: faculty.id,
 				faculty_name: faculty.name,
-				admin_count: facultyAdmins.length,
-				active_count: facultyAdmins.filter(admin => admin.is_active).length
+				admin_count: facultyAdmins2.length,
+				active_count: facultyAdmins2.filter(admin => admin.is_active).length
 			};
 		}),
 		permission_breakdown: Object.values(ADMIN_PERMISSIONS).map(permission => ({

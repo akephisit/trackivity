@@ -32,7 +32,7 @@
 		IconCrown,
 		IconCalendar,
 		IconMail,
-		IconBuilding2
+		IconBuilding
 	} from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll, invalidate } from '$app/navigation';
@@ -623,7 +623,7 @@
 												</Badge>
 												{#if admin.assigned_departments && admin.assigned_departments.length > 0}
 													<Badge variant="secondary" class="text-xs flex items-center gap-1">
-														<IconBuilding2 class="h-3 w-3" />
+														<IconBuilding class="h-3 w-3" />
 														แอดมินภาควิชา
 													</Badge>
 												{/if}
@@ -954,7 +954,7 @@
 						<div class="grid grid-cols-1 md:grid-cols-2 gap-2">
 							{#each viewingAdmin.assigned_departments as department}
 								<div class="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border">
-									<IconBuilding2 class="h-4 w-4 text-purple-600" />
+									<IconBuilding class="h-4 w-4 text-purple-600" />
 									<div class="flex-1">
 										<span class="text-sm font-medium text-purple-800 dark:text-purple-200">
 											{department.name}
@@ -976,7 +976,7 @@
 						</p>
 					{:else}
 						<div class="text-center py-8 text-gray-500">
-							<IconBuilding2 class="h-12 w-12 mx-auto mb-3 opacity-50" />
+							<IconBuilding class="h-12 w-12 mx-auto mb-3 opacity-50" />
 							<p class="text-sm">ไม่ได้รับมอบหมายให้ดูแลภาควิชาใดๆ</p>
 							<p class="text-xs text-gray-400 mt-1">ทำหน้าที่เป็นแอดมินคณะเท่านั้น</p>
 						</div>
