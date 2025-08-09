@@ -19,8 +19,7 @@
 		IconUsersGroup,
 		IconBook,
 		IconAward,
-		IconBadgeCheck,
-		IconBarChart3
+		IconShieldCheck
 	} from '@tabler/icons-svelte/icons';
 	import { AdminLevel } from '$lib/types/admin';
 	import { BarChart } from 'layerchart';
@@ -264,7 +263,7 @@
 			<Card>
 				<CardHeader>
 					<CardTitle class="flex items-center gap-2">
-						<IconBarChart class="h-5 w-5" />
+						<IconChartBar class="h-5 w-5" />
 						การกระจายผู้ใช้ตามภาควิชา
 					</CardTitle>
 					<CardDescription>
@@ -332,7 +331,7 @@
 					</div>
 					<div class="grid grid-cols-2 gap-4 mt-4">
 						<div class="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-							<IconBadgeCheck class="h-6 w-6 text-green-600 dark:text-green-400 mx-auto mb-1" />
+							<IconShieldCheck class="h-6 w-6 text-green-600 dark:text-green-400 mx-auto mb-1" />
 							<div class="text-sm font-medium text-green-800 dark:text-green-200">เป้าหมายสำเร็จ</div>
 							<div class="text-xs text-green-600 dark:text-green-400">3 จาก 4 เป้าหมาย</div>
 						</div>
