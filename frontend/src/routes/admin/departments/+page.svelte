@@ -1,0 +1,1159 @@
+<script lang="ts">
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import { z } from 'zod';
+	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import { Textarea } from '$lib/components/ui/textarea';
+	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { Alert, AlertDescription } from '$lib/components/ui/alert';
+	import * as Form from '$lib/components/ui/form';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import * as Table from '$lib/components/ui/table';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Switch } from '$lib/components/ui/switch';
+	import { 
+		IconLoader, 
+		IconPlus, 
+		IconEdit, 
+		IconTrash, 
+		IconBuilding2,
+		IconToggleLeft, 
+		IconToggleRight,
+		IconUsers,
+		IconSearch,
+		IconFilter,
+		IconUserCheck,
+		IconSchool,
+		IconUserPlus,
+		IconShield
+	} from '@tabler/icons-svelte/icons';
+	import { toast } from 'svelte-sonner';
+	import { invalidateAll, invalidate } from '$app/navigation';
+	import type { Department, ExtendedAdminRole } from '$lib/types/admin';
+
+	let { data } = $props();
+	let refreshing = $state(false);
+
+	// Department admin assignment states
+	let assignAdminDialogOpen = $state(false);
+	let departmentForAdmin = $state<Department | null>(null);
+	let selectedAdminId = $state('');
+	let availableAdmins = $state<ExtendedAdminRole[]>([]);
+	let loadingAdmins = $state(false);
+	let assigningAdmin = $state(false);
+
+	// Department schemas
+	const departmentCreateSchema = z.object({
+		name: z.string().min(1, 'กรุณากรอกชื่อภาควิชา'),
+		description: z.string().optional(),
+		head_name: z.string().optional(),
+		head_email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง').optional().or(z.literal('')),
+		status: z.boolean().default(true)
+	});
+
+	// Forms
+	const createForm = superForm(data.createForm, {
+		validators: zodClient(departmentCreateSchema),
+		onResult: async ({ result }) => {
+			if (result.type === 'success') {
+				toast.success('สร้างภาควิชาสำเร็จ');
+				createDialogOpen = false;
+				
+				setTimeout(async () => {
+					try {
+						refreshing = true;
+						await invalidate('app:page-data');
+						await invalidateAll();
+						refreshing = false;
+					} catch (error) {
+						console.error('Failed to refresh data:', error);
+						refreshing = false;
+						window.location.reload();
+					}
+				}, 500);
+			} else if (result.type === 'failure') {
+				toast.error('เกิดข้อผิดพลาดในการสร้างภาควิชา');
+			}
+		}
+	});
+
+	const { form: createFormData, enhance: createEnhance, errors: createErrors, submitting: createSubmitting } = createForm;
+
+	// Dialog states
+	let createDialogOpen = $state(false);
+	let editDialogOpen = $state(false);
+	let deleteDialogOpen = $state(false);
+
+	// Edit form states
+	let editingDepartment = $state<Department | null>(null);
+	let editFormData = $state({
+		name: '',
+		description: '',
+		head_name: '',
+		head_email: '',
+		status: true
+	});
+
+	// Delete state
+	let departmentToDelete = $state<{id: string, name: string} | null>(null);
+
+	// Remove admin state
+	let removeAdminDialogOpen = $state(false);
+	let adminToRemove = $state<{departmentId: string, adminId: string, adminName: string, departmentName: string} | null>(null);
+	let removingAdmin = $state(false);
+
+	// Toggle loading
+	let toggleLoading = $state<{[key: string]: boolean}>({});
+
+	// Search and filter states
+	let searchQuery = $state('');
+	let statusFilter = $state<'all' | 'active' | 'inactive'>('all');
+
+	// Filtered departments
+	let filteredDepartments = $derived(() => {
+		let filtered = data.departments;
+
+		// Apply search filter
+		if (searchQuery.trim()) {
+			const query = searchQuery.toLowerCase();
+			filtered = filtered.filter(dept => 
+				dept.name.toLowerCase().includes(query) ||
+				(dept.description && dept.description.toLowerCase().includes(query)) ||
+				(dept.head_name && dept.head_name.toLowerCase().includes(query))
+			);
+		}
+
+		// Apply status filter
+		if (statusFilter !== 'all') {
+			filtered = filtered.filter(dept => 
+				statusFilter === 'active' ? dept.status : !dept.status
+			);
+		}
+
+		return filtered;
+	});
+
+	// Stats
+	let stats = $derived({
+		total: data.departments.length,
+		active: data.departments.filter(d => d.status).length,
+		inactive: data.departments.filter(d => !d.status).length,
+		totalStudents: data.departments.reduce((sum, d) => sum + (d.students_count || 0), 0),
+		totalAdmins: data.departments.reduce((sum, d) => sum + (d.admins_count || 0), 0)
+	});
+
+	function openCreateDialog() {
+		$createFormData = {
+			name: '',
+			description: '',
+			head_name: '',
+			head_email: '',
+			status: true
+		};
+		createDialogOpen = true;
+	}
+
+	function openEditDialog(department: Department) {
+		editingDepartment = department;
+		editFormData = {
+			name: department.name,
+			description: department.description || '',
+			head_name: department.head_name || '',
+			head_email: department.head_email || '',
+			status: department.status
+		};
+		editDialogOpen = true;
+	}
+
+	function openDeleteDialog(departmentId: string, departmentName: string) {
+		departmentToDelete = { id: departmentId, name: departmentName };
+		deleteDialogOpen = true;
+	}
+
+	async function handleUpdate() {
+		if (!editingDepartment) return;
+
+		try {
+			const formData = new FormData();
+			formData.append('departmentId', editingDepartment.id);
+			formData.append('updateData', JSON.stringify(editFormData));
+
+			const response = await fetch('?/update', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success('แก้ไขภาควิชาสำเร็จ');
+				editDialogOpen = false;
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data after update:', error);
+						window.location.reload();
+					}
+				}, 500);
+			} else {
+				toast.error('เกิดข้อผิดพลาดในการแก้ไขภาควิชา');
+			}
+		} catch (error) {
+			console.error('Update error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		}
+	}
+
+	async function handleDelete() {
+		if (!departmentToDelete) return;
+
+		try {
+			const formData = new FormData();
+			formData.append('departmentId', departmentToDelete.id);
+
+			const response = await fetch('?/delete', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success('ลบภาควิชาสำเร็จ');
+				deleteDialogOpen = false;
+				departmentToDelete = null;
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data after delete:', error);
+						window.location.reload();
+					}
+				}, 500);
+			} else {
+				toast.error('เกิดข้อผิดพลาดในการลบภาควิชา');
+			}
+		} catch (error) {
+			console.error('Delete error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		}
+	}
+
+	async function handleToggleStatus(departmentId: string, currentStatus: boolean) {
+		const newStatus = !currentStatus;
+		const actionText = newStatus ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
+
+		toggleLoading = { ...toggleLoading, [departmentId]: true };
+
+		try {
+			const formData = new FormData();
+			formData.append('departmentId', departmentId);
+
+			const response = await fetch('?/toggleStatus', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success(`${actionText}ภาควิชาสำเร็จ`);
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data after toggle status:', error);
+						window.location.reload();
+					}
+				}, 300);
+			} else {
+				toast.error(result.error || `เกิดข้อผิดพลาดในการ${actionText}ภาควิชา`);
+			}
+		} catch (error) {
+			console.error('Toggle status error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		} finally {
+			toggleLoading = { ...toggleLoading, [departmentId]: false };
+		}
+	}
+
+	function clearSearch() {
+		searchQuery = '';
+	}
+
+	// Department admin assignment functions
+	async function openAssignAdminDialog(department: Department) {
+		departmentForAdmin = department;
+		selectedAdminId = '';
+		loadingAdmins = true;
+		assignAdminDialogOpen = true;
+
+		// Fetch available faculty admins for this department's faculty
+		try {
+			const response = await fetch(`/api/departments/${department.id}/available-admins`, {
+				method: 'GET'
+			});
+
+			if (response.ok) {
+				const result = await response.json();
+				if (result.success) {
+					availableAdmins = result.data.admins || [];
+				}
+			}
+		} catch (error) {
+			console.error('Failed to fetch available admins:', error);
+			toast.error('เกิดข้อผิดพลาดในการโหลดรายชื่อแอดมิน');
+		} finally {
+			loadingAdmins = false;
+		}
+	}
+
+	async function handleAssignAdmin() {
+		if (!departmentForAdmin || !selectedAdminId) {
+			toast.error('กรุณาเลือกแอดมินที่จะมอบหมาย');
+			return;
+		}
+
+		assigningAdmin = true;
+
+		try {
+			const formData = new FormData();
+			formData.append('departmentId', departmentForAdmin.id);
+			formData.append('adminId', selectedAdminId);
+
+			const response = await fetch('?/assignAdmin', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success('มอบหมายแอดมินภาควิชาสำเร็จ');
+				assignAdminDialogOpen = false;
+				departmentForAdmin = null;
+				selectedAdminId = '';
+				
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data:', error);
+						window.location.reload();
+					}
+				}, 500);
+			} else {
+				toast.error(result.error || 'เกิดข้อผิดพลาดในการมอบหมายแอดมิน');
+			}
+		} catch (error) {
+			console.error('Assign admin error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		} finally {
+			assigningAdmin = false;
+		}
+	}
+
+	function openRemoveAdminDialog(departmentId: string, adminId: string, adminName: string, departmentName: string) {
+		adminToRemove = { departmentId, adminId, adminName, departmentName };
+		removeAdminDialogOpen = true;
+	}
+
+	async function handleRemoveAdmin() {
+		if (!adminToRemove) return;
+
+		removingAdmin = true;
+
+		try {
+			const formData = new FormData();
+			formData.append('departmentId', adminToRemove.departmentId);
+			formData.append('adminId', adminToRemove.adminId);
+
+			const response = await fetch('?/removeAdmin', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success('ถอดถอนแอดมินภาควิชาสำเร็จ');
+				removeAdminDialogOpen = false;
+				adminToRemove = null;
+				
+				setTimeout(async () => {
+					try {
+						await invalidate('app:page-data');
+						await invalidateAll();
+					} catch (error) {
+						console.error('Failed to refresh data:', error);
+						window.location.reload();
+					}
+				}, 500);
+			} else {
+				toast.error(result.error || 'เกิดข้อผิดพลาดในการถอดถอนแอดมิน');
+			}
+		} catch (error) {
+			console.error('Remove admin error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		} finally {
+			removingAdmin = false;
+		}
+	}
+
+	function formatDateTime(dateString: string) {
+		return new Date(dateString).toLocaleDateString('th-TH', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	}
+
+	// Get page title based on user role
+	let pageTitle = $derived(() => {
+		if (data.userRole === 'FacultyAdmin' && data.currentFaculty) {
+			return `จัดการภาควิชา - ${data.currentFaculty.name}`;
+		}
+		return 'จัดการภาควิชา';
+	});
+</script>
+
+<svelte:head>
+	<title>{pageTitle} - Admin Panel</title>
+</svelte:head>
+
+<div class="space-y-6">
+	<!-- Header -->
+	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+		<div>
+			<h1 id="department-management-heading" class="text-4xl font-bold text-gray-900 dark:text-white">
+				{#if data.userRole === 'FacultyAdmin' && data.currentFaculty}
+					จัดการภาควิชา - {data.currentFaculty.name}
+				{:else}
+					จัดการภาควิชา
+				{/if}
+			</h1>
+			<p class="mt-3 text-lg text-gray-600 dark:text-gray-400">
+				{#if data.userRole === 'FacultyAdmin'}
+					จัดการภาควิชาในคณะของคุณ รวมถึงการเปิด-ปิดการใช้งาน
+				{:else}
+					จัดการภาควิชาทั้งหมดในระบบ รวมถึงการเปิด-ปิดการใช้งาน
+				{/if}
+			</p>
+		</div>
+		<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
+			<IconPlus class="h-5 w-5 mr-2" />
+			เพิ่มภาควิชาใหม่
+		</Button>
+	</div>
+
+	<!-- Stats Cards -->
+	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+		<Card>
+			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<CardTitle class="text-sm font-medium">ภาควิชาทั้งหมด</CardTitle>
+				<IconBuilding2 class="h-4 w-4 text-muted-foreground" />
+			</CardHeader>
+			<CardContent>
+				<div class="text-2xl font-bold">{stats.total}</div>
+			</CardContent>
+		</Card>
+
+		<Card>
+			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<CardTitle class="text-sm font-medium">เปิดใช้งาน</CardTitle>
+				<IconBuilding2 class="h-4 w-4 text-green-500" />
+			</CardHeader>
+			<CardContent>
+				<div class="text-2xl font-bold text-green-600">
+					{stats.active}
+				</div>
+			</CardContent>
+		</Card>
+
+		<Card>
+			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<CardTitle class="text-sm font-medium">ปิดใช้งาน</CardTitle>
+				<IconBuilding2 class="h-4 w-4 text-red-500" />
+			</CardHeader>
+			<CardContent>
+				<div class="text-2xl font-bold text-red-600">
+					{stats.inactive}
+				</div>
+			</CardContent>
+		</Card>
+
+		<Card>
+			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<CardTitle class="text-sm font-medium">นักศึกษาทั้งหมด</CardTitle>
+				<IconUsers class="h-4 w-4 text-blue-500" />
+			</CardHeader>
+			<CardContent>
+				<div class="text-2xl font-bold text-blue-600">
+					{stats.totalStudents}
+				</div>
+			</CardContent>
+		</Card>
+
+		<Card>
+			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<CardTitle class="text-sm font-medium">แอดมินทั้งหมด</CardTitle>
+				<IconUserCheck class="h-4 w-4 text-purple-500" />
+			</CardHeader>
+			<CardContent>
+				<div class="text-2xl font-bold text-purple-600">
+					{stats.totalAdmins}
+				</div>
+			</CardContent>
+		</Card>
+	</div>
+
+	<!-- Search and Filter -->
+	<Card>
+		<CardHeader>
+			<CardTitle class="flex items-center gap-3">
+				<IconFilter class="h-6 w-6 text-blue-600" />
+				ค้นหาและกรอง
+			</CardTitle>
+		</CardHeader>
+		<CardContent class="space-y-4">
+			<div class="flex flex-col sm:flex-row gap-4">
+				<div class="flex-1">
+					<div class="relative">
+						<IconSearch class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+						<Input
+							bind:value={searchQuery}
+							placeholder="ค้นหาภาควิชา, หัวหน้าภาค, หรือคำอธิบาย..."
+							class="pl-10 pr-10"
+						/>
+						{#if searchQuery}
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={clearSearch}
+								class="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+							>
+								<span class="sr-only">ล้างการค้นหา</span>
+								×
+							</Button>
+						{/if}
+					</div>
+				</div>
+				<div class="flex gap-2">
+					<Button
+						variant={statusFilter === 'all' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => statusFilter = 'all'}
+					>
+						ทั้งหมด ({stats.total})
+					</Button>
+					<Button
+						variant={statusFilter === 'active' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => statusFilter = 'active'}
+						class="text-green-600 border-green-600 hover:bg-green-50"
+					>
+						เปิดใช้งาน ({stats.active})
+					</Button>
+					<Button
+						variant={statusFilter === 'inactive' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => statusFilter = 'inactive'}
+						class="text-red-600 border-red-600 hover:bg-red-50"
+					>
+						ปิดใช้งาน ({stats.inactive})
+					</Button>
+				</div>
+			</div>
+		</CardContent>
+	</Card>
+
+	<!-- Departments Table -->
+	<div class="space-y-6" role="main" aria-labelledby="department-management-heading">
+		{#if refreshing}
+			<div class="flex items-center justify-center py-12" role="status" aria-live="polite">
+				<IconLoader class="h-8 w-8 animate-spin mr-3 text-blue-500" />
+				<span class="text-lg text-gray-600 dark:text-gray-300">กำลังรีเฟรชข้อมูล...</span>
+			</div>
+		{:else if filteredDepartments.length === 0}
+			<div class="text-center py-16 text-gray-500 dark:text-gray-400">
+				{#if searchQuery || statusFilter !== 'all'}
+					<IconSearch class="h-16 w-16 mx-auto mb-6 opacity-50" />
+					<h3 class="text-xl font-semibold mb-2">ไม่พบข้อมูลที่ตรงกับการค้นหา</h3>
+					<p class="text-gray-400 mb-6">ลองเปลี่ยนคำค้นหาหรือตัวกรองใหม่</p>
+					<Button onclick={clearSearch} variant="outline">
+						ล้างการค้นหา
+					</Button>
+				{:else}
+					<IconBuilding2 class="h-16 w-16 mx-auto mb-6 opacity-50" />
+					<h3 class="text-xl font-semibold mb-2">ยังไม่มีข้อมูลภาควิชาในระบบ</h3>
+					<p class="text-gray-400 mb-6">เริ่มต้นด้วยการเพิ่มภาควิชาแรก</p>
+					<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3">
+						<IconPlus class="h-5 w-5 mr-2" />
+						เพิ่มภาควิชาแรก
+					</Button>
+				{/if}
+			</div>
+		{:else}
+			<Card>
+				<CardHeader>
+					<CardTitle class="flex items-center gap-3">
+						<IconBuilding2 class="h-6 w-6 text-blue-600" />
+						รายการภาควิชา
+						<Badge variant="secondary" class="ml-2">
+							{filteredDepartments.length} รายการ
+						</Badge>
+					</CardTitle>
+					<CardDescription>
+						จัดการข้อมูลภาควิชาต่างๆ ในระบบ
+					</CardDescription>
+				</CardHeader>
+				<CardContent class="p-0">
+					<div class="overflow-hidden">
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-gray-50 dark:bg-gray-800">
+									<Table.Head class="font-semibold">ชื่อภาควิชา</Table.Head>
+									{#if data.userRole === 'SuperAdmin'}
+										<Table.Head class="font-semibold">คณะ</Table.Head>
+									{/if}
+									<Table.Head class="font-semibold">หัวหน้าภาค</Table.Head>
+									<Table.Head class="font-semibold">แอดมินภาควิชา</Table.Head>
+									<Table.Head class="font-semibold text-center">จำนวนนักศึกษา</Table.Head>
+									<Table.Head class="font-semibold text-center">จำนวนแอดมิน</Table.Head>
+									<Table.Head class="font-semibold">สถานะ</Table.Head>
+									<Table.Head class="font-semibold">วันที่สร้าง</Table.Head>
+									<Table.Head class="text-right font-semibold">การดำเนินการ</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each filteredDepartments as department (department.id)}
+									<Table.Row class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+										<Table.Cell class="font-medium py-4">
+											<div class="flex items-center gap-3">
+												<div class="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+													<IconBuilding2 class="h-5 w-5 text-blue-600 dark:text-blue-400" />
+												</div>
+												<div>
+													<div class="font-semibold text-gray-900 dark:text-gray-100">
+														{department.name}
+													</div>
+													{#if department.description}
+														<div class="text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+															{department.description}
+														</div>
+													{/if}
+												</div>
+											</div>
+										</Table.Cell>
+										{#if data.userRole === 'SuperAdmin'}
+											<Table.Cell class="py-4">
+												{#if department.faculty}
+													<Badge variant="outline">
+														{department.faculty.name}
+													</Badge>
+												{:else}
+													<span class="text-gray-400">-</span>
+												{/if}
+											</Table.Cell>
+										{/if}
+										<Table.Cell class="py-4">
+											{#if department.head_name}
+												<div>
+													<div class="font-medium text-gray-900 dark:text-gray-100">
+														{department.head_name}
+													</div>
+													{#if department.head_email}
+														<div class="text-sm text-gray-500 dark:text-gray-400">
+															{department.head_email}
+														</div>
+													{/if}
+												</div>
+											{:else}
+												<span class="text-gray-400">ยังไม่ได้กำหนด</span>
+											{/if}
+										</Table.Cell>
+										<Table.Cell class="py-4">
+											{#if department.department_admins && department.department_admins.length > 0}
+												<div class="space-y-1">
+													{#each department.department_admins.slice(0, 2) as admin}
+														<div class="flex items-center gap-2">
+															<Badge variant="outline" class="text-xs flex items-center gap-1">
+																<IconShield class="h-3 w-3" />
+																{admin.full_name || admin.user?.email || 'N/A'}
+															</Badge>
+															<Button
+																variant="ghost"
+																size="sm"
+																onclick={() => openRemoveAdminDialog(department.id, admin.id, admin.full_name || admin.user?.email || 'แอดมิน', department.name)}
+																class="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+																title="ถอดถอนแอดมิน"
+															>
+																×
+															</Button>
+														</div>
+													{/each}
+													{#if department.department_admins.length > 2}
+														<Badge variant="secondary" class="text-xs">
+															+{department.department_admins.length - 2} อื่นๆ
+														</Badge>
+													{/if}
+												</div>
+											{:else}
+												<div class="flex items-center gap-2">
+													<span class="text-gray-400 text-sm">ยังไม่มีแอดมิน</span>
+													<Button
+														variant="outline"
+														size="sm"
+														onclick={() => openAssignAdminDialog(department)}
+														class="h-7 px-2 text-xs"
+													>
+														<IconUserPlus class="h-3 w-3 mr-1" />
+														มอบหมาย
+													</Button>
+												</div>
+											{/if}
+										</Table.Cell>
+										<Table.Cell class="py-4 text-center">
+											<Badge variant="secondary" class="font-mono">
+												{department.students_count || 0}
+											</Badge>
+										</Table.Cell>
+										<Table.Cell class="py-4 text-center">
+											<Badge variant="secondary" class="font-mono">
+												{department.admins_count || 0}
+											</Badge>
+										</Table.Cell>
+										<Table.Cell class="py-4">
+											<Badge 
+												variant={department.status ? 'default' : 'secondary'}
+												class={department.status ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+											>
+												<span class="w-2 h-2 rounded-full mr-2" 
+													class:bg-green-500={department.status} 
+													class:bg-gray-400={!department.status}
+												></span>
+												{department.status ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
+											</Badge>
+										</Table.Cell>
+										<Table.Cell class="py-4 text-sm text-gray-500">
+											{formatDateTime(department.created_at)}
+										</Table.Cell>
+										<Table.Cell class="text-right py-4">
+											<div class="flex items-center gap-1 justify-end">
+												{#if (!department.department_admins || department.department_admins.length === 0)}
+													<Button 
+														variant="ghost" 
+														size="sm" 
+														onclick={() => openAssignAdminDialog(department)}
+														class="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+														title="มอบหมายแอดมินภาควิชา"
+													>
+														<IconUserPlus class="h-4 w-4" />
+													</Button>
+												{:else}
+													<Button 
+														variant="ghost" 
+														size="sm" 
+														onclick={() => openAssignAdminDialog(department)}
+														class="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+														title="เพิ่มแอดมินภาควิชา"
+													>
+														<IconUserPlus class="h-4 w-4" />
+													</Button>
+												{/if}
+												<Button 
+													variant="ghost" 
+													size="sm" 
+													onclick={() => handleToggleStatus(department.id, department.status)}
+													disabled={toggleLoading[department.id] || false}
+													class="{department.status ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+													title="{department.status ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}ภาควิชา"
+												>
+													{#if toggleLoading[department.id]}
+														<IconLoader class="h-4 w-4 animate-spin" />
+													{:else if department.status}
+														<IconToggleLeft class="h-4 w-4" />
+													{:else}
+														<IconToggleRight class="h-4 w-4" />
+													{/if}
+												</Button>
+												<Button 
+													variant="ghost" 
+													size="sm" 
+													onclick={() => openEditDialog(department)}
+													class="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+													title="แก้ไขภาควิชา"
+												>
+													<IconEdit class="h-4 w-4" />
+												</Button>
+												<Button
+													variant="ghost"
+													size="sm"
+													onclick={() => openDeleteDialog(department.id, department.name)}
+													class="text-red-600 hover:text-red-700 hover:bg-red-50"
+													title="ลบภาควิชา"
+												>
+													<IconTrash class="h-4 w-4" />
+												</Button>
+											</div>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					</div>
+				</CardContent>
+			</Card>
+		{/if}
+	</div>
+</div>
+
+<!-- Create Department Dialog -->
+<Dialog.Root bind:open={createDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>เพิ่มภาควิชาใหม่</Dialog.Title>
+			<Dialog.Description>
+				กรอกข้อมูลเพื่อสร้างภาควิชาใหม่ในระบบ
+			</Dialog.Description>
+		</Dialog.Header>
+
+		<form method="POST" action="?/create" use:createEnhance class="space-y-4">
+			{#if $createErrors._errors}
+				<Alert variant="destructive">
+					<AlertDescription>
+						{$createErrors._errors[0]}
+					</AlertDescription>
+				</Alert>
+			{/if}
+
+			<Form.Field form={createForm} name="name">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>ชื่อภาควิชา</Label>
+						<Input
+							{...props}
+							bind:value={$createFormData.name}
+							placeholder="เช่น ภาควิชาวิทยาการคอมพิวเตอร์"
+							disabled={$createSubmitting}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field form={createForm} name="description">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>คำอธิบาย (ไม่บังคับ)</Label>
+						<Textarea
+							{...props}
+							bind:value={$createFormData.description}
+							placeholder="คำอธิบายเพิ่มเติมเกี่ยวกับภาควิชา"
+							disabled={$createSubmitting}
+							rows={3}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field form={createForm} name="head_name">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>ชื่อหัวหน้าภาค (ไม่บังคับ)</Label>
+						<Input
+							{...props}
+							bind:value={$createFormData.head_name}
+							placeholder="เช่น รศ.ดร. สมชาย ใจดี"
+							disabled={$createSubmitting}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field form={createForm} name="head_email">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>อีเมลหัวหน้าภาค (ไม่บังคับ)</Label>
+						<Input
+							{...props}
+							type="email"
+							bind:value={$createFormData.head_email}
+							placeholder="เช่น head@university.ac.th"
+							disabled={$createSubmitting}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<div class="flex items-center space-x-2">
+				<Switch bind:checked={$createFormData.status} disabled={$createSubmitting} />
+				<Label>เปิดใช้งานทันทีหลังสร้าง</Label>
+			</div>
+
+			<Dialog.Footer>
+				<Button type="button" variant="outline" onclick={() => createDialogOpen = false}>
+					ยกเลิก
+				</Button>
+				<Button type="submit" disabled={$createSubmitting}>
+					{#if $createSubmitting}
+						<IconLoader class="mr-2 h-4 w-4 animate-spin" />
+						กำลังสร้าง...
+					{:else}
+						สร้างภาควิชา
+					{/if}
+				</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Edit Department Dialog -->
+<Dialog.Root bind:open={editDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>แก้ไขภาควิชา</Dialog.Title>
+			<Dialog.Description>
+				แก้ไขข้อมูลของภาควิชา
+			</Dialog.Description>
+		</Dialog.Header>
+
+		{#if editingDepartment}
+			<div class="space-y-4">
+				<div class="space-y-2">
+					<Label>ชื่อภาควิชา</Label>
+					<Input
+						bind:value={editFormData.name}
+						placeholder="เช่น ภาควิชาวิทยาการคอมพิวเตอร์"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label>คำอธิบาย</Label>
+					<Textarea
+						bind:value={editFormData.description}
+						placeholder="คำอธิบายเพิ่มเติมเกี่ยวกับภาควิชา"
+						rows={3}
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label>ชื่อหัวหน้าภาค</Label>
+					<Input
+						bind:value={editFormData.head_name}
+						placeholder="เช่น รศ.ดร. สมชาย ใจดี"
+					/>
+				</div>
+
+				<div class="space-y-2">
+					<Label>อีเมลหัวหน้าภาค</Label>
+					<Input
+						type="email"
+						bind:value={editFormData.head_email}
+						placeholder="เช่น head@university.ac.th"
+					/>
+				</div>
+
+				<div class="flex items-center space-x-2">
+					<Switch bind:checked={editFormData.status} />
+					<Label>สถานะการใช้งาน</Label>
+				</div>
+
+				<Dialog.Footer>
+					<Button type="button" variant="outline" onclick={() => editDialogOpen = false}>
+						ยกเลิก
+					</Button>
+					<Button type="button" onclick={handleUpdate}>
+						บันทึกการแก้ไข
+					</Button>
+				</Dialog.Footer>
+			</div>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Delete Department Confirmation Dialog -->
+<AlertDialog.Root bind:open={deleteDialogOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>ยืนยันการลบภาควิชา</AlertDialog.Title>
+			<AlertDialog.Description>
+				{#if departmentToDelete}
+					คุณแน่ใจหรือไม่ที่จะลบภาควิชา "{departmentToDelete.name}"?<br />
+					<strong class="text-red-600">การดำเนินการนี้จะลบข้อมูลทั้งหมดที่เกี่ยวข้องกับภาควิชานี้ รวมถึงผู้ใช้และแอดมินในภาควิชา</strong><br />
+					การดำเนินการนี้ไม่สามารถยกเลิกได้
+				{:else}
+					กำลังโหลดข้อมูล...
+				{/if}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel onclick={() => {
+				deleteDialogOpen = false;
+				departmentToDelete = null;
+			}}>
+				ยกเลิก
+			</AlertDialog.Cancel>
+			<AlertDialog.Action 
+				onclick={handleDelete}
+				class="bg-red-600 hover:bg-red-700 text-white"
+			>
+				ลบภาควิชา
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
+<!-- Assign Department Admin Dialog -->
+<Dialog.Root bind:open={assignAdminDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title class="flex items-center gap-2">
+				<IconUserPlus class="h-5 w-5 text-purple-600" />
+				มอบหมายแอดมินภาควิชา
+			</Dialog.Title>
+			<Dialog.Description>
+				{#if departmentForAdmin}
+					เลือกแอดมินคณะเพื่อมอบหมายให้ดูแลภาควิชา "{departmentForAdmin.name}"
+				{:else}
+					มอบหมายแอดมินเพื่อดูแลภาควิชา
+				{/if}
+			</Dialog.Description>
+		</Dialog.Header>
+
+		{#if departmentForAdmin}
+			<div class="space-y-4">
+				<!-- Department Info -->
+				<div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+					<div class="flex items-center gap-2">
+						<IconBuilding2 class="h-4 w-4 text-blue-600" />
+						<span class="font-medium">{departmentForAdmin.name}</span>
+					</div>
+					{#if departmentForAdmin.description}
+						<p class="text-sm text-gray-600 mt-1">{departmentForAdmin.description}</p>
+					{/if}
+				</div>
+
+				<!-- Admin Selection -->
+				<div class="space-y-2">
+					<Label>เลือกแอดมินคณะ</Label>
+					{#if loadingAdmins}
+						<div class="flex items-center justify-center py-8">
+							<IconLoader class="h-6 w-6 animate-spin mr-2" />
+							<span>กำลังโหลดรายชื่อแอดมิน...</span>
+						</div>
+					{:else if availableAdmins.length === 0}
+						<div class="text-center py-8 text-gray-500">
+							<IconShield class="h-12 w-12 mx-auto mb-3 opacity-50" />
+							<p class="mb-2">ไม่มีแอดมินคณะที่สามารถมอบหมายได้</p>
+							<p class="text-sm">แอดมินคณะทั้งหมดได้รับการมอบหมายแล้ว</p>
+						</div>
+					{:else}
+						<div class="space-y-2 max-h-64 overflow-y-auto">
+							{#each availableAdmins as admin}
+								<label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+									<input
+										type="radio"
+										bind:group={selectedAdminId}
+										value={admin.id}
+										class="text-purple-600"
+									/>
+									<div class="flex-1">
+										<div class="font-medium">{admin.full_name}</div>
+										<div class="text-sm text-gray-500">{admin.user?.email}</div>
+										{#if admin.faculty}
+											<div class="text-xs text-gray-400">{admin.faculty.name}</div>
+										{/if}
+									</div>
+									<Badge variant="outline" class="text-xs">
+										{admin.permission_count} สิทธิ์
+									</Badge>
+								</label>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<Dialog.Footer>
+				<Button 
+					type="button" 
+					variant="outline" 
+					onclick={() => {
+						assignAdminDialogOpen = false;
+						departmentForAdmin = null;
+						selectedAdminId = '';
+					}}
+					disabled={assigningAdmin}
+				>
+					ยกเลิก
+				</Button>
+				<Button 
+					type="button" 
+					onclick={handleAssignAdmin}
+					disabled={assigningAdmin || !selectedAdminId || availableAdmins.length === 0}
+					class="bg-purple-600 hover:bg-purple-700"
+				>
+					{#if assigningAdmin}
+						<IconLoader class="mr-2 h-4 w-4 animate-spin" />
+						กำลังมอบหมาย...
+					{:else}
+						<IconUserPlus class="mr-2 h-4 w-4" />
+						มอบหมายแอดมิน
+					{/if}
+				</Button>
+			</Dialog.Footer>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>
+
+<!-- Remove Department Admin Confirmation Dialog -->
+<AlertDialog.Root bind:open={removeAdminDialogOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>ยืนยันการถอดถอนแอดมินภาควิชา</AlertDialog.Title>
+			<AlertDialog.Description>
+				{#if adminToRemove}
+					คุณแน่ใจหรือไม่ที่จะถอดถอน "{adminToRemove.adminName}" จากตำแหน่งแอดมินภาควิชา "{adminToRemove.departmentName}"?<br />
+					<strong class="text-orange-600">แอดมินคนนี้จะไม่สามารถจัดการภาควิชานี้ได้อีกต่อไป</strong><br />
+					แต่ยังคงเป็นแอดมินคณะอยู่
+				{:else}
+					กำลังโหลดข้อมูล...
+				{/if}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel onclick={() => {
+				removeAdminDialogOpen = false;
+				adminToRemove = null;
+			}}>
+				ยกเลิก
+			</AlertDialog.Cancel>
+			<AlertDialog.Action 
+				onclick={handleRemoveAdmin}
+				class="bg-orange-600 hover:bg-orange-700 text-white"
+				disabled={removingAdmin}
+			>
+				{#if removingAdmin}
+					<IconLoader class="mr-2 h-4 w-4 animate-spin" />
+					กำลังถอดถอน...
+				{:else}
+					ถอดถอนแอดมิน
+				{/if}
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
