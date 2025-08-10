@@ -111,6 +111,14 @@ export const actions: Actions = {
 
 		const user = await requireAdmin(event);
 		const admin_role = user.admin_role;
+
+		// Only SuperAdmin and FacultyAdmin can create departments
+		if (admin_role?.admin_level !== 'SuperAdmin' && admin_role?.admin_level !== 'FacultyAdmin') {
+			return fail(403, { 
+				error: 'คุณไม่มีสิทธิ์ในการสร้างภาควิชา'
+			});
+		}
+
 		const form = await superValidate(request, zod(departmentCreateSchema));
 
 		if (!form.valid) {
@@ -152,10 +160,21 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, cookies }) => {
+	update: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
+		}
+
+		const user = await requireAdmin(event);
+		const admin_role = user.admin_role;
+
+		// Only SuperAdmin and FacultyAdmin can update departments
+		if (admin_role?.admin_level !== 'SuperAdmin' && admin_role?.admin_level !== 'FacultyAdmin') {
+			return fail(403, { 
+				error: 'คุณไม่มีสิทธิ์ในการแก้ไขภาควิชา'
+			});
 		}
 
 		const formData = await request.formData();
@@ -197,10 +216,21 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, cookies }) => {
+	delete: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
+		}
+
+		const user = await requireAdmin(event);
+		const admin_role = user.admin_role;
+
+		// Only SuperAdmin and FacultyAdmin can delete departments
+		if (admin_role?.admin_level !== 'SuperAdmin' && admin_role?.admin_level !== 'FacultyAdmin') {
+			return fail(403, { 
+				error: 'คุณไม่มีสิทธิ์ในการลบภาควิชา'
+			});
 		}
 
 		const formData = await request.formData();
@@ -231,10 +261,21 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, cookies }) => {
+	toggleStatus: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
+		}
+
+		const user = await requireAdmin(event);
+		const admin_role = user.admin_role;
+
+		// Only SuperAdmin and FacultyAdmin can toggle department status
+		if (admin_role?.admin_level !== 'SuperAdmin' && admin_role?.admin_level !== 'FacultyAdmin') {
+			return fail(403, { 
+				error: 'คุณไม่มีสิทธิ์ในการเปลี่ยนสถานะภาควิชา'
+			});
 		}
 
 		const formData = await request.formData();
@@ -265,77 +306,4 @@ export const actions: Actions = {
 		}
 	},
 
-	assignAdmin: async ({ request, cookies }) => {
-		const sessionId = cookies.get('session_id');
-		if (!sessionId) {
-			throw redirect(302, '/admin/login');
-		}
-
-		const formData = await request.formData();
-		const departmentId = formData.get('departmentId') as string;
-		const adminId = formData.get('adminId') as string;
-
-		try {
-			const response = await fetch(`${API_BASE_URL}/api/departments/${departmentId}/assign-admin`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
-				body: JSON.stringify({ admin_id: adminId })
-			});
-
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการมอบหมายแอดมิน'
-				});
-			}
-
-			return { success: true };
-		} catch (error) {
-			console.error('Failed to assign department admin:', error);
-			return fail(500, { 
-				error: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'
-			});
-		}
-	},
-
-	removeAdmin: async ({ request, cookies }) => {
-		const sessionId = cookies.get('session_id');
-		if (!sessionId) {
-			throw redirect(302, '/admin/login');
-		}
-
-		const formData = await request.formData();
-		const departmentId = formData.get('departmentId') as string;
-		const adminId = formData.get('adminId') as string;
-
-		try {
-			const response = await fetch(`${API_BASE_URL}/api/departments/${departmentId}/remove-admin`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
-				body: JSON.stringify({ admin_id: adminId })
-			});
-
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการถอดถอนแอดมิน'
-				});
-			}
-
-			return { success: true };
-		} catch (error) {
-			console.error('Failed to remove department admin:', error);
-			return fail(500, { 
-				error: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'
-			});
-		}
-	}
 };

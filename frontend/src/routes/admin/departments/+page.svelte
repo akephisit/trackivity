@@ -663,9 +663,7 @@
 										<Table.Head class="font-semibold">คณะ</Table.Head>
 									{/if}
 									<Table.Head class="font-semibold">หัวหน้าภาค</Table.Head>
-									<Table.Head class="font-semibold">แอดมินภาควิชา</Table.Head>
 									<Table.Head class="text-center font-semibold">จำนวนนักศึกษา</Table.Head>
-									<Table.Head class="text-center font-semibold">จำนวนแอดมิน</Table.Head>
 									<Table.Head class="font-semibold">สถานะ</Table.Head>
 									<Table.Head class="font-semibold">วันที่สร้าง</Table.Head>
 									<Table.Head class="text-right font-semibold">การดำเนินการ</Table.Head>
@@ -725,61 +723,9 @@
 												<span class="text-gray-400">ยังไม่ได้กำหนด</span>
 											{/if}
 										</Table.Cell>
-										<Table.Cell class="py-4">
-											{#if department.department_admins && department.department_admins.length > 0}
-												<div class="space-y-1">
-													{#each department.department_admins.slice(0, 2) as admin}
-														<div class="flex items-center gap-2">
-															<Badge variant="outline" class="flex items-center gap-1 text-xs">
-																<IconShield class="h-3 w-3" />
-																{admin.full_name || admin.user?.email || 'N/A'}
-															</Badge>
-															<Button
-																variant="ghost"
-																size="sm"
-																onclick={() =>
-																	openRemoveAdminDialog(
-																		department.id,
-																		admin.id,
-																		admin.full_name || admin.user?.email || 'แอดมิน',
-																		department.name
-																	)}
-																class="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-																title="ถอดถอนแอดมิน"
-															>
-																×
-															</Button>
-														</div>
-													{/each}
-													{#if department.department_admins.length > 2}
-														<Badge variant="secondary" class="text-xs">
-															+{department.department_admins.length - 2} อื่นๆ
-														</Badge>
-													{/if}
-												</div>
-											{:else}
-												<div class="flex items-center gap-2">
-													<span class="text-sm text-gray-400">ยังไม่มีแอดมิน</span>
-													<Button
-														variant="outline"
-														size="sm"
-														onclick={() => openAssignAdminDialog(department)}
-														class="h-7 px-2 text-xs"
-													>
-														<IconUserPlus class="mr-1 h-3 w-3" />
-														มอบหมาย
-													</Button>
-												</div>
-											{/if}
-										</Table.Cell>
 										<Table.Cell class="py-4 text-center">
 											<Badge variant="secondary" class="font-mono">
 												{department.students_count || 0}
-											</Badge>
-										</Table.Cell>
-										<Table.Cell class="py-4 text-center">
-											<Badge variant="secondary" class="font-mono">
-												{department.admins_count || 0}
 											</Badge>
 										</Table.Cell>
 										<Table.Cell class="py-4">
