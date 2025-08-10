@@ -1115,14 +1115,16 @@
 					</div>
 					<div class="space-y-2">
 						<Label class="text-sm font-medium text-gray-500">สถานะ</Label>
-						{@const viewStatus = getAdminCombinedStatus(viewingAdmin)}
-						<Badge 
-							variant="default"
-							class={viewStatus.badgeClass}
-						>
-							<span class="w-2 h-2 rounded-full mr-2 {viewStatus.dotClass}" aria-hidden="true"></span>
-							{viewStatus.statusText}
-						</Badge>
+						{#if viewingAdmin}
+							{@const viewStatus = getAdminCombinedStatus(viewingAdmin)}
+							<Badge 
+								variant="default"
+								class={viewStatus.badgeClass}
+							>
+								<span class="w-2 h-2 rounded-full mr-2 {viewStatus.dotClass}" aria-hidden="true"></span>
+								{viewStatus.statusText}
+							</Badge>
+						{/if}
 					</div>
 				</div>
 
