@@ -42,13 +42,6 @@
 	let { data } = $props();
 	let refreshing = $state(false);
 
-	// Department admin assignment states
-	let assignAdminDialogOpen = $state(false);
-	let departmentForAdmin = $state<Department | null>(null);
-	let selectedAdminId = $state('');
-	let availableAdmins = $state<ExtendedAdminRole[]>([]);
-	let loadingAdmins = $state(false);
-	let assigningAdmin = $state(false);
 
 	// Department schemas
 	const departmentCreateSchema = z.object({
@@ -114,15 +107,6 @@
 	// Delete state
 	let departmentToDelete = $state<{ id: string; name: string } | null>(null);
 
-	// Remove admin state
-	let removeAdminDialogOpen = $state(false);
-	let adminToRemove = $state<{
-		departmentId: string;
-		adminId: string;
-		adminName: string;
-		departmentName: string;
-	} | null>(null);
-	let removingAdmin = $state(false);
 
 	// Toggle loading
 	let toggleLoading = $state<{ [key: string]: boolean }>({});
@@ -312,130 +296,9 @@
 		searchQuery = '';
 	}
 
-	// Department admin assignment functions
-	async function openAssignAdminDialog(department: Department) {
-		departmentForAdmin = department;
-		selectedAdminId = '';
-		loadingAdmins = true;
-		assignAdminDialogOpen = true;
 
-		// Fetch available faculty admins for this department's faculty
-		try {
-			const response = await fetch(`/api/departments/${department.id}/available-admins`, {
-				method: 'GET'
-			});
 
-			if (response.ok) {
-				const result = await response.json();
-				if (result.success) {
-					availableAdmins = result.data.admins || [];
-				}
-			}
-		} catch (error) {
-			console.error('Failed to fetch available admins:', error);
-			toast.error('เกิดข้อผิดพลาดในการโหลดรายชื่อแอดมิน');
-		} finally {
-			loadingAdmins = false;
-		}
-	}
 
-	async function handleAssignAdmin() {
-		if (!departmentForAdmin || !selectedAdminId) {
-			toast.error('กรุณาเลือกแอดมินที่จะมอบหมาย');
-			return;
-		}
-
-		assigningAdmin = true;
-
-		try {
-			const formData = new FormData();
-			formData.append('departmentId', departmentForAdmin.id);
-			formData.append('adminId', selectedAdminId);
-
-			const response = await fetch('?/assignAdmin', {
-				method: 'POST',
-				body: formData
-			});
-
-			const result = await response.json();
-
-			if (result.type === 'success') {
-				toast.success('มอบหมายแอดมินภาควิชาสำเร็จ');
-				assignAdminDialogOpen = false;
-				departmentForAdmin = null;
-				selectedAdminId = '';
-
-				setTimeout(async () => {
-					try {
-						await invalidate('app:page-data');
-						await invalidateAll();
-					} catch (error) {
-						console.error('Failed to refresh data:', error);
-						window.location.reload();
-					}
-				}, 500);
-			} else {
-				toast.error(result.error || 'เกิดข้อผิดพลาดในการมอบหมายแอดมิน');
-			}
-		} catch (error) {
-			console.error('Assign admin error:', error);
-			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
-		} finally {
-			assigningAdmin = false;
-		}
-	}
-
-	function openRemoveAdminDialog(
-		departmentId: string,
-		adminId: string,
-		adminName: string,
-		departmentName: string
-	) {
-		adminToRemove = { departmentId, adminId, adminName, departmentName };
-		removeAdminDialogOpen = true;
-	}
-
-	async function handleRemoveAdmin() {
-		if (!adminToRemove) return;
-
-		removingAdmin = true;
-
-		try {
-			const formData = new FormData();
-			formData.append('departmentId', adminToRemove.departmentId);
-			formData.append('adminId', adminToRemove.adminId);
-
-			const response = await fetch('?/removeAdmin', {
-				method: 'POST',
-				body: formData
-			});
-
-			const result = await response.json();
-
-			if (result.type === 'success') {
-				toast.success('ถอดถอนแอดมินภาควิชาสำเร็จ');
-				removeAdminDialogOpen = false;
-				adminToRemove = null;
-
-				setTimeout(async () => {
-					try {
-						await invalidate('app:page-data');
-						await invalidateAll();
-					} catch (error) {
-						console.error('Failed to refresh data:', error);
-						window.location.reload();
-					}
-				}, 500);
-			} else {
-				toast.error(result.error || 'เกิดข้อผิดพลาดในการถอดถอนแอดมิน');
-			}
-		} catch (error) {
-			console.error('Remove admin error:', error);
-			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
-		} finally {
-			removingAdmin = false;
-		}
-	}
 
 	function formatDateTime(dateString: string) {
 		return new Date(dateString).toLocaleDateString('th-TH', {
@@ -747,65 +610,50 @@
 											{formatDateTime(department.created_at)}
 										</Table.Cell>
 										<Table.Cell class="py-4 text-right">
-											<div class="flex items-center justify-end gap-1">
-												{#if !department.department_admins || department.department_admins.length === 0}
+											{#if data.userRole === 'SuperAdmin' || data.userRole === 'FacultyAdmin'}
+												<div class="flex items-center justify-end gap-1">
 													<Button
 														variant="ghost"
 														size="sm"
-														onclick={() => openAssignAdminDialog(department)}
-														class="text-purple-600 hover:bg-purple-50 hover:text-purple-700"
-														title="มอบหมายแอดมินภาควิชา"
+														onclick={() => handleToggleStatus(department.id, department.status)}
+														disabled={toggleLoading[department.id] || false}
+														class="{department.status
+															? 'text-orange-600 hover:bg-orange-50 hover:text-orange-700'
+															: 'text-green-600 hover:bg-green-50 hover:text-green-700'} transition-colors"
+														title="{department.status ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}ภาควิชา"
 													>
-														<IconUserPlus class="h-4 w-4" />
+														{#if toggleLoading[department.id]}
+															<IconLoader class="h-4 w-4 animate-spin" />
+														{:else if department.status}
+															<IconToggleLeft class="h-4 w-4" />
+														{:else}
+															<IconToggleRight class="h-4 w-4" />
+														{/if}
 													</Button>
-												{:else}
 													<Button
 														variant="ghost"
 														size="sm"
-														onclick={() => openAssignAdminDialog(department)}
-														class="text-purple-600 hover:bg-purple-50 hover:text-purple-700"
-														title="เพิ่มแอดมินภาควิชา"
+														onclick={() => openEditDialog(department)}
+														class="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+														title="แก้ไขภาควิชา"
 													>
-														<IconUserPlus class="h-4 w-4" />
+														<IconEdit class="h-4 w-4" />
 													</Button>
-												{/if}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => handleToggleStatus(department.id, department.status)}
-													disabled={toggleLoading[department.id] || false}
-													class="{department.status
-														? 'text-orange-600 hover:bg-orange-50 hover:text-orange-700'
-														: 'text-green-600 hover:bg-green-50 hover:text-green-700'} transition-colors"
-													title="{department.status ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}ภาควิชา"
-												>
-													{#if toggleLoading[department.id]}
-														<IconLoader class="h-4 w-4 animate-spin" />
-													{:else if department.status}
-														<IconToggleLeft class="h-4 w-4" />
-													{:else}
-														<IconToggleRight class="h-4 w-4" />
-													{/if}
-												</Button>
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => openEditDialog(department)}
-													class="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-													title="แก้ไขภาควิชา"
-												>
-													<IconEdit class="h-4 w-4" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => openDeleteDialog(department.id, department.name)}
-													class="text-red-600 hover:bg-red-50 hover:text-red-700"
-													title="ลบภาควิชา"
-												>
-													<IconTrash class="h-4 w-4" />
-												</Button>
-											</div>
+													<Button
+														variant="ghost"
+														size="sm"
+														onclick={() => openDeleteDialog(department.id, department.name)}
+														class="text-red-600 hover:bg-red-50 hover:text-red-700"
+														title="ลบภาควิชา"
+													>
+														<IconTrash class="h-4 w-4" />
+													</Button>
+												</div>
+											{:else}
+												<div class="text-center text-sm text-gray-500">
+													-
+												</div>
+											{/if}
 										</Table.Cell>
 									</Table.Row>
 								{/each}
@@ -1027,149 +875,3 @@
 	</AlertDialog.Content>
 </AlertDialog.Root>
 
-<!-- Assign Department Admin Dialog -->
-<Dialog.Root bind:open={assignAdminDialogOpen}>
-	<Dialog.Content class="sm:max-w-lg">
-		<Dialog.Header>
-			<Dialog.Title class="flex items-center gap-2">
-				<IconUserPlus class="h-5 w-5 text-purple-600" />
-				มอบหมายแอดมินภาควิชา
-			</Dialog.Title>
-			<Dialog.Description>
-				{#if departmentForAdmin}
-					เลือกแอดมินคณะเพื่อมอบหมายให้ดูแลภาควิชา "{departmentForAdmin.name}"
-				{:else}
-					มอบหมายแอดมินเพื่อดูแลภาควิชา
-				{/if}
-			</Dialog.Description>
-		</Dialog.Header>
-
-		{#if departmentForAdmin}
-			<div class="space-y-4">
-				<!-- Department Info -->
-				<div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-					<div class="flex items-center gap-2">
-						<IconBuilding class="h-4 w-4 text-blue-600" />
-						<span class="font-medium">{departmentForAdmin.name}</span>
-					</div>
-					{#if departmentForAdmin.description}
-						<p class="mt-1 text-sm text-gray-600">{departmentForAdmin.description}</p>
-					{/if}
-				</div>
-
-				<!-- Admin Selection -->
-				<div class="space-y-2">
-					<Label>เลือกแอดมินคณะ</Label>
-					{#if loadingAdmins}
-						<div class="flex items-center justify-center py-8">
-							<IconLoader class="mr-2 h-6 w-6 animate-spin" />
-							<span>กำลังโหลดรายชื่อแอดมิน...</span>
-						</div>
-					{:else if availableAdmins.length === 0}
-						<div class="py-8 text-center text-gray-500">
-							<IconShield class="mx-auto mb-3 h-12 w-12 opacity-50" />
-							<p class="mb-2">ไม่มีแอดมินคณะที่สามารถมอบหมายได้</p>
-							<p class="text-sm">แอดมินคณะทั้งหมดได้รับการมอบหมายแล้ว</p>
-						</div>
-					{:else}
-						<div class="max-h-64 space-y-2 overflow-y-auto">
-							{#each availableAdmins as admin}
-								<label
-									class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
-								>
-									<input
-										type="radio"
-										bind:group={selectedAdminId}
-										value={admin.id}
-										class="text-purple-600"
-									/>
-									<div class="flex-1">
-										<div class="font-medium">{admin.full_name}</div>
-										<div class="text-sm text-gray-500">{admin.user?.email}</div>
-										{#if admin.faculty}
-											<div class="text-xs text-gray-400">{admin.faculty.name}</div>
-										{/if}
-									</div>
-									<Badge variant="outline" class="text-xs">
-										{admin.permission_count} สิทธิ์
-									</Badge>
-								</label>
-							{/each}
-						</div>
-					{/if}
-				</div>
-			</div>
-
-			<Dialog.Footer>
-				<Button
-					type="button"
-					variant="outline"
-					onclick={() => {
-						assignAdminDialogOpen = false;
-						departmentForAdmin = null;
-						selectedAdminId = '';
-					}}
-					disabled={assigningAdmin}
-				>
-					ยกเลิก
-				</Button>
-				<Button
-					type="button"
-					onclick={handleAssignAdmin}
-					disabled={assigningAdmin || !selectedAdminId || availableAdmins.length === 0}
-					class="bg-purple-600 hover:bg-purple-700"
-				>
-					{#if assigningAdmin}
-						<IconLoader class="mr-2 h-4 w-4 animate-spin" />
-						กำลังมอบหมาย...
-					{:else}
-						<IconUserPlus class="mr-2 h-4 w-4" />
-						มอบหมายแอดมิน
-					{/if}
-				</Button>
-			</Dialog.Footer>
-		{/if}
-	</Dialog.Content>
-</Dialog.Root>
-
-<!-- Remove Department Admin Confirmation Dialog -->
-<AlertDialog.Root bind:open={removeAdminDialogOpen}>
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>ยืนยันการถอดถอนแอดมินภาควิชา</AlertDialog.Title>
-			<AlertDialog.Description>
-				{#if adminToRemove}
-					คุณแน่ใจหรือไม่ที่จะถอดถอน "{adminToRemove.adminName}" จากตำแหน่งแอดมินภาควิชา "{adminToRemove.departmentName}"?<br
-					/>
-					<strong class="text-orange-600">แอดมินคนนี้จะไม่สามารถจัดการภาควิชานี้ได้อีกต่อไป</strong
-					><br />
-					แต่ยังคงเป็นแอดมินคณะอยู่
-				{:else}
-					กำลังโหลดข้อมูล...
-				{/if}
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel
-				onclick={() => {
-					removeAdminDialogOpen = false;
-					adminToRemove = null;
-				}}
-			>
-				ยกเลิก
-			</AlertDialog.Cancel>
-			<AlertDialog.Action
-				onclick={handleRemoveAdmin}
-				class="bg-orange-600 text-white hover:bg-orange-700"
-				disabled={removingAdmin}
-			>
-				{#if removingAdmin}
-					<IconLoader class="mr-2 h-4 w-4 animate-spin" />
-					กำลังถอดถอน...
-				{:else}
-					ถอดถอนแอดมิน
-				{/if}
-			</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
