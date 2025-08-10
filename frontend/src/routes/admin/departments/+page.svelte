@@ -81,7 +81,9 @@
 					}
 				}, 500);
 			} else if (result.type === 'failure') {
-				toast.error('เกิดข้อผิดพลาดในการสร้างภาควิชา');
+				// Display specific error message if available
+				const errorMessage = result.data?.error || 'เกิดข้อผิดพลาดในการสร้างภาควิชา';
+				toast.error(errorMessage);
 			}
 		}
 	});
@@ -257,7 +259,9 @@
 					}
 				}, 500);
 			} else {
-				toast.error('เกิดข้อผิดพลาดในการลบภาควิชา');
+				// Display specific error message if available
+				const errorMessage = result.error || 'เกิดข้อผิดพลาดในการลบภาควิชา';
+				toast.error(errorMessage);
 			}
 		} catch (error) {
 			console.error('Delete error:', error);
@@ -1052,9 +1056,9 @@
 				{#if departmentToDelete}
 					คุณแน่ใจหรือไม่ที่จะลบภาควิชา "{departmentToDelete.name}"?<br />
 					<strong class="text-red-600"
-						>การดำเนินการนี้จะลบข้อมูลทั้งหมดที่เกี่ยวข้องกับภาควิชานี้
-						รวมถึงผู้ใช้และแอดมินในภาควิชา</strong
+						>หมายเหตุ: ไม่สามารถลบภาควิชาได้หากยังมีผู้ใช้หรือนักศึกษาที่สังกัดอยู่</strong
 					><br />
+					<span class="text-sm text-gray-600">กรุณาย้ายหรือลบผู้ใช้ทั้งหมดออกจากภาควิชานี้ก่อน</span><br />
 					การดำเนินการนี้ไม่สามารถยกเลิกได้
 				{:else}
 					กำลังโหลดข้อมูล...

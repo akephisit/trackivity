@@ -138,7 +138,7 @@ export const actions: Actions = {
 			if (!response.ok) {
 				return fail(response.status, { 
 					form,
-					error: result.message || 'เกิดข้อผิดพลาดในการสร้างภาควิชา'
+					error: result.message || result.error || 'เกิดข้อผิดพลาดในการสร้างภาควิชา'
 				});
 			}
 
@@ -218,7 +218,7 @@ export const actions: Actions = {
 
 			if (!response.ok) {
 				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการลบภาควิชา'
+					error: result.message || result.error || 'เกิดข้อผิดพลาดในการลบภาควิชา'
 				});
 			}
 
