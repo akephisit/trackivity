@@ -325,6 +325,24 @@
 			}
 			facultyGroups[facultyId].admins.push(admin);
 		});
+
+		// Sort admins within each faculty group: FacultyAdmin first, then RegularAdmin
+		Object.values(facultyGroups).forEach(group => {
+			group.admins.sort((a, b) => {
+				// FacultyAdmin (0) comes before RegularAdmin (1)
+				const orderA = a.admin_level === AdminLevel.FacultyAdmin ? 0 : 1;
+				const orderB = b.admin_level === AdminLevel.FacultyAdmin ? 0 : 1;
+				
+				if (orderA !== orderB) {
+					return orderA - orderB;
+				}
+				
+				// If same admin level, sort by name
+				const nameA = (a.user?.first_name || '') + ' ' + (a.user?.last_name || '');
+				const nameB = (b.user?.first_name || '') + ' ' + (b.user?.last_name || '');
+				return nameA.localeCompare(nameB, 'th');
+			});
+		});
 		
 		// No separate regular admins since they're now merged with faculty admins
 		const regularAdmins: AdminRole[] = [];
