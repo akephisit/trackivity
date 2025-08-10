@@ -112,6 +112,19 @@
 		return faculty?.name || 'ไม่พบข้อมูล';
 	}
 
+	function getRoleDisplayName(adminLevel: AdminLevel): string {
+		switch (adminLevel) {
+			case AdminLevel.SuperAdmin:
+				return 'ซุปเปอร์แอดมิน';
+			case AdminLevel.FacultyAdmin:
+				return 'แอดมินคณะ';
+			case AdminLevel.RegularAdmin:
+				return 'แอดมินทั่วไป';
+			default:
+				return 'ไม่ระบุ';
+		}
+	}
+
 	function openDeleteDialog(adminId: string, userId: string, adminName: string) {
 		adminToDelete = { id: adminId, userId: userId, name: adminName };
 		deleteDialogOpen = true;
@@ -349,7 +362,7 @@
 	</div>
 
 	<!-- Stats Cards -->
-	<div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">แอดมินทั้งหมด</CardTitle>
@@ -380,6 +393,18 @@
 			<CardContent>
 				<div class="text-2xl font-bold text-blue-600">
 					{groupedAdmins.facultyGroups.reduce((acc, [, group]) => acc + group.admins.length, 0)}
+				</div>
+			</CardContent>
+		</Card>
+
+		<Card>
+			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<CardTitle class="text-sm font-medium">แอดมินทั่วไป</CardTitle>
+				<IconUsers class="h-4 w-4 text-gray-500" />
+			</CardHeader>
+			<CardContent>
+				<div class="text-2xl font-bold text-gray-600">
+					{groupedAdmins.regularAdmins.length}
 				</div>
 			</CardContent>
 		</Card>
@@ -426,6 +451,7 @@
 										<Table.Row class="bg-gray-50 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800">
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">ชื่อ-นามสกุล</Table.Head>
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">อีเมล</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">บทบาท</Table.Head>
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สถานะ</Table.Head>
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สิทธิ์</Table.Head>
 											<Table.Head class="text-right font-semibold text-gray-900 dark:text-gray-100">การดำเนินการ</Table.Head>
@@ -449,6 +475,11 @@
 														<IconMail class="h-4 w-4 text-gray-400" aria-hidden="true" />
 														<span class="text-sm">{admin.user?.email || 'ไม่ระบุอีเมล'}</span>
 													</div>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<Badge variant="destructive" class="bg-red-100 text-red-800 hover:bg-red-100">
+														{getRoleDisplayName(admin.admin_level)}
+													</Badge>
 												</Table.Cell>
 												<Table.Cell class="py-4">
 													<Badge 
@@ -577,6 +608,7 @@
 													<Table.Row class="bg-blue-25 dark:bg-blue-950/10 hover:bg-blue-25 dark:hover:bg-blue-950/10">
 														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">ชื่อ-นามสกุล</Table.Head>
 														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">อีเมล</Table.Head>
+														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">บทบาท</Table.Head>
 														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สถานะ</Table.Head>
 														<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สิทธิ์</Table.Head>
 														<Table.Head class="text-right font-semibold text-gray-900 dark:text-gray-100">การดำเนินการ</Table.Head>
@@ -600,6 +632,11 @@
 																	<IconMail class="h-4 w-4 text-gray-400" aria-hidden="true" />
 																	<span class="text-sm">{admin.user?.email || 'ไม่ระบุอีเมล'}</span>
 																</div>
+															</Table.Cell>
+															<Table.Cell class="py-4">
+																<Badge variant="default" class="bg-blue-100 text-blue-800 hover:bg-blue-100">
+																	{getRoleDisplayName(admin.admin_level)}
+																</Badge>
 															</Table.Cell>
 															<Table.Cell class="py-4">
 																<Badge 
@@ -703,6 +740,7 @@
 										<Table.Row class="bg-gray-50 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800">
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">ชื่อ-นามสกุล</Table.Head>
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">อีเมล</Table.Head>
+											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">บทบาท</Table.Head>
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สถานะ</Table.Head>
 											<Table.Head class="font-semibold text-gray-900 dark:text-gray-100">สิทธิ์</Table.Head>
 											<Table.Head class="text-right font-semibold text-gray-900 dark:text-gray-100">การดำเนินการ</Table.Head>
@@ -726,6 +764,11 @@
 														<IconMail class="h-4 w-4 text-gray-400" aria-hidden="true" />
 														<span class="text-sm">{admin.user?.email || 'ไม่ระบุอีเมล'}</span>
 													</div>
+												</Table.Cell>
+												<Table.Cell class="py-4">
+													<Badge variant="secondary" class="bg-gray-100 text-gray-700 hover:bg-gray-100">
+														{getRoleDisplayName(admin.admin_level)}
+													</Badge>
 												</Table.Cell>
 												<Table.Cell class="py-4">
 													<Badge 
