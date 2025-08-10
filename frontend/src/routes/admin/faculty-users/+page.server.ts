@@ -116,7 +116,8 @@ export const load: PageServerLoad = async (event) => {
         }
 
         const usersData = await usersResponse.json();
-        if (!usersData.success) {
+        // Check for error status or missing data
+        if (usersData.status === 'error' || (!usersData.data && !usersData.users)) {
             error(500, usersData.message || 'Failed to fetch users');
         }
 
@@ -127,7 +128,8 @@ export const load: PageServerLoad = async (event) => {
         }
 
         const statsData = await statsResponse.json();
-        if (!statsData.success) {
+        // Check for error status or missing data
+        if (statsData.status === 'error' || !statsData.data) {
             error(500, statsData.message || 'Failed to fetch user statistics');
         }
 
@@ -135,7 +137,7 @@ export const load: PageServerLoad = async (event) => {
         let faculties: Faculty[] = [];
         if (facultiesResponse && facultiesResponse.ok) {
             const facultiesData = await facultiesResponse.json();
-            if (facultiesData.success) {
+            if (facultiesData.status === 'success') {
                 faculties = facultiesData.data || [];
             }
         }
@@ -144,14 +146,14 @@ export const load: PageServerLoad = async (event) => {
         let departments: Department[] = [];
         if (departmentsResponse && departmentsResponse.ok) {
             const departmentsData = await departmentsResponse.json();
-            if (departmentsData.success) {
+            if (departmentsData.status === 'success') {
                 departments = departmentsData.data || [];
             }
         }
 
         // Return data to the page component
         return {
-            users: usersData.data as UserListResponse,
+            users: (usersData.data || usersData) as UserListResponse,
             stats: statsData.data as UserStats,
             faculties,
             departments,
