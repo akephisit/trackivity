@@ -415,11 +415,13 @@ pub async fn get_faculty_user_statistics(
         ORDER BY d.name
         "#
     )
+    .bind(faculty_id)
     .fetch_all(&session_state.db_pool)
     .await;
 
     match (faculty_stats_result, department_stats_result) {
         (Ok(faculty_row), Ok(department_rows)) => {
+            tracing::info!("Faculty stats query successful for faculty_id: {}", faculty_id);
             let faculty_stats = json!({
                 "faculty_id": faculty_row.get::<Uuid, _>("faculty_id"),
                 "faculty_name": faculty_row.get::<String, _>("faculty_name"),
@@ -468,10 +470,19 @@ pub async fn get_faculty_user_statistics(
 
             Ok(Json(response))
         }
-        _ => {
+        (Err(faculty_error), _) => {
+            tracing::error!("Faculty stats query failed: {:?}", faculty_error);
             let error_response = json!({
                 "status": "error",
-                "message": "Failed to retrieve faculty user statistics"
+                "message": format!("Failed to retrieve faculty statistics: {}", faculty_error)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+        (_, Err(dept_error)) => {
+            tracing::error!("Department stats query failed: {:?}", dept_error);
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to retrieve department statistics: {}", dept_error)
             });
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }
