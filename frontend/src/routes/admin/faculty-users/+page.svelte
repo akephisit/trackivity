@@ -1,16 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
-	import { browser } from '$app/environment';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Table from '$lib/components/ui/table';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import * as AlertDialog from '$lib/components/ui/alert-dialog';
-	import { Separator } from '$lib/components/ui/separator';
-	import { toast } from 'svelte-sonner';
 	import {
 		getCoreRowModel,
 		getFilteredRowModel,
@@ -37,15 +29,22 @@
 
 	// Import our components
 	import UserFilters from '$lib/components/user-management/UserFilters.svelte';
-	import UserTableComponents from '$lib/components/user-management/UserTableComponents.svelte';
 	import { getUserTableColumns, columnVisibilityPresets } from '$lib/components/user-table-columns';
-	import { userApi } from '$lib/services/userApi';
 
 	// Get data from server load function
 	let { data } = $props();
 
-	// Extract data from server load
-	const { users, stats, faculties, departments = [], filters, adminLevel, pagination, meta } = $derived(data);
+	// Extract data from server load with safe defaults
+	const { 
+		users = { users: [], pagination: { page: 1, limit: 20, total: 0, pages: 1 } }, 
+		stats, 
+		faculties = [], 
+		departments = [], 
+		filters = {}, 
+		adminLevel, 
+		pagination = { page: 1, limit: 20, total: 0, pages: 1 }, 
+		meta = { title: 'จัดการผู้ใช้', description: 'จัดการผู้ใช้ในระบบ' }
+	} = $derived(data || {});
 
 	// Component state
 	let loading = false;
@@ -56,8 +55,8 @@
 	let columnVisibility = $state<VisibilityState>(columnVisibilityPresets.detailed);
 	let rowSelection = $state<RowSelectionState>({});
 	const tablePagination = $derived<PaginationState>({
-		pageIndex: pagination.page - 1,
-		pageSize: pagination.limit
+		pageIndex: (pagination?.page || 1) - 1,
+		pageSize: pagination?.limit || 20
 	});
 
 	// Get appropriate columns for admin level
@@ -66,7 +65,7 @@
 	// Create table instance
 	const table = $derived(createSvelteTable({
 		get data() {
-			return users.users || [];
+			return users?.users || [];
 		},
 		columns,
 		state: {
@@ -179,7 +178,7 @@
 			<CardContent>
 				<div class="text-2xl font-bold">{totalUsers.toLocaleString()}</div>
 				<p class="text-xs text-muted-foreground">
-					{users?.pagination?.total || users?.total_count || 0} รายการในตาราง
+					{users?.pagination?.total || (users as any)?.total_count || 0} รายการในตาราง
 				</p>
 			</CardContent>
 		</Card>
@@ -226,9 +225,9 @@
 
 	<!-- Advanced Filters -->
 	<UserFilters
-		{filters}
-		{faculties}
-		{departments}
+		filters={filters || {}}
+		faculties={Array.isArray(faculties) ? faculties : []}
+		departments={Array.isArray(departments) ? departments : []}
 		showFacultyFilter={canViewAllFaculties}
 		{loading}
 		on:filtersChanged={(e) => {
@@ -255,7 +254,7 @@
 							{selectedUsers.length} รายการที่เลือก
 						</Badge>
 						<span class="text-sm text-muted-foreground">
-							จาก {users.users.length} รายการ
+							จาก {users?.users?.length || 0} รายการ
 						</span>
 					</div>
 
@@ -289,7 +288,7 @@
 				<div>
 					<CardTitle>รายการผู้ใช้</CardTitle>
 					<CardDescription>
-						แสดงผลจำนวน {users?.users?.length || 0} จาก {users?.pagination?.total || users?.total_count || 0} รายการ
+						แสดงผลจำนวน {users?.users?.length || 0} จาก {users?.pagination?.total || (users as any)?.total_count || 0} รายการ
 					</CardDescription>
 				</div>
 				
@@ -359,33 +358,33 @@
 	</Card>
 
 	<!-- Table Pagination -->
-	{#if users.pagination.pages > 1}
+	{#if users?.pagination?.pages && users.pagination.pages > 1}
 		<Card>
 			<CardContent class="p-4">
 				<div class="flex items-center justify-between">
 					<div class="text-sm text-muted-foreground">
 						แสดงผล {((users?.pagination?.page || 1) - 1) * (users?.pagination?.limit || 20) + 1} - 
-						{Math.min((users?.pagination?.page || 1) * (users?.pagination?.limit || 20), users?.pagination?.total || users?.total_count || 0)} 
-						จาก {users?.pagination?.total || users?.total_count || 0} รายการ
+						{Math.min((users?.pagination?.page || 1) * (users?.pagination?.limit || 20), users?.pagination?.total || (users as any)?.total_count || 0)} 
+						จาก {users?.pagination?.total || (users as any)?.total_count || 0} รายการ
 					</div>
 					
 					<div class="flex items-center gap-2">
 						<Button 
 							variant="outline" 
 							size="sm"
-							disabled={users.pagination.page <= 1}
+							disabled={(users?.pagination?.page || 1) <= 1}
 						>
 							หน้าก่อนหน้า
 						</Button>
 						
 						<span class="text-sm">
-							หน้า {users.pagination.page} จาก {users.pagination.pages}
+							หน้า {users?.pagination?.page || 1} จาก {users?.pagination?.pages || 1}
 						</span>
 						
 						<Button 
 							variant="outline" 
 							size="sm"
-							disabled={users.pagination.page >= users.pagination.pages}
+							disabled={(users?.pagination?.page || 1) >= (users?.pagination?.pages || 1)}
 						>
 							หน้าถัดไป
 						</Button>
