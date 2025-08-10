@@ -11,9 +11,12 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดสถิติแดชบอร์ด
 	let stats: AdminDashboardStats = {
 		total_users: 0,
-		total_admins: 0,
-		total_faculties: 0,
-		recent_activities: 0
+		total_activities: 0,
+		total_participations: 0,
+		active_sessions: 0,
+		ongoing_activities: 0,
+		user_registrations_today: 0,
+		recent_activities: []
 	};
 
 	try {

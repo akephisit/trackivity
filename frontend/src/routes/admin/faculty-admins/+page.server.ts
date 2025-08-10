@@ -70,6 +70,12 @@ export const load: PageServerLoad = async (event) => {
 			if (result.status === 'success' && result.data) {
 				const adminData = result.data.users || result.data.admins || result.data || [];
 				
+				// Ensure adminData is an array
+				if (!Array.isArray(adminData)) {
+					console.warn('adminData is not an array:', typeof adminData, adminData);
+					throw new Error('Invalid data format received from server');
+				}
+				
 				// Helper function to convert API AdminLevel to Frontend AdminLevel
 				const mapAdminLevel = (apiLevel: string): AdminLevel => {
 					switch (apiLevel) {
@@ -132,7 +138,7 @@ export const load: PageServerLoad = async (event) => {
 							last_login_formatted: lastLogin ? formatDateTime(lastLogin) : 'ยังไม่เคยเข้าใช้',
 							created_at_formatted: formatDateTime(createdAt),
 							permission_count: admin.admin_role.permissions.length,
-							days_since_last_login: lastLogin ? Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24)) : null,
+							days_since_last_login: lastLogin ? Math.floor((now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24)) : undefined,
 							full_name: `${admin.first_name} ${admin.last_name}`
 						};
 					});
@@ -149,7 +155,7 @@ export const load: PageServerLoad = async (event) => {
 		active_admins: facultyAdmins.filter(admin => admin.is_active).length,
 		inactive_admins: facultyAdmins.filter(admin => !admin.is_active).length,
 		recent_logins: facultyAdmins.filter(admin => {
-			return admin.days_since_last_login !== null && admin.days_since_last_login <= 7;
+			return admin.days_since_last_login !== undefined && admin.days_since_last_login <= 7;
 		}).length,
 		total_faculties: isSuperAdmin ? faculties.length : 1,
 		faculty_breakdown: faculties.map(faculty => {
