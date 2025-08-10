@@ -26,11 +26,11 @@ export const GET: RequestHandler = async (event) => {
         }
         
         // Make request to backend API
-        const backendUrl = `${PUBLIC_API_URL}/api/admin/faculties/${facultyId}/departments`;
+        const backendUrl = `${PUBLIC_API_URL}/api/faculties/${facultyId}/departments`;
         const response = await event.fetch(backendUrl, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${event.cookies.get('auth_token')}`,
+                'Cookie': `session_id=${event.cookies.get('session_id')}`,
                 'Content-Type': 'application/json'
             }
         });
