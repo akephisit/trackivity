@@ -278,13 +278,50 @@
 		}
 	}
 
-	// Function to get login session status (for status badge display)
-	function getAdminActiveStatus(admin: AdminRole): boolean {
+	// Function to get combined admin status for display
+	function getAdminCombinedStatus(admin: AdminRole): {
+		isEnabled: boolean;
+		isActive: boolean;
+		statusText: string;
+		badgeClass: string;
+		dotClass: string;
+	} {
+		// Check if admin account is enabled (can login)
+		const isEnabled = 'is_enabled' in admin && admin.is_enabled !== undefined 
+			? Boolean(admin.is_enabled)
+			: Boolean(admin.permissions && admin.permissions.length > 0);
+
 		// Check if admin has active login session
-		if ('is_active' in admin && admin.is_active !== undefined && admin.is_active !== null) {
-			return Boolean(admin.is_active);
+		const isActive = 'is_active' in admin && admin.is_active !== undefined && admin.is_active !== null
+			? Boolean(admin.is_active)
+			: false;
+
+		// Determine combined status
+		let statusText: string;
+		let badgeClass: string;
+		let dotClass: string;
+
+		if (!isEnabled) {
+			statusText = 'ปิดใช้งาน';
+			badgeClass = 'bg-red-100 text-red-800 hover:bg-red-100';
+			dotClass = 'bg-red-500';
+		} else if (isActive) {
+			statusText = 'ใช้งานอยู่';
+			badgeClass = 'bg-green-100 text-green-800 hover:bg-green-100';
+			dotClass = 'bg-green-500';
+		} else {
+			statusText = 'ไม่ออนไลน์';
+			badgeClass = 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100';
+			dotClass = 'bg-yellow-500';
 		}
-		return false;
+
+		return {
+			isEnabled,
+			isActive,
+			statusText,
+			badgeClass,
+			dotClass
+		};
 	}
 
 	// Function to get account enabled status (for toggle button)
@@ -519,12 +556,13 @@
 													</Badge>
 												</Table.Cell>
 												<Table.Cell class="py-4">
+													{@const status = getAdminCombinedStatus(admin)}
 													<Badge 
-														variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}
-														class={getAdminActiveStatus(admin) ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+														variant="default"
+														class={status.badgeClass}
 													>
-														<span class="w-2 h-2 rounded-full mr-2" class:bg-green-500={getAdminActiveStatus(admin)} class:bg-gray-400={!getAdminActiveStatus(admin)} aria-hidden="true"></span>
-														{getAdminActiveStatus(admin) ? 'ใช้งานอยู่' : 'ไม่ใช้งาน'}
+														<span class="w-2 h-2 rounded-full mr-2 {status.dotClass}" aria-hidden="true"></span>
+														{status.statusText}
 													</Badge>
 												</Table.Cell>
 												<Table.Cell class="py-4">
@@ -676,12 +714,13 @@
 																</Badge>
 															</Table.Cell>
 															<Table.Cell class="py-4">
+																{@const status = getAdminCombinedStatus(admin)}
 																<Badge 
-																	variant={getAdminActiveStatus(admin) ? 'default' : 'secondary'}
-																	class={getAdminActiveStatus(admin) ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+																	variant="default"
+																	class={status.badgeClass}
 																>
-																	<span class="w-2 h-2 rounded-full mr-2" class:bg-green-500={getAdminActiveStatus(admin)} class:bg-gray-400={!getAdminActiveStatus(admin)} aria-hidden="true"></span>
-																	{getAdminActiveStatus(admin) ? 'ใช้งานอยู่' : 'ไม่ใช้งาน'}
+																	<span class="w-2 h-2 rounded-full mr-2 {status.dotClass}" aria-hidden="true"></span>
+																	{status.statusText}
 																</Badge>
 															</Table.Cell>
 															<Table.Cell class="py-4">
