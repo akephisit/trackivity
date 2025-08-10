@@ -80,6 +80,7 @@
 
 	// Dialog states
 	let createDialogOpen = $state(false);
+	let createGeneralAdminDialogOpen = $state(false);
 	let editDialogOpen = $state(false);
 	let deleteDialogOpen = $state(false);
 	let viewDialogOpen = $state(false);
@@ -114,6 +115,16 @@
 		ADMIN_PERMISSIONS.VIEW_DASHBOARD,
 		ADMIN_PERMISSIONS.MANAGE_FACULTY_USERS
 	]);
+
+	// Form data for general admin creation (used by FacultyAdmin)
+	let generalAdminFormData = $state({
+		name: '',
+		email: '',
+		password: '',
+		admin_level: AdminLevel.RegularAdmin,
+		faculty_id: data.userFacultyId || '',
+		permissions: [ADMIN_PERMISSIONS.VIEW_DASHBOARD, ADMIN_PERMISSIONS.MANAGE_ACTIVITIES]
+	});
 
 	// Available permissions list
 	const availablePermissions = [
@@ -173,6 +184,18 @@
 			ADMIN_PERMISSIONS.MANAGE_FACULTY_USERS
 		];
 		createDialogOpen = true;
+	}
+
+	function openCreateGeneralAdminDialog() {
+		generalAdminFormData = {
+			name: '',
+			email: '',
+			password: '',
+			admin_level: AdminLevel.RegularAdmin,
+			faculty_id: data.userFacultyId || '',
+			permissions: [ADMIN_PERMISSIONS.VIEW_DASHBOARD, ADMIN_PERMISSIONS.MANAGE_ACTIVITIES]
+		};
+		createGeneralAdminDialogOpen = true;
 	}
 
 	function openEditDialog(admin: ExtendedAdminRole) {
@@ -328,6 +351,48 @@
 		return isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
 	}
 
+	async function handleCreateGeneralAdmin() {
+		try {
+			const formData = new FormData();
+			formData.append('name', generalAdminFormData.name);
+			formData.append('email', generalAdminFormData.email);
+			formData.append('password', generalAdminFormData.password);
+			formData.append('admin_level', generalAdminFormData.admin_level);
+			formData.append('faculty_id', generalAdminFormData.faculty_id);
+			formData.append('permissions', JSON.stringify(generalAdminFormData.permissions));
+
+			const response = await fetch('?/create', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (result.type === 'success') {
+				toast.success('สร้างแอดมินทั่วไปสำเร็จ');
+				createGeneralAdminDialogOpen = false;
+				
+				setTimeout(async () => {
+					try {
+						refreshing = true;
+						await invalidate('app:page-data');
+						await invalidateAll();
+						refreshing = false;
+					} catch (error) {
+						console.error('Failed to refresh data:', error);
+						refreshing = false;
+						window.location.reload();
+					}
+				}, 500);
+			} else {
+				toast.error('เกิดข้อผิดพลาดในการสร้างแอดมินทั่วไป');
+			}
+		} catch (error) {
+			console.error('Create general admin error:', error);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		}
+	}
+
 	// Get page title based on user role
 	let pageTitle = $derived(
 		!data.isSuperAdmin && data.currentFaculty 
@@ -355,12 +420,19 @@
 				{/if}
 			</p>
 		</div>
-		{#if data.isSuperAdmin}
-			<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
-				<IconPlus class="h-5 w-5 mr-2" />
-				เพิ่มแอดมินคณะ
-			</Button>
-		{/if}
+		<div class="flex gap-2">
+			{#if data.isSuperAdmin}
+				<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
+					<IconPlus class="h-5 w-5 mr-2" />
+					เพิ่มแอดมินคณะ
+				</Button>
+			{:else}
+				<Button onclick={openCreateGeneralAdminDialog} class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-base font-medium">
+					<IconPlus class="h-5 w-5 mr-2" />
+					เพิ่มแอดมินทั่วไป
+				</Button>
+			{/if}
+		</div>
 	</div>
 
 	<!-- Stats Cards -->
@@ -545,6 +617,11 @@
 						<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3">
 							<IconPlus class="h-5 w-5 mr-2" />
 							เพิ่มแอดมินคณะแรก
+						</Button>
+					{:else}
+						<Button onclick={openCreateGeneralAdminDialog} class="bg-green-600 hover:bg-green-700 text-white px-6 py-3">
+							<IconPlus class="h-5 w-5 mr-2" />
+							เพิ่มแอดมินทั่วไปแรก
 						</Button>
 					{/if}
 				{/if}
@@ -870,6 +947,86 @@
 				</Button>
 			</Dialog.Footer>
 		</form>
+	</Dialog.Content>
+</Dialog.Root>
+{/if}
+
+<!-- Create General Admin Dialog (for FacultyAdmin users) -->
+{#if !data.isSuperAdmin}
+<Dialog.Root bind:open={createGeneralAdminDialogOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>เพิ่มแอดมินทั่วไปใหม่</Dialog.Title>
+			<Dialog.Description>
+				สร้างบัญชีแอดมินทั่วไปสำหรับการจัดการในคณะ {data.currentFaculty?.name || ''}
+			</Dialog.Description>
+		</Dialog.Header>
+
+		<div class="space-y-4">
+			<div class="space-y-2">
+				<Label for="general-admin-name">ชื่อ-นามสกุล</Label>
+				<Input
+					id="general-admin-name"
+					bind:value={generalAdminFormData.name}
+					placeholder="เช่น นาย สมชาย ใจดี"
+				/>
+			</div>
+
+			<div class="space-y-2">
+				<Label for="general-admin-email">อีเมล</Label>
+				<Input
+					id="general-admin-email"
+					type="email"
+					bind:value={generalAdminFormData.email}
+					placeholder="เช่น admin@university.ac.th"
+				/>
+			</div>
+
+			<div class="space-y-2">
+				<Label for="general-admin-password">รหัสผ่าน</Label>
+				<Input
+					id="general-admin-password"
+					type="password"
+					bind:value={generalAdminFormData.password}
+					placeholder="กรุณาใส่รหัสผ่าน"
+				/>
+				<p class="text-xs text-gray-500">
+					รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร
+				</p>
+			</div>
+
+			<div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+				<div class="flex items-center gap-2">
+					<IconUsers class="h-4 w-4 text-blue-600" />
+					<p class="text-sm text-blue-700 dark:text-blue-300 font-medium">
+						แอดมินทั่วไปจะได้รับสิทธิ์พื้นฐาน
+					</p>
+				</div>
+				<ul class="mt-2 text-xs text-blue-600 dark:text-blue-400 ml-6 space-y-1">
+					<li>• ดูแดชบอร์ด</li>
+					<li>• จัดการกิจกรรม</li>
+					<li>• สังกัดคณะ: {data.currentFaculty?.name || 'ไม่ระบุ'}</li>
+				</ul>
+			</div>
+
+			<Dialog.Footer>
+				<Button 
+					type="button" 
+					variant="outline" 
+					onclick={() => createGeneralAdminDialogOpen = false}
+				>
+					ยกเลิก
+				</Button>
+				<Button 
+					type="button" 
+					onclick={handleCreateGeneralAdmin}
+					disabled={!generalAdminFormData.name || !generalAdminFormData.email || !generalAdminFormData.password}
+				>
+					<IconPlus class="mr-2 h-4 w-4" />
+					สร้างแอดมินทั่วไป
+				</Button>
+			</Dialog.Footer>
+		</div>
 	</Dialog.Content>
 </Dialog.Root>
 {/if}

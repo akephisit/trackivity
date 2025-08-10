@@ -134,8 +134,8 @@ export const load: PageServerLoad = async (event) => {
 							},
 							faculty: admin.admin_role.faculty_id ? 
 								faculties.find(f => f.id === admin.admin_role.faculty_id) : undefined,
-							// Enhanced properties
-							is_active: admin.status === 'active' && admin.admin_role.permissions.length > 0,
+							// Enhanced properties - fix status calculation to use user status
+							is_active: admin.status === 'active',
 							last_login_formatted: lastLogin ? formatDateTime(lastLogin) : 'ยังไม่เคยเข้าใช้',
 							created_at_formatted: formatDateTime(createdAt),
 							permission_count: admin.admin_role.permissions.length,
@@ -214,7 +214,7 @@ export const actions: Actions = {
 		try {
 			const sessionId = cookies.get('session_id');
 			
-			// Only SuperAdmin can create new faculty admins
+			// Authorization check - SuperAdmin can create FacultyAdmin, FacultyAdmin can create RegularAdmin
 			const authResponse = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
 				headers: {
 					'Cookie': `session_id=${sessionId}`
@@ -227,12 +227,30 @@ export const actions: Actions = {
 			}
 
 			const authResult = await authResponse.json();
-			if (authResult.user?.admin_role?.admin_level !== AdminLevel.SuperAdmin) {
-				form.errors._errors = ['เฉพาะซุปเปอร์แอดมินเท่านั้นที่สามารถสร้างแอดมินคณะได้'];
-				return fail(403, { form });
+			const userLevel = authResult.user?.admin_role?.admin_level;
+			const userFacultyId = authResult.user?.admin_role?.faculty_id;
+
+			// Check authorization based on admin levels
+			if (form.data.admin_level === AdminLevel.FacultyAdmin) {
+				// Only SuperAdmin can create FacultyAdmin
+				if (userLevel !== AdminLevel.SuperAdmin) {
+					form.errors._errors = ['เฉพาะซุปเปอร์แอดมินเท่านั้นที่สามารถสร้างแอดมินคณะได้'];
+					return fail(403, { form });
+				}
+			} else if (form.data.admin_level === AdminLevel.RegularAdmin) {
+				// Both SuperAdmin and FacultyAdmin can create RegularAdmin
+				if (userLevel !== AdminLevel.SuperAdmin && userLevel !== AdminLevel.FacultyAdmin) {
+					form.errors._errors = ['ไม่มีสิทธิ์ในการสร้างแอดมินประเภทนี้'];
+					return fail(403, { form });
+				}
+				// FacultyAdmin can only create RegularAdmin in their own faculty
+				if (userLevel === AdminLevel.FacultyAdmin && form.data.faculty_id !== userFacultyId) {
+					form.errors._errors = ['แอดมินคณะสามารถสร้างแอดมินได้เฉพาะในคณะของตนเองเท่านั้น'];
+					return fail(403, { form });
+				}
 			}
 
-			// Define default permissions for faculty admin
+			// Define default permissions based on admin level
 			const getDefaultPermissions = (adminLevel: string, facultyId?: string) => {
 				if (adminLevel === AdminLevel.FacultyAdmin) {
 					return [
@@ -241,21 +259,29 @@ export const actions: Actions = {
 						'ManageUsers',
 						'ManageFacultyUsers'
 					];
+				} else if (adminLevel === AdminLevel.RegularAdmin) {
+					return [
+						'ViewDashboard',
+						'ManageActivities'
+					];
 				}
 				return ['ViewDashboard'];
 			};
 
 			// Transform form data to match backend expectations
+			const adminPrefix = form.data.admin_level === AdminLevel.FacultyAdmin ? 'FA' : 'RA'; // RA for RegularAdmin
+			const defaultPassword = form.data.admin_level === AdminLevel.FacultyAdmin ? 'FacAdmin123!' : 'RegAdmin123!';
+			
 			const transformedData = {
-				student_id: `FA${Date.now()}`, // Generate faculty admin ID with prefix
+				student_id: `${adminPrefix}${Date.now()}`, // Generate admin ID with appropriate prefix
 				email: form.data.email,
-				password: form.data.password || 'FacAdmin123!',
+				password: form.data.password || defaultPassword,
 				first_name: form.data.name.split(' ')[0] || form.data.name,
 				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
 				department_id: null,
-				admin_level: AdminLevel.FacultyAdmin, // Force to FacultyAdmin
+				admin_level: form.data.admin_level, // Use the provided admin level
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,
-				permissions: getDefaultPermissions(AdminLevel.FacultyAdmin, form.data.faculty_id)
+				permissions: getDefaultPermissions(form.data.admin_level, form.data.faculty_id)
 			};
 
 			console.log('Creating faculty admin with data:', {
