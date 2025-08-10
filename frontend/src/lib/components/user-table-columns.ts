@@ -1,6 +1,21 @@
 import type { ColumnDef } from '@tanstack/table-core';
 import { renderComponent, renderSnippet } from '$lib/components/ui/data-table';
+import { Checkbox as DataTableCheckbox } from '$lib/components/ui/checkbox';
 import type { User } from '$lib/types/admin';
+import {
+	UserProfileCell,
+	EmailCell,
+	IdentifierCell,
+	RoleBadge,
+	StatusBadge,
+	FacultyCell,
+	DepartmentCell,
+	PhoneCell,
+	LastLoginCell,
+	CreatedAtCell,
+	EmailVerifiedCell,
+	UserActionsMenu
+} from '$lib/components/user-management/UserTableCells';
 
 /**
  * Comprehensive Data Table Column Configuration for User Management
@@ -47,7 +62,7 @@ export const userTableColumns: ColumnDef<User>[] = [
                 user.email.toLowerCase().includes(searchValue) ||
                 user.student_id?.toLowerCase().includes(searchValue) ||
                 user.employee_id?.toLowerCase().includes(searchValue) ||
-                ''
+                false
             );
         },
     },

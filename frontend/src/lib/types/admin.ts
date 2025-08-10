@@ -139,6 +139,7 @@ export interface UserListResponse {
 	users: User[];
 	pagination: UserPagination;
 	filters: UserFilter;
+	total_count: number;
 }
 
 export interface UserStats {

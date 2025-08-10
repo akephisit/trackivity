@@ -38,8 +38,8 @@
 
 	// Reactive filtered departments based on selected faculty
 	$: filteredDepartments = selectedFaculty === 'all' 
-		? departments 
-		: departments.filter(dept => dept.faculty_id === selectedFaculty);
+		? (departments || []) 
+		: (departments || []).filter(dept => dept.faculty_id === selectedFaculty);
 
 	// Event dispatcher
 	const dispatch = createEventDispatcher<{
@@ -193,9 +193,9 @@
 		<!-- Quick Filter Buttons -->
 		<div class="flex gap-2">
 			<!-- Status Filter -->
-			<Select.Root bind:selected={selectedStatus}>
+			<Select.Root bind:value={selectedStatus}>
 				<Select.Trigger class="w-32">
-					<Select.Value placeholder="สถานะ" />
+					{statusOptions.find(o => o.value === selectedStatus)?.label || 'สถานะ'}
 				</Select.Trigger>
 				<Select.Content>
 					{#each statusOptions as option}
@@ -205,9 +205,9 @@
 			</Select.Root>
 
 			<!-- Role Filter -->
-			<Select.Root bind:selected={selectedRole}>
+			<Select.Root bind:value={selectedRole}>
 				<Select.Trigger class="w-32">
-					<Select.Value placeholder="บทบาท" />
+					{roleOptions.find(o => o.value === selectedRole)?.label || 'บทบาท'}
 				</Select.Trigger>
 				<Select.Content>
 					{#each roleOptions as option}
@@ -218,9 +218,9 @@
 
 			<!-- Faculty Filter (if enabled) -->
 			{#if showFacultyFilter && faculties.length > 0}
-				<Select.Root bind:selected={selectedFaculty}>
+				<Select.Root bind:value={selectedFaculty}>
 					<Select.Trigger class="w-40">
-						<Select.Value placeholder="คณะ" />
+						{selectedFaculty === 'all' ? 'ทุกคณะ' : faculties.find(f => f.id === selectedFaculty)?.name || 'คณะ'}
 					</Select.Trigger>
 					<Select.Content>
 						<Select.Item value="all">ทุกคณะ</Select.Item>
@@ -268,9 +268,9 @@
 				{#if filteredDepartments.length > 0}
 					<div>
 						<label for="department-select" class="text-sm font-medium mb-2 block">สาขา/ภาควิชา</label>
-						<Select.Root bind:selected={selectedDepartment}>
+						<Select.Root bind:value={selectedDepartment}>
 							<Select.Trigger id="department-select">
-								<Select.Value placeholder="เลือกสาขา" />
+								{selectedDepartment === 'all' ? 'ทุกสาขา' : filteredDepartments.find(d => d.id === selectedDepartment)?.name || 'เลือกสาขา'}
 							</Select.Trigger>
 							<Select.Content>
 								<Select.Item value="all">ทุกสาขา</Select.Item>

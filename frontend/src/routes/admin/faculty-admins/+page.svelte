@@ -494,9 +494,9 @@
 			{#if data.isSuperAdmin && data.faculties.length > 1}
 				<div>
 					<Label class="text-sm font-medium">กรองตามคณะ</Label>
-					<Select.Root bind:selected={facultyFilter}>
+					<Select.Root bind:value={facultyFilter}>
 						<Select.Trigger class="mt-1">
-							<Select.Value placeholder="เลือกคณะ" />
+							{facultyFilter === 'all' ? 'ทุกคณะ' : data.faculties.find(f => f.id === facultyFilter)?.name || 'เลือกคณะ'}
 						</Select.Trigger>
 						<Select.Content>
 							<Select.Item value="all">ทุกคณะ</Select.Item>
@@ -810,9 +810,9 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Label for={props.id}>คณะ</Label>
-						<Select.Root bind:selected={$createFormData.faculty_id}>
+						<Select.Root bind:value={$createFormData.faculty_id}>
 							<Select.Trigger>
-								<Select.Value placeholder="เลือกคณะที่จะดูแล" />
+								{$createFormData.faculty_id ? data.faculties.find(f => f.id === $createFormData.faculty_id)?.name : 'เลือกคณะที่จะดูแล'}
 							</Select.Trigger>
 							<Select.Content>
 								{#each data.faculties as faculty}
@@ -1067,9 +1067,9 @@
 
 				<div class="space-y-2">
 					<Label>คณะ</Label>
-					<Select.Root bind:selected={editFormData.faculty_id}>
+					<Select.Root bind:value={editFormData.faculty_id}>
 						<Select.Trigger>
-							<Select.Value placeholder="เลือกคณะ" />
+							{editFormData.faculty_id ? data.faculties.find(f => f.id === editFormData.faculty_id)?.name : 'เลือกคณะ'}
 						</Select.Trigger>
 						<Select.Content>
 							{#each data.faculties as faculty}

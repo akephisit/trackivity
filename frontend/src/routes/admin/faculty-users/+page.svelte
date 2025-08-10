@@ -45,7 +45,7 @@
 	let { data } = $props();
 
 	// Extract data from server load
-	const { users, stats, faculties, departments, filters, adminLevel, pagination, meta } = $derived(data);
+	const { users, stats, faculties, departments = [], filters, adminLevel, pagination, meta } = $derived(data);
 
 	// Component state
 	let loading = false;
@@ -179,7 +179,7 @@
 			<CardContent>
 				<div class="text-2xl font-bold">{totalUsers.toLocaleString()}</div>
 				<p class="text-xs text-muted-foreground">
-					{users.pagination.total} รายการในตาราง
+					{users?.pagination?.total || users?.total_count || 0} รายการในตาราง
 				</p>
 			</CardContent>
 		</Card>
@@ -289,7 +289,7 @@
 				<div>
 					<CardTitle>รายการผู้ใช้</CardTitle>
 					<CardDescription>
-						แสดงผลจำนวน {users.users.length} จาก {users.pagination.total} รายการ
+						แสดงผลจำนวน {users?.users?.length || 0} จาก {users?.pagination?.total || users?.total_count || 0} รายการ
 					</CardDescription>
 				</div>
 				
@@ -364,9 +364,9 @@
 			<CardContent class="p-4">
 				<div class="flex items-center justify-between">
 					<div class="text-sm text-muted-foreground">
-						แสดงผล {(users.pagination.page - 1) * users.pagination.limit + 1} - 
-						{Math.min(users.pagination.page * users.pagination.limit, users.pagination.total)} 
-						จาก {users.pagination.total} รายการ
+						แสดงผล {((users?.pagination?.page || 1) - 1) * (users?.pagination?.limit || 20) + 1} - 
+						{Math.min((users?.pagination?.page || 1) * (users?.pagination?.limit || 20), users?.pagination?.total || users?.total_count || 0)} 
+						จาก {users?.pagination?.total || users?.total_count || 0} รายการ
 					</div>
 					
 					<div class="flex items-center gap-2">
