@@ -10,37 +10,42 @@ const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 // Fallback faculties data สำหรับกรณีที่ backend ไม่สามารถเชื่อมต่อได้
 const FALLBACK_FACULTIES: Faculty[] = [
 	{
-		id: 1,
+		id: '1',
 		name: 'คณะวิทยาศาสตร์',
 		code: 'SCI',
+		status: true,
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString()
 	},
 	{
-		id: 2,
+		id: '2',
 		name: 'คณะวิศวกรรมศาสตร์',
 		code: 'ENG',
+		status: true,
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString()
 	},
 	{
-		id: 3,
+		id: '3',
 		name: 'คณะครุศาสตร์',
 		code: 'EDU',
+		status: true,
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString()
 	},
 	{
-		id: 4,
+		id: '4',
 		name: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
 		code: 'HUM',
+		status: true,
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString()
 	},
 	{
-		id: 5,
+		id: '5',
 		name: 'คณะบริหารธุรกิจ',
 		code: 'BUS',
+		status: true,
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString()
 	}
@@ -198,6 +203,7 @@ export const actions: Actions = {
 					password: form.data.password,
 					first_name: form.data.first_name,
 					last_name: form.data.last_name,
+					faculty_id: form.data.faculty_id,
 					department_id: form.data.department_id
 				})
 			});

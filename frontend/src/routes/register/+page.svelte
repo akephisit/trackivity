@@ -11,6 +11,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import { IconLoader, IconEye, IconEyeOff, IconUser, IconMail, IconLock, IconAlertTriangle, IconWifi, IconWifiOff } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
+	import type { Department } from '$lib/types/admin';
 
 	let { data } = $props();
 
@@ -30,8 +31,11 @@
 	let showPassword = $state(false);
 	let showConfirmPassword = $state(false);
 
-	// Student registration state variables
+	// Faculty and Department selection state variables
+	let selectedFaculty = $state('');
 	let selectedDepartment = $state('');
+	let departments = $state<Department[]>([]);
+	let loadingDepartments = $state(false);
 
 	function togglePasswordVisibility() {
 		showPassword = !showPassword;
@@ -41,18 +45,68 @@
 		showConfirmPassword = !showConfirmPassword;
 	}
 
-	// Department options for student registration
-	let departmentOptions = $derived(Array.isArray(data.faculties) ? data.faculties.map(faculty => ({
+	// Faculty options for registration
+	let facultyOptions = $derived(Array.isArray(data.faculties) ? data.faculties.map(faculty => ({
 		value: faculty.id,
 		label: faculty.name
 	})) : []);
 
+	// Department options based on selected faculty
+	let departmentOptions = $derived(departments.map(dept => ({
+		value: dept.id,
+		label: dept.name
+	})));
+
+	// Handle faculty selection
+	$effect(() => {
+		if (selectedFaculty) {
+			$formData.faculty_id = selectedFaculty;
+			// Reset department when faculty changes
+			selectedDepartment = '';
+			$formData.department_id = undefined;
+			// Load departments for selected faculty
+			loadDepartments(selectedFaculty);
+		} else {
+			$formData.faculty_id = undefined;
+			selectedDepartment = '';
+			$formData.department_id = undefined;
+			departments = [];
+		}
+	});
+
 	// Handle department selection
 	$effect(() => {
 		if (selectedDepartment) {
-			$formData.department_id = parseInt(selectedDepartment);
+			$formData.department_id = selectedDepartment;
+		} else {
+			$formData.department_id = undefined;
 		}
 	});
+
+	// Load departments based on faculty selection
+	async function loadDepartments(facultyId: string) {
+		if (!facultyId) {
+			departments = [];
+			return;
+		}
+
+		loadingDepartments = true;
+		try {
+			const response = await fetch(`/api/faculties/${facultyId}/departments/public`);
+			if (response.ok) {
+				const result = await response.json();
+				departments = result.data || [];
+			} else {
+				console.warn('Failed to load departments:', response.status);
+				departments = [];
+			}
+		} catch (error) {
+			console.error('Error loading departments:', error);
+			departments = [];
+		} finally {
+			loadingDepartments = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -307,30 +361,66 @@
 						</Form.Field>
 					</div>
 
-					<!-- สาขาวิชา - เต็มแถว -->
-					<Form.Field {form} name="department_id">
-						<Form.Control>
-							{#snippet children({ props })}
-								<Label for={props.id} class="flex items-center gap-2">
-									<IconUser class="h-4 w-4" />
-									สาขาวิชา (ไม่บังคับ)
-								</Label>
-								<Select.Root type="single" bind:value={selectedDepartment} disabled={$submitting}>
-									<Select.Trigger class="w-full">
-										{departmentOptions.find(opt => opt.value.toString() === selectedDepartment)?.label ?? "เลือกสาขาวิชา"}
-									</Select.Trigger>
-									<Select.Content>
-										{#each departmentOptions as option}
-											<Select.Item value={option.value.toString()} label={option.label}>
-												{option.label}
-											</Select.Item>
-										{/each}
-									</Select.Content>
-								</Select.Root>
-							{/snippet}
-						</Form.Control>
-						<Form.FieldErrors />
-					</Form.Field>
+					<!-- คณะและสาขาวิชา - 2 คอลัมน์ -->
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+						<!-- คณะ -->
+						<Form.Field {form} name="faculty_id">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconUser class="h-4 w-4" />
+										คณะ (ไม่บังคับ)
+									</Label>
+									<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
+										<Select.Trigger class="w-full">
+											{facultyOptions.find(opt => opt.value.toString() === selectedFaculty)?.label ?? "เลือกคณะ"}
+										</Select.Trigger>
+										<Select.Content>
+											{#each facultyOptions as option}
+												<Select.Item value={option.value.toString()} label={option.label}>
+													{option.label}
+												</Select.Item>
+											{/each}
+										</Select.Content>
+									</Select.Root>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<!-- สาขาวิชา -->
+						<Form.Field {form} name="department_id">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconUser class="h-4 w-4" />
+										สาขาวิชา (ไม่บังคับ)
+									</Label>
+									<Select.Root type="single" bind:value={selectedDepartment} disabled={$submitting || loadingDepartments || !selectedFaculty}>
+										<Select.Trigger class="w-full">
+											{#if loadingDepartments}
+												กำลังโหลด...
+											{:else if !selectedFaculty}
+												เลือกคณะก่อน
+											{:else if departmentOptions.length === 0}
+												ไม่มีสาขาวิชา
+											{:else}
+												{departmentOptions.find(opt => opt.value.toString() === selectedDepartment)?.label ?? "เลือกสาขาวิชา"}
+											{/if}
+										</Select.Trigger>
+										<Select.Content>
+											{#each departmentOptions as option}
+												<Select.Item value={option.value.toString()} label={option.label}>
+													{option.label}
+												</Select.Item>
+											{/each}
+										</Select.Content>
+									</Select.Root>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
 
 					<div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
 						<p class="font-medium mb-1">หมายเหตุ:</p>
@@ -343,7 +433,8 @@
 							</div>
 							<div>
 								<ul class="space-y-1 list-disc list-inside">
-									<li>สาขาวิชาเป็นข้อมูลไม่บังคับ</li>
+									<li>คณะและสาขาวิชาเป็นข้อมูลไม่บังคับ</li>
+									<li>เลือกคณะก่อนเพื่อดูสาขาวิชา</li>
 									<li>สามารถแก้ไขข้อมูลได้ภายหลัง</li>
 								</ul>
 							</div>

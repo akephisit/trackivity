@@ -61,9 +61,13 @@ export const registerSchema = z.object({
 		.min(1, 'กรุณาใส่นามสกุล')
 		.min(2, 'นามสกุลต้องมีอย่างน้อย 2 ตัวอักษร')
 		.max(50, 'นามสกุลต้องไม่เกิน 50 ตัวอักษร'),
+	faculty_id: z
+		.string()
+		.min(1, 'กรุณาเลือกคณะ')
+		.optional(),
 	department_id: z
-		.number()
-		.positive('กรุณาเลือกสาขาวิชา')
+		.string()
+		.min(1, 'กรุณาเลือกสาขาวิชา')
 		.optional()
 }).refine(data => data.password === data.confirmPassword, {
 	message: 'รหัสผ่านไม่ตรงกัน',
