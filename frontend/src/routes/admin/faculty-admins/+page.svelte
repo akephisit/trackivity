@@ -329,12 +329,11 @@
 	}
 
 	// Get page title based on user role
-	let pageTitle = $derived(() => {
-		if (!data.isSuperAdmin && data.currentFaculty) {
-			return `จัดการแอดมินคณะ - ${data.currentFaculty.name}`;
-		}
-		return 'จัดการแอดมินคณะ';
-	});
+	let pageTitle = $derived(
+		!data.isSuperAdmin && data.currentFaculty 
+			? `จัดการแอดมินคณะ - ${data.currentFaculty.name}`
+			: 'จัดการแอดมินคณะ'
+	)
 </script>
 
 <svelte:head>
