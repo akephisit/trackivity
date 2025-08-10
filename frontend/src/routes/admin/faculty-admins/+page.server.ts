@@ -134,8 +134,8 @@ export const load: PageServerLoad = async (event) => {
 							},
 							faculty: admin.admin_role.faculty_id ? 
 								faculties.find(f => f.id === admin.admin_role.faculty_id) : undefined,
-							// Enhanced properties - fix status calculation to use user status
-							is_active: admin.status === 'active',
+							// Enhanced properties - use is_active from backend AdminUserInfo
+							is_active: admin.is_active || false, // Backend calculates this based on active sessions
 							last_login_formatted: lastLogin ? formatDateTime(lastLogin) : 'ยังไม่เคยเข้าใช้',
 							created_at_formatted: formatDateTime(createdAt),
 							permission_count: admin.admin_role.permissions.length,
