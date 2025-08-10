@@ -61,6 +61,7 @@ export interface AdminRole {
 	admin_level: AdminLevel;
 	faculty_id?: string; // UUID string
 	permissions: string[];
+	is_enabled: boolean; // Whether admin account is enabled (can login)
 	created_at: string;
 	updated_at: string;
 	user?: User;
@@ -283,7 +284,8 @@ export interface FacultyAdminExportOptions {
 
 // Enhanced AdminRole interface with additional properties
 export interface ExtendedAdminRole extends AdminRole {
-	is_active?: boolean;
+	is_active?: boolean;  // Whether admin has active login session (from sessions)
+	is_enabled: boolean;  // Whether admin account is enabled (from admin_roles)
 	last_login_formatted?: string;
 	created_at_formatted?: string;
 	permission_count?: number;

@@ -343,6 +343,7 @@ pub async fn get_session_stats(
                         admin_level: crate::models::admin_role::AdminLevel::RegularAdmin,
                         faculty_id: None,
                         permissions: vec![],
+                        is_enabled: true,
                         created_at: Some(chrono::Utc::now()),
                         updated_at: Some(chrono::Utc::now()),
                     }),

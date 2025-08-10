@@ -50,7 +50,8 @@ pub struct AdminUserInfo {
     pub admin_role: Option<AdminRole>,
     pub created_at: Option<DateTime<Utc>>,
     pub last_login: Option<DateTime<Utc>>,
-    pub is_active: bool,
+    pub is_active: bool,    // Whether admin has active login session
+    pub is_enabled: bool,   // Whether admin account is enabled (can login)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -455,6 +456,7 @@ pub async fn get_admin_users(
             ar.admin_level,
             ar.faculty_id,
             ar.permissions,
+            ar.is_enabled,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
             (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) as last_login,
@@ -519,6 +521,7 @@ pub async fn get_admin_users(
                         permissions: row
                             .get::<Option<Vec<String>>, _>("permissions")
                             .unwrap_or_else(|| vec![]),
+                        is_enabled: row.get::<Option<bool>, _>("is_enabled").unwrap_or(true),
                         created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
                         updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
                     }),
@@ -536,6 +539,7 @@ pub async fn get_admin_users(
                     created_at: row.get::<Option<DateTime<Utc>>, _>("created_at"),
                     last_login: row.get::<Option<DateTime<Utc>>, _>("last_login"),
                     is_active: row.get::<Option<bool>, _>("is_active").unwrap_or(false),
+                    is_enabled: row.get::<Option<bool>, _>("is_enabled").unwrap_or(true),
                 };
 
                 admin_users.push(admin_user);
@@ -947,18 +951,19 @@ pub async fn create_admin(
         }
     };
 
-    // Create admin role
+    // Create admin role (with is_enabled = true by default)
     let admin_role_result = sqlx::query_as::<_, AdminRole>(
         r#"
-        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions, is_enabled)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, user_id, admin_level, faculty_id, permissions, is_enabled, created_at, updated_at
         "#
     )
     .bind(user.id)
     .bind(&request.admin_level)
     .bind(request.faculty_id)
     .bind(&request.permissions)
+    .bind(true) // is_enabled = true by default
     .fetch_one(&mut *tx)
     .await;
 
@@ -1013,17 +1018,17 @@ pub async fn create_admin(
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ToggleAdminStatusRequest {
-    pub is_active: bool,
+    pub is_enabled: bool,  // Changed from is_active to is_enabled
 }
 
-/// Toggle admin status by managing permissions
+/// Toggle admin enabled status (not login activity status)
 pub async fn toggle_admin_status(
     State(session_state): State<SessionState>,
     _admin: SuperAdminUser,
     Path(admin_role_id): Path<Uuid>,
     Json(request): Json<ToggleAdminStatusRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    // Get the admin role first
+    // Get the admin role first to verify it exists
     let admin_role_result = sqlx::query_as::<_, AdminRole>(
         "SELECT * FROM admin_roles WHERE id = $1"
     )
@@ -1031,7 +1036,7 @@ pub async fn toggle_admin_status(
     .fetch_optional(&session_state.db_pool)
     .await;
 
-    let admin_role = match admin_role_result {
+    let _admin_role = match admin_role_result {
         Ok(Some(role)) => role,
         Ok(None) => {
             let error_response = json!({
@@ -1049,66 +1054,38 @@ pub async fn toggle_admin_status(
         }
     };
 
-    // Define default permissions based on admin level
-    let default_permissions = match admin_role.admin_level {
-        AdminLevel::SuperAdmin => vec![
-            "ManageUsers".to_string(),
-            "ManageAdmins".to_string(),
-            "ManageActivities".to_string(),
-            "ViewDashboard".to_string(),
-            "ManageFaculties".to_string(),
-            "ManageSessions".to_string(),
-        ],
-        AdminLevel::FacultyAdmin => vec![
-            "ViewDashboard".to_string(),
-            "ManageActivities".to_string(),
-            "ManageUsers".to_string(),
-        ],
-        AdminLevel::RegularAdmin => vec![
-            "ViewDashboard".to_string(),
-            "ManageActivities".to_string(),
-        ],
-    };
-
-    // Set permissions based on active status
-    let new_permissions = if request.is_active {
-        default_permissions
-    } else {
-        vec![] // Empty permissions means inactive
-    };
-
-    // Update the admin role permissions
+    // Update the is_enabled field directly (don't modify permissions)
     let update_result = sqlx::query_as::<_, AdminRole>(
         r#"
         UPDATE admin_roles 
-        SET permissions = $1, updated_at = NOW() 
+        SET is_enabled = $1, updated_at = NOW() 
         WHERE id = $2
-        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        RETURNING id, user_id, admin_level, faculty_id, permissions, is_enabled, created_at, updated_at
         "#
     )
-    .bind(&new_permissions)
+    .bind(request.is_enabled)
     .bind(admin_role_id)
     .fetch_one(&session_state.db_pool)
     .await;
 
     match update_result {
         Ok(updated_role) => {
-            // If deactivating, also revoke any active sessions for this user
-            if !request.is_active {
-                // Note: For now we skip session revocation as we'd need to implement
-                // a method to find all sessions for a user and revoke them individually
-                // This is a future enhancement
+            // If disabling admin, optionally revoke active sessions for this user
+            if !request.is_enabled {
+                // TODO: Implement session revocation for disabled admins
+                // This could be done by calling redis_session.revoke_user_sessions(user_id)
+                // For now, we'll leave sessions active but the middleware should check is_enabled
             }
 
             let response = json!({
                 "status": "success",
                 "data": {
                     "admin_role": updated_role,
-                    "is_active": request.is_active,
-                    "action": if request.is_active { "activated" } else { "deactivated" }
+                    "is_enabled": request.is_enabled,
+                    "action": if request.is_enabled { "enabled" } else { "disabled" }
                 },
-                "message": format!("Admin status {} successfully", 
-                    if request.is_active { "activated" } else { "deactivated" })
+                "message": format!("Admin account {} successfully", 
+                    if request.is_enabled { "enabled" } else { "disabled" })
             });
             Ok(Json(response))
         }
@@ -1255,16 +1232,17 @@ pub async fn bootstrap_admin(
         "ViewAllReports".to_string(),
     ];
 
-    // Create super admin role (with null faculty_id)
+    // Create super admin role (with null faculty_id and is_enabled = true)
     let admin_role_result = sqlx::query_as::<_, AdminRole>(
         r#"
-        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions)
-        VALUES ($1, 'super_admin', NULL, $2)
-        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions, is_enabled)
+        VALUES ($1, 'super_admin', NULL, $2, $3)
+        RETURNING id, user_id, admin_level, faculty_id, permissions, is_enabled, created_at, updated_at
         "#
     )
     .bind(user.id)
     .bind(&super_admin_permissions)
+    .bind(true) // is_enabled = true for super admin
     .fetch_one(&mut *tx)
     .await;
 
@@ -1446,6 +1424,7 @@ pub async fn get_faculty_admins(
                         permissions: row
                             .get::<Option<Vec<String>>, _>("permissions")
                             .unwrap_or_else(|| vec![]),
+                        is_enabled: row.get::<Option<bool>, _>("is_enabled").unwrap_or(true),
                         created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
                         updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
                     }),
@@ -1463,6 +1442,7 @@ pub async fn get_faculty_admins(
                     created_at: row.get::<Option<DateTime<Utc>>, _>("created_at"),
                     last_login: row.get::<Option<DateTime<Utc>>, _>("last_login"),
                     is_active: row.get::<Option<bool>, _>("is_active").unwrap_or(false),
+                    is_enabled: row.get::<Option<bool>, _>("is_enabled").unwrap_or(true),
                 };
 
                 admin_users.push(admin_user);
@@ -1825,18 +1805,19 @@ pub async fn create_faculty_admin(
         }
     };
 
-    // Create admin role
+    // Create admin role (with is_enabled = true by default)
     let admin_role_result = sqlx::query_as::<_, AdminRole>(
         r#"
-        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, user_id, admin_level, faculty_id, permissions, created_at, updated_at
+        INSERT INTO admin_roles (user_id, admin_level, faculty_id, permissions, is_enabled)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, user_id, admin_level, faculty_id, permissions, is_enabled, created_at, updated_at
         "#
     )
     .bind(user.id)
     .bind(&request.admin_level)
     .bind(request.faculty_id)
     .bind(&request.permissions)
+    .bind(true) // is_enabled = true by default
     .fetch_one(&mut *tx)
     .await;
 
@@ -2056,6 +2037,7 @@ pub async fn get_all_system_admins(
             ar.admin_level,
             ar.faculty_id,
             ar.permissions,
+            ar.is_enabled,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
             f.name as faculty_name,
@@ -2115,11 +2097,13 @@ pub async fn get_all_system_admins(
                         "admin_level": admin_level,
                         "faculty_id": faculty_id,
                         "permissions": row.get::<Vec<String>, _>("permissions"),
+                        "is_enabled": row.get::<bool, _>("is_enabled"),
                         "created_at": row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
                         "updated_at": row.get::<Option<DateTime<Utc>>, _>("role_updated_at")
                     },
                     "last_login": row.get::<Option<DateTime<Utc>>, _>("last_login"),
-                    "is_active": row.get::<bool, _>("is_active")
+                    "is_active": row.get::<bool, _>("is_active"),
+                    "is_enabled": row.get::<bool, _>("is_enabled")
                 });
 
                 match admin_level {

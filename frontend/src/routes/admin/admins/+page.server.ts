@@ -5,6 +5,7 @@ import { zod } from 'sveltekit-superforms/adapters';
 import { adminCreateSchema } from '$lib/schemas/auth';
 import type { PageServerLoad, Actions } from './$types';
 import type { AdminRole, Faculty } from '$lib/types/admin';
+import { AdminLevel } from '$lib/types/admin';
 import { PUBLIC_API_URL } from '$env/static/public';
 
 const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
@@ -25,10 +26,10 @@ export const load: PageServerLoad = async (event) => {
 		console.error('Failed to load faculties:', error);
 	}
 
-	// โหลดรายการแอดมิน
+	// โหลดรายการแอดมิน - ใช้ system-admins endpoint เพื่อให้ได้ข้อมูล is_active
 	let admins: AdminRole[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+		const response = await fetch(`${API_BASE_URL}/api/admin/system-admins`, {
 			headers: {
 				'Cookie': `session_id=${sessionId}`
 			}
@@ -36,48 +37,91 @@ export const load: PageServerLoad = async (event) => {
 
 		if (response.ok) {
 			const result = await response.json();
+			console.log('=== SYSTEM ADMINS API RESPONSE ===');
+			console.log('result.status:', result.status);
+			console.log('result.data type:', typeof result.data);
+			if (result.data) {
+				console.log('super_admins count:', result.data.super_admins?.length || 0);
+				console.log('faculty_groups count:', result.data.faculty_groups?.length || 0);
+			}
+			console.log('================================');
 			if (result.status === 'success' && result.data) {
-				// API ส่งข้อมูลในรูปแบบ { users: [], ... } ไม่ใช่ array โดยตรง
-				const adminUsers = result.data.users || [];
+				// API ส่งข้อมูลในรูปแบบ { super_admins: [], faculty_groups: [...] }
+				let adminUsers: any[] = [];
+				
+				// รวม super_admins เข้าด้วย
+				if (result.data.super_admins && Array.isArray(result.data.super_admins)) {
+					adminUsers = [...result.data.super_admins];
+				}
+				
+				// รวม admins จาก faculty_groups
+				if (result.data.faculty_groups && Array.isArray(result.data.faculty_groups)) {
+					result.data.faculty_groups.forEach((group: any) => {
+						if (group.admins && Array.isArray(group.admins)) {
+							adminUsers = [...adminUsers, ...group.admins];
+						}
+					});
+				}
+				
+				// Ensure adminUsers is an array to prevent .filter() error
+				if (!Array.isArray(adminUsers)) {
+					console.warn('adminUsers is not an array:', typeof adminUsers, adminUsers);
+					throw new Error('Invalid data format received from server');
+				}
 				
 				// Helper function to convert API AdminLevel to Frontend AdminLevel
-				const mapAdminLevel = (apiLevel: string) => {
+				const mapAdminLevel = (apiLevel: string): AdminLevel => {
 					switch (apiLevel) {
 						case 'SuperAdmin':
-							return 'SuperAdmin';
+						case 'super_admin':
+							return AdminLevel.SuperAdmin;
 						case 'FacultyAdmin':
-							return 'FacultyAdmin';
+						case 'faculty_admin':
+							return AdminLevel.FacultyAdmin;
 						case 'RegularAdmin':
-							return 'RegularAdmin';
+						case 'regular_admin':
+							return AdminLevel.RegularAdmin;
 						default:
-							return 'RegularAdmin';
+							return AdminLevel.RegularAdmin;
 					}
 				};
 
-				// แปลงข้อมูลจาก AdminUserInfo ให้เป็น AdminRole format ที่ frontend ใช้
+				// แปลงข้อมูลจาก system-admins API response ให้เป็น AdminRole format ที่ frontend ใช้
+				// API response structure: { id, email, first_name, ..., admin_role: {...}, is_active, last_login }
 				admins = adminUsers
-					.filter((user: any) => user.admin_role) // เฉพาะ user ที่มี admin role
-					.map((user: any) => ({
-						id: user.admin_role.id,
-						user_id: user.id,
-						admin_level: mapAdminLevel(user.admin_role.admin_level),
-						faculty_id: user.admin_role.faculty_id,
-						permissions: user.admin_role.permissions || [],
-						created_at: user.admin_role.created_at,
-						updated_at: user.admin_role.updated_at,
+					.filter((admin: any) => admin.admin_role) // เฉพาะ admin ที่มี admin_role
+					.map((admin: any) => ({
+						id: admin.admin_role.id,
+						user_id: admin.id,
+						admin_level: mapAdminLevel(admin.admin_role.admin_level),
+						faculty_id: admin.admin_role.faculty_id,
+						permissions: admin.admin_role.permissions || [],
+						created_at: admin.admin_role.created_at,
+						updated_at: admin.admin_role.updated_at,
 						// เพิ่มข้อมูล user เข้าไปด้วยเพื่อให้ UI แสดงได้
 						user: {
-							id: user.id,
-							student_id: user.student_id,
-							email: user.email,
-							first_name: user.first_name,
-							last_name: user.last_name,
-							department_id: user.department_id,
-							created_at: user.created_at
+							id: admin.id,
+							student_id: admin.student_id,
+							email: admin.email,
+							first_name: admin.first_name,
+							last_name: admin.last_name,
+							department_id: admin.department_id,
+							faculty_id: admin.faculty_id,
+							status: admin.status || 'active',
+							role: admin.role || 'admin',
+							phone: admin.phone,
+							avatar: admin.avatar,
+							last_login: admin.last_login,
+							email_verified_at: admin.email_verified_at,
+							created_at: admin.created_at,
+							updated_at: admin.updated_at
 						},
 						// เพิ่ม faculty ข้อมูลถ้ามี
-						faculty: user.admin_role.faculty_id ? 
-							faculties.find(f => f.id === user.admin_role.faculty_id) : undefined
+						faculty: admin.admin_role.faculty_id ? 
+							faculties.find(f => f.id === admin.admin_role.faculty_id) : undefined,
+						// เพิ่ม is_active (login session) และ is_enabled (account enabled) ข้อมูลจาก backend
+						is_active: admin.is_active !== undefined ? admin.is_active : false,
+						is_enabled: admin.is_enabled !== undefined ? admin.is_enabled : true
 					}));
 			}
 		}
@@ -280,7 +324,7 @@ export const actions: Actions = {
 					'Cookie': `session_id=${sessionId}`
 				},
 				body: JSON.stringify({
-					is_active: isActive
+					is_enabled: isActive  // Send is_enabled instead of is_active
 				})
 			});
 

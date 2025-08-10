@@ -24,6 +24,7 @@ pub struct AdminRole {
     pub admin_level: AdminLevel,
     pub faculty_id: Option<Uuid>, // null for super admin, required for faculty admin
     pub permissions: Vec<String>,
+    pub is_enabled: bool, // Whether admin account is enabled (can login)
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -34,6 +35,7 @@ pub struct CreateAdminRole {
     pub admin_level: AdminLevel,
     pub faculty_id: Option<Uuid>,
     pub permissions: Vec<String>,
+    pub is_enabled: Option<bool>, // Optional for creation, defaults to true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,4 +43,5 @@ pub struct UpdateAdminRole {
     pub admin_level: Option<AdminLevel>,
     pub faculty_id: Option<Uuid>,
     pub permissions: Option<Vec<String>>,
+    pub is_enabled: Option<bool>, // Allow updating enabled status
 }

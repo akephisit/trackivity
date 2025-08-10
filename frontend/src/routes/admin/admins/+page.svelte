@@ -235,8 +235,8 @@
 		}
 	}
 
-	async function handleToggleStatus(adminId: string, _userId: string, currentStatus: boolean) {
-		const newStatus = !currentStatus;
+	async function handleToggleStatus(adminId: string, _userId: string, currentEnabledStatus: boolean) {
+		const newStatus = !currentEnabledStatus;
 		const actionText = newStatus ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
 
 		// Set loading state for this specific admin
@@ -245,7 +245,7 @@
 		try {
 			const formData = new FormData();
 			formData.append('adminId', adminId); // admin role id for the new endpoint
-			formData.append('isActive', newStatus.toString());
+			formData.append('isActive', newStatus.toString()); // This gets converted to is_enabled in server
 
 			const response = await fetch('?/toggleStatus', {
 				method: 'POST',
@@ -255,7 +255,7 @@
 			const result = await response.json();
 
 			if (result.type === 'success') {
-				toast.success(`${actionText}แอดมินสำเร็จ`);
+				toast.success(`${actionText}บัญชีแอดมินสำเร็จ`);
 				// รีเฟรชข้อมูลทันทีเพื่อให้ UI อัพเดต
 				setTimeout(async () => {
 					try {
@@ -267,7 +267,7 @@
 					}
 				}, 300);
 			} else {
-				toast.error(result.error || `เกิดข้อผิดพลาดในการ${actionText}แอดมิน`);
+				toast.error(result.error || `เกิดข้อผิดพลาดในการ${actionText}บัญชีแอดมิน`);
 			}
 		} catch (error) {
 			console.error('Toggle status error:', error);
@@ -278,9 +278,23 @@
 		}
 	}
 
+	// Function to get login session status (for status badge display)
 	function getAdminActiveStatus(admin: AdminRole): boolean {
-		// Check if admin has any permissions (empty permissions means deactivated)
-		return admin.permissions && admin.permissions.length > 0;
+		// Check if admin has active login session
+		if ('is_active' in admin && admin.is_active !== undefined && admin.is_active !== null) {
+			return Boolean(admin.is_active);
+		}
+		return false;
+	}
+
+	// Function to get account enabled status (for toggle button)
+	function getAdminEnabledStatus(admin: AdminRole): boolean {
+		// Check if admin account is enabled (can login)
+		if ('is_enabled' in admin && admin.is_enabled !== undefined) {
+			return Boolean(admin.is_enabled);
+		}
+		// Fallback to permissions check for backward compatibility
+		return Boolean(admin.permissions && admin.permissions.length > 0);
 	}
 
 	// Group admins by level and faculty
@@ -523,15 +537,15 @@
 														<Button 
 															variant="ghost" 
 															size="sm" 
-															onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminActiveStatus(admin))}
+															onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminEnabledStatus(admin))}
 															disabled={toggleLoading[admin.id] || false}
-															class="{getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
-															aria-label="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} {admin.user?.first_name || 'แอดมิน'}"
-															title="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}แอดมิน"
+															class="{getAdminEnabledStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+															aria-label="{getAdminEnabledStatus(admin) ? 'ปิดการใช้งานบัญชี' : 'เปิดการใช้งานบัญชี'} {admin.user?.first_name || 'แอดมิน'}"
+															title="{getAdminEnabledStatus(admin) ? 'ปิดการใช้งานบัญชี' : 'เปิดการใช้งานบัญชี'}แอดมิน"
 														>
 															{#if toggleLoading[admin.id]}
 																<IconLoader class="h-4 w-4 animate-spin" aria-hidden="true" />
-															{:else if getAdminActiveStatus(admin)}
+															{:else if getAdminEnabledStatus(admin)}
 																<IconToggleLeft class="h-4 w-4" aria-hidden="true" />
 															{:else}
 																<IconToggleRight class="h-4 w-4" aria-hidden="true" />
@@ -680,15 +694,15 @@
 																	<Button 
 																		variant="ghost" 
 																		size="sm" 
-																		onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminActiveStatus(admin))}
+																		onclick={() => handleToggleStatus(admin.id, admin.user_id || admin.user?.id || '', getAdminEnabledStatus(admin))}
 																		disabled={toggleLoading[admin.id] || false}
-																		class="{getAdminActiveStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
-																		aria-label="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'} {admin.user?.first_name || 'แอดมิน'}"
-																		title="{getAdminActiveStatus(admin) ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}แอดมิน"
+																		class="{getAdminEnabledStatus(admin) ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+																		aria-label="{getAdminEnabledStatus(admin) ? 'ปิดการใช้งานบัญชี' : 'เปิดการใช้งานบัญชี'} {admin.user?.first_name || 'แอดมิน'}"
+																		title="{getAdminEnabledStatus(admin) ? 'ปิดการใช้งานบัญชี' : 'เปิดการใช้งานบัญชี'}แอดมิน"
 																	>
 																		{#if toggleLoading[admin.id]}
 																			<IconLoader class="h-4 w-4 animate-spin" aria-hidden="true" />
-																		{:else if getAdminActiveStatus(admin)}
+																		{:else if getAdminEnabledStatus(admin)}
 																			<IconToggleLeft class="h-4 w-4" aria-hidden="true" />
 																		{:else}
 																			<IconToggleRight class="h-4 w-4" aria-hidden="true" />

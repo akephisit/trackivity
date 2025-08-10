@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::Json,
 };
@@ -152,6 +152,7 @@ pub async fn get_system_users(
                         permissions: row
                             .get::<Option<Vec<String>>, _>("permissions")
                             .unwrap_or_else(|| vec![]),
+                        is_enabled: row.get::<Option<bool>, _>("is_enabled").unwrap_or(true),
                         created_at: row.get::<Option<DateTime<Utc>>, _>("role_created_at"),
                         updated_at: row.get::<Option<DateTime<Utc>>, _>("role_updated_at"),
                     }),
