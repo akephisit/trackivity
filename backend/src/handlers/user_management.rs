@@ -63,6 +63,7 @@ pub async fn get_system_users(
             ar.admin_level,
             ar.faculty_id as admin_faculty_id,
             ar.permissions,
+            ar.is_enabled,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
             COALESCE(COUNT(p.id), 0) as activity_count,
@@ -111,7 +112,7 @@ pub async fn get_system_users(
         count_query.push_str(&where_clause);
     }
 
-    query.push_str(" GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, d.code, f.id, f.name, f.code, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.created_at, ar.updated_at");
+    query.push_str(" GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, d.code, f.id, f.name, f.code, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.is_enabled, ar.created_at, ar.updated_at");
     query.push_str(" ORDER BY f.name NULLS LAST, d.name NULLS LAST, u.last_name, u.first_name LIMIT $1 OFFSET $2");
 
     let mut query_builder = sqlx::query(&query).bind(limit).bind(offset);

@@ -1356,6 +1356,7 @@ pub async fn get_faculty_admins(
             ar.admin_level,
             ar.faculty_id,
             ar.permissions,
+            ar.is_enabled,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
             (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) as last_login,
