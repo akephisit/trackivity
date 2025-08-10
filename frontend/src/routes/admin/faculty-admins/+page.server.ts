@@ -13,8 +13,9 @@ import type {
 } from '$lib/types/admin';
 import { AdminLevel, ADMIN_PERMISSIONS } from '$lib/types/admin';
 import { z } from 'zod';
+import { PUBLIC_API_URL } from '$env/static/public';
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async (event) => {
 	// Role-based access: Both SuperAdmin and FacultyAdmin can access this page

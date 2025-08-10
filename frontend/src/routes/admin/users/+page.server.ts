@@ -8,6 +8,9 @@ import type {
     Faculty
 } from '$lib/types/admin';
 import { AdminLevel } from '$lib/types/admin';
+import { PUBLIC_API_URL } from '$env/static/public';
+
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 /**
  * Server Load Function for General User Management
@@ -45,15 +48,15 @@ export const load: PageServerLoad = async (event) => {
 
         if (adminLevel === AdminLevel.SuperAdmin) {
             // SuperAdmin can view all users
-            apiEndpoint = '/api/admin/users';
-            statsEndpoint = '/api/admin/users/stats';
+            apiEndpoint = `${API_BASE_URL}/api/admin/system-users`;
+            statsEndpoint = `${API_BASE_URL}/api/admin/user-statistics`;
         } else if (adminLevel === AdminLevel.FacultyAdmin) {
             // FacultyAdmin can only view users within their faculty
             if (!facultyId) {
                 throw error(403, 'Faculty admin must be associated with a faculty');
             }
-            apiEndpoint = `/api/faculties/${facultyId}/users`;
-            statsEndpoint = `/api/faculties/${facultyId}/users/stats`;
+            apiEndpoint = `${API_BASE_URL}/api/faculties/${facultyId}/users`;
+            statsEndpoint = `${API_BASE_URL}/api/admin/faculty-user-statistics?faculty_id=${facultyId}`;
         } else {
             throw error(403, 'Insufficient permissions to view user data');
         }
@@ -71,21 +74,22 @@ export const load: PageServerLoad = async (event) => {
         queryParams.set('limit', limit.toString());
 
         // Make API requests
+        const sessionId = event.cookies.get('session_id');
         const [usersResponse, statsResponse, facultiesResponse] = await Promise.all([
             event.fetch(`${apiEndpoint}?${queryParams.toString()}`, {
                 headers: {
-                    'Cookie': event.request.headers.get('Cookie') || ''
+                    'Cookie': `session_id=${sessionId}`
                 }
             }),
             event.fetch(statsEndpoint, {
                 headers: {
-                    'Cookie': event.request.headers.get('Cookie') || ''
+                    'Cookie': `session_id=${sessionId}`
                 }
             }),
             // Load faculties for filtering (only for SuperAdmin)
-            adminLevel === AdminLevel.SuperAdmin ? event.fetch('/api/faculties', {
+            adminLevel === AdminLevel.SuperAdmin ? event.fetch(`${API_BASE_URL}/api/faculties`, {
                 headers: {
-                    'Cookie': event.request.headers.get('Cookie') || ''
+                    'Cookie': `session_id=${sessionId}`
                 }
             }) : Promise.resolve(null)
         ]);

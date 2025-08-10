@@ -4,8 +4,9 @@ import { zod } from 'sveltekit-superforms/adapters';
 import { registerSchema } from '$lib/schemas/auth';
 import type { Actions, PageServerLoad } from './$types';
 import type { Faculty } from '$lib/types/admin';
+import { PUBLIC_API_URL } from '$env/static/public';
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 // Fallback faculties data สำหรับกรณีที่ backend ไม่สามารถเชื่อมต่อได้
 const FALLBACK_FACULTIES: Faculty[] = [

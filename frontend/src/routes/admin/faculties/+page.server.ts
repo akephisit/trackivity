@@ -3,6 +3,7 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
+import { PUBLIC_API_URL } from '$env/static/public';
 
 // Faculty schemas
 const facultyCreateSchema = z.object({
@@ -19,7 +20,7 @@ const facultyUpdateSchema = z.object({
 	status: z.boolean().optional()
 });
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 	depends('app:page-data');

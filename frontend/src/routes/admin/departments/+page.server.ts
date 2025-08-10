@@ -4,6 +4,8 @@ import { zod } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
 import type { Department, Faculty } from '$lib/types/admin';
+import { PUBLIC_API_URL } from '$env/static/public';
+import { requireAdmin } from '$lib/server/auth';
 
 // Department schemas
 const departmentCreateSchema = z.object({
@@ -22,7 +24,7 @@ const departmentUpdateSchema = z.object({
 	status: z.boolean().optional()
 });
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) => {
 	depends('app:page-data');
@@ -33,7 +35,7 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 	}
 
 	// Get parent data for user context
-	const { user, admin_role } = await parent();
+	const { admin_role } = await parent();
 
 	// For SuperAdmin, show all departments; for FacultyAdmin, show only their faculty's departments
 	let apiEndpoint = `${API_BASE_URL}/api/departments`;
@@ -98,13 +100,15 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 };
 
 export const actions: Actions = {
-	create: async ({ request, cookies, parent }) => {
+	create: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
 		}
 
-		const { admin_role } = await parent();
+		const user = await requireAdmin(event);
+		const admin_role = user.admin_role;
 		const form = await superValidate(request, zod(departmentCreateSchema));
 
 		if (!form.valid) {

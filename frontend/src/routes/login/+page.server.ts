@@ -3,8 +3,9 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { loginSchema } from '$lib/schemas/auth';
 import type { Actions, PageServerLoad } from './$types';
+import { PUBLIC_API_URL } from '$env/static/public';
 
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async ({ cookies, url }) => {
 	// ตรวจสอบว่ามี session อยู่แล้วหรือไม่
