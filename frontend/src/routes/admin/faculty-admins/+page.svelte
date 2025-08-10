@@ -5,7 +5,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
@@ -29,14 +28,13 @@
 		IconUserCheck,
 		IconSchool,
 		IconEye,
-		IconCrown,
 		IconCalendar,
 		IconMail,
 		IconBuilding
 	} from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import { invalidateAll, invalidate } from '$app/navigation';
-	import type { ExtendedAdminRole, Faculty, FacultyAdminUpdateRequest } from '$lib/types/admin';
+	import type { ExtendedAdminRole, FacultyAdminUpdateRequest } from '$lib/types/admin';
 	import { AdminLevel, ADMIN_PERMISSIONS } from '$lib/types/admin';
 
 	let { data } = $props();
@@ -48,6 +46,7 @@
 		email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง'),
 		password: z.string().min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร').optional(),
 		faculty_id: z.string().min(1, 'กรุณาเลือกคณะ'),
+		admin_level: z.nativeEnum(AdminLevel).default(AdminLevel.FacultyAdmin),
 		permissions: z.array(z.string()).default([])
 	});
 
@@ -166,6 +165,7 @@
 			email: '',
 			password: '',
 			faculty_id: data.isSuperAdmin ? '' : (data.userFacultyId || ''),
+			admin_level: AdminLevel.FacultyAdmin,
 			permissions: selectedPermissions
 		};
 		selectedPermissions = [
@@ -493,8 +493,8 @@
 			{#if data.isSuperAdmin && data.faculties.length > 1}
 				<div>
 					<Label class="text-sm font-medium">กรองตามคณะ</Label>
-					<Select.Root bind:value={facultyFilter}>
-						<Select.Trigger class="mt-1">
+					<Select.Root type="single" bind:value={facultyFilter}>
+						<Select.Trigger class="mt-1 w-[180px]">
 							{facultyFilter === 'all' ? 'ทุกคณะ' : data.faculties.find(f => f.id === facultyFilter)?.name || 'เลือกคณะ'}
 						</Select.Trigger>
 						<Select.Content>
@@ -516,7 +516,7 @@
 				<IconLoader class="h-8 w-8 animate-spin mr-3 text-blue-500" />
 				<span class="text-lg text-gray-600 dark:text-gray-300">กำลังรีเฟรชข้อมูล...</span>
 			</div>
-		{:else if filteredAdmins.length === 0}
+		{:else if filteredAdmins().length === 0}
 			<div class="text-center py-16 text-gray-500 dark:text-gray-400">
 				{#if searchQuery || statusFilter !== 'all'}
 					<IconSearch class="h-16 w-16 mx-auto mb-6 opacity-50" />
@@ -556,7 +556,7 @@
 						<IconShield class="h-6 w-6 text-blue-600" />
 						รายการแอดมินคณะ
 						<Badge variant="secondary" class="ml-2">
-							{filteredAdmins.length} รายการ
+							{filteredAdmins().length} รายการ
 						</Badge>
 					</CardTitle>
 					<CardDescription>
@@ -581,7 +581,7 @@
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
-								{#each filteredAdmins as admin (admin.id)}
+								{#each filteredAdmins() as admin (admin.id)}
 									<Table.Row class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
 										<Table.Cell class="font-medium py-4">
 											<div class="flex items-center gap-3">
@@ -671,14 +671,14 @@
 										</Table.Cell>
 										<Table.Cell class="py-4">
 											<Badge 
-												variant={getStatusBadgeVariant(admin.is_active)}
+												variant={getStatusBadgeVariant(admin.is_active ?? false)}
 												class={admin.is_active ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
 											>
 												<span class="w-2 h-2 rounded-full mr-2" 
 													class:bg-green-500={admin.is_active} 
 													class:bg-gray-400={!admin.is_active}
 												></span>
-												{getStatusText(admin.is_active)}
+												{getStatusText(admin.is_active ?? false)}
 											</Badge>
 										</Table.Cell>
 										<Table.Cell class="py-4 text-sm">
@@ -707,7 +707,7 @@
 													<Button 
 														variant="ghost" 
 														size="sm" 
-														onclick={() => handleToggleStatus(admin.id, admin.is_active)}
+														onclick={() => handleToggleStatus(admin.id, admin.is_active ?? false)}
 														disabled={toggleLoading[admin.id] || false}
 														class="{admin.is_active ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
 														title="{admin.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}แอดมิน"
@@ -809,7 +809,7 @@
 				<Form.Control>
 					{#snippet children({ props })}
 						<Label for={props.id}>คณะ</Label>
-						<Select.Root bind:value={$createFormData.faculty_id}>
+						<Select.Root type="single" bind:value={$createFormData.faculty_id}>
 							<Select.Trigger>
 								{$createFormData.faculty_id ? data.faculties.find(f => f.id === $createFormData.faculty_id)?.name : 'เลือกคณะที่จะดูแล'}
 							</Select.Trigger>
@@ -912,14 +912,14 @@
 					<div class="space-y-2">
 						<Label class="text-sm font-medium text-gray-500">สถานะ</Label>
 						<Badge 
-							variant={getStatusBadgeVariant(viewingAdmin.is_active)}
+							variant={getStatusBadgeVariant(viewingAdmin.is_active ?? false)}
 							class={viewingAdmin.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}
 						>
 							<span class="w-2 h-2 rounded-full mr-2" 
 								class:bg-green-500={viewingAdmin.is_active} 
 								class:bg-gray-400={!viewingAdmin.is_active}
 							></span>
-							{getStatusText(viewingAdmin.is_active)}
+							{getStatusText(viewingAdmin.is_active ?? false)}
 						</Badge>
 					</div>
 				</div>
@@ -1014,7 +1014,7 @@
 				{#if data.isSuperAdmin}
 					<Button onclick={() => {
 						viewDialogOpen = false;
-						openEditDialog(viewingAdmin);
+						if (viewingAdmin) openEditDialog(viewingAdmin);
 					}}>
 						<IconEdit class="mr-2 h-4 w-4" />
 						แก้ไขข้อมูล
@@ -1066,7 +1066,7 @@
 
 				<div class="space-y-2">
 					<Label>คณะ</Label>
-					<Select.Root bind:value={editFormData.faculty_id}>
+					<Select.Root type="single" bind:value={editFormData.faculty_id}>
 						<Select.Trigger>
 							{editFormData.faculty_id ? data.faculties.find(f => f.id === editFormData.faculty_id)?.name : 'เลือกคณะ'}
 						</Select.Trigger>
@@ -1103,8 +1103,8 @@
 
 				<div class="flex items-center space-x-2">
 					<Switch 
-						bind:checked={editFormData.status}
-						on:checkedChange={(checked) => editFormData.status = checked ? 'active' : 'inactive'}
+						checked={editFormData.status === 'active'}
+						onCheckedChange={(checked: boolean) => editFormData.status = checked ? 'active' : 'inactive'}
 					/>
 					<Label>เปิดใช้งานบัญชี</Label>
 				</div>
