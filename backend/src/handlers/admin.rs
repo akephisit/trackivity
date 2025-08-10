@@ -1668,11 +1668,11 @@ pub async fn get_faculty_users(
     }
 }
 
-/// Create admin in faculty (SuperAdmin only, must set faculty_id)
+/// Create admin in faculty (SuperAdmin can create any, FacultyAdmin can create RegularAdmin in their faculty)
 pub async fn create_faculty_admin(
     State(session_state): State<SessionState>,
     Path(faculty_id): Path<Uuid>,
-    _admin: SuperAdminUser,
+    admin: FacultyAdminUser,
     Json(mut request): Json<CreateAdminRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // Verify faculty exists
@@ -1694,6 +1694,38 @@ pub async fn create_faculty_admin(
 
     // Force the faculty_id to match the path parameter
     request.faculty_id = Some(faculty_id);
+
+    // Check authorization based on admin levels
+    match admin.admin_role.admin_level {
+        AdminLevel::SuperAdmin => {
+            // SuperAdmin can create any faculty admin in any faculty
+        }
+        AdminLevel::FacultyAdmin => {
+            // FacultyAdmin can only create RegularAdmin in their own faculty
+            if admin.admin_role.faculty_id != Some(faculty_id) {
+                let error_response = json!({
+                    "status": "error",
+                    "message": "Faculty Admin can only create admins in their own faculty"
+                });
+                return Err((StatusCode::FORBIDDEN, Json(error_response)));
+            }
+            if request.admin_level != AdminLevel::RegularAdmin {
+                let error_response = json!({
+                    "status": "error",
+                    "message": "Faculty Admin can only create Regular Admin accounts"
+                });
+                return Err((StatusCode::FORBIDDEN, Json(error_response)));
+            }
+        }
+        AdminLevel::RegularAdmin => {
+            // Regular admins cannot create other admins
+            let error_response = json!({
+                "status": "error",
+                "message": "Regular Admin does not have permission to create admin accounts"
+            });
+            return Err((StatusCode::FORBIDDEN, Json(error_response)));
+        }
+    }
 
     // Validate admin level is appropriate for faculty
     match request.admin_level {

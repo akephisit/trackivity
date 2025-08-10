@@ -5,14 +5,11 @@ import { zod } from 'sveltekit-superforms/adapters';
 import { adminCreateSchema } from '$lib/schemas/auth';
 import type { PageServerLoad, Actions } from './$types';
 import type { 
-	AdminRole, 
 	Faculty, 
 	FacultyAdminStats, 
-	ExtendedAdminRole,
-	FacultyAdminUpdateRequest 
+	ExtendedAdminRole
 } from '$lib/types/admin';
 import { AdminLevel, ADMIN_PERMISSIONS } from '$lib/types/admin';
-import { z } from 'zod';
 import { PUBLIC_API_URL } from '$env/static/public';
 
 const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
@@ -199,9 +196,6 @@ function formatDateTime(date: Date): string {
 	});
 }
 
-function getAdminActiveStatus(admin: AdminRole): boolean {
-	return admin.permissions && admin.permissions.length > 0;
-}
 
 export const actions: Actions = {
 	create: async ({ request, cookies }) => {
@@ -251,7 +245,7 @@ export const actions: Actions = {
 			}
 
 			// Define default permissions based on admin level
-			const getDefaultPermissions = (adminLevel: string, facultyId?: string) => {
+			const getDefaultPermissions = (adminLevel: string) => {
 				if (adminLevel === AdminLevel.FacultyAdmin) {
 					return [
 						'ViewDashboard',
@@ -281,7 +275,7 @@ export const actions: Actions = {
 				department_id: null,
 				admin_level: form.data.admin_level, // Use the provided admin level
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,
-				permissions: getDefaultPermissions(form.data.admin_level, form.data.faculty_id)
+				permissions: getDefaultPermissions(form.data.admin_level)
 			};
 
 			console.log('Creating faculty admin with data:', {
@@ -304,7 +298,21 @@ export const actions: Actions = {
 				body: JSON.stringify(transformedData)
 			});
 
-			const result = await response.json();
+			// Check if response body exists and has content
+			const responseText = await response.text();
+			if (!responseText.trim()) {
+				form.errors._errors = ['Server returned empty response'];
+				return fail(500, { form });
+			}
+
+			let result;
+			try {
+				result = JSON.parse(responseText);
+			} catch (parseError) {
+				console.error('JSON parse error:', parseError, 'Response text:', responseText);
+				form.errors._errors = ['Invalid response format from server'];
+				return fail(500, { form });
+			}
 
 			if (!response.ok) {
 				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสร้างแอดมินคณะ'];
@@ -356,7 +364,6 @@ export const actions: Actions = {
 
 			const authResult = await authResponse.json();
 			const userLevel = authResult.user?.admin_role?.admin_level;
-			const userFacultyId = authResult.user?.admin_role?.faculty_id;
 
 			// Only SuperAdmin can toggle status, or FacultyAdmin for their own faculty
 			if (userLevel !== AdminLevel.SuperAdmin) {
