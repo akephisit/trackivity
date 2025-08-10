@@ -327,6 +327,157 @@ pub async fn bulk_user_operations(
     Ok(Json(response))
 }
 
+/// Get faculty-scoped user statistics (FacultyAdmin can view their faculty, SuperAdmin can view any)
+pub async fn get_faculty_user_statistics(
+    State(session_state): State<SessionState>,
+    faculty_admin: FacultyAdminUser,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Get faculty_id from query parameter or use admin's faculty_id
+    let faculty_id = match params.get("faculty_id").and_then(|f| Uuid::parse_str(f).ok()) {
+        Some(requested_faculty_id) => {
+            // Validate access to the requested faculty
+            match faculty_admin.admin_role.admin_level {
+                AdminLevel::SuperAdmin => requested_faculty_id, // SuperAdmin can access any faculty
+                AdminLevel::FacultyAdmin | AdminLevel::RegularAdmin => {
+                    // Faculty admins can only access their own faculty
+                    match faculty_admin.faculty_id {
+                        Some(admin_faculty_id) if admin_faculty_id == requested_faculty_id => {
+                            requested_faculty_id
+                        }
+                        _ => {
+                            let error_response = json!({
+                                "status": "error",
+                                "message": "Access denied: You can only view statistics for your own faculty"
+                            });
+                            return Err((StatusCode::FORBIDDEN, Json(error_response)));
+                        }
+                    }
+                }
+            }
+        }
+        None => {
+            // No faculty_id provided, use admin's faculty_id if they have one
+            match faculty_admin.faculty_id {
+                Some(admin_faculty_id) => admin_faculty_id,
+                None => {
+                    let error_response = json!({
+                        "status": "error",
+                        "message": "No faculty_id provided and admin has no assigned faculty"
+                    });
+                    return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+                }
+            }
+        }
+    };
+
+    // Get faculty statistics for the specific faculty
+    let faculty_stats_result = sqlx::query(
+        r#"
+        SELECT 
+            f.id as faculty_id,
+            f.name as faculty_name,
+            f.code as faculty_code,
+            COUNT(DISTINCT u.id) as total_users,
+            COUNT(DISTINCT ar.id) as admin_count,
+            COUNT(DISTINCT d.id) as department_count,
+            COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as new_users_30_days,
+            COUNT(DISTINCT CASE WHEN p.registered_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users_30_days,
+            COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '7 days' THEN u.id END) as new_users_7_days
+        FROM faculties f
+        LEFT JOIN departments d ON f.id = d.faculty_id
+        LEFT JOIN users u ON d.id = u.department_id
+        LEFT JOIN admin_roles ar ON (u.id = ar.user_id AND ar.faculty_id = f.id)
+        LEFT JOIN participations p ON u.id = p.user_id
+        WHERE f.id = $1
+        GROUP BY f.id, f.name, f.code
+        "#
+    )
+    .bind(faculty_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    // Get department statistics for the specific faculty
+    let department_stats_result = sqlx::query(
+        r#"
+        SELECT 
+            d.id as department_id,
+            d.name as department_name,
+            d.code as department_code,
+            COUNT(DISTINCT u.id) as total_users,
+            COUNT(DISTINCT CASE WHEN u.created_at >= NOW() - INTERVAL '30 days' THEN u.id END) as new_users_30_days,
+            COUNT(DISTINCT CASE WHEN p.registered_at >= NOW() - INTERVAL '30 days' THEN u.id END) as active_users_30_days
+        FROM departments d
+        LEFT JOIN users u ON d.id = u.department_id
+        LEFT JOIN participations p ON u.id = p.user_id
+        WHERE d.faculty_id = $1
+        GROUP BY d.id, d.name, d.code
+        ORDER BY d.name
+        "#
+    )
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    match (faculty_stats_result, department_stats_result) {
+        (Ok(faculty_row), Ok(department_rows)) => {
+            let faculty_stats = json!({
+                "faculty_id": faculty_row.get::<Uuid, _>("faculty_id"),
+                "faculty_name": faculty_row.get::<String, _>("faculty_name"),
+                "faculty_code": faculty_row.get::<String, _>("faculty_code"),
+                "total_users": faculty_row.get::<i64, _>("total_users"),
+                "admin_count": faculty_row.get::<i64, _>("admin_count"),
+                "department_count": faculty_row.get::<i64, _>("department_count"),
+                "new_users_30_days": faculty_row.get::<i64, _>("new_users_30_days"),
+                "active_users_30_days": faculty_row.get::<i64, _>("active_users_30_days"),
+                "new_users_7_days": faculty_row.get::<i64, _>("new_users_7_days")
+            });
+
+            let department_stats: Vec<_> = department_rows
+                .into_iter()
+                .map(|row| json!({
+                    "department_id": row.get::<Uuid, _>("department_id"),
+                    "department_name": row.get::<String, _>("department_name"),
+                    "department_code": row.get::<String, _>("department_code"),
+                    "total_users": row.get::<i64, _>("total_users"),
+                    "new_users_30_days": row.get::<i64, _>("new_users_30_days"),
+                    "active_users_30_days": row.get::<i64, _>("active_users_30_days")
+                }))
+                .collect();
+
+            // Build response in format expected by frontend (UserStats interface)
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "total_users": faculty_stats["total_users"],
+                    "active_users": faculty_stats["active_users_30_days"],
+                    "inactive_users": faculty_stats["total_users"].as_i64().unwrap_or(0) - faculty_stats["active_users_30_days"].as_i64().unwrap_or(0),
+                    "students": faculty_stats["total_users"], // For now, assuming most users are students
+                    "faculty": 0, // Would need additional query to distinguish faculty users
+                    "staff": 0,   // Would need additional query to distinguish staff users
+                    "recent_registrations": faculty_stats["new_users_30_days"],
+                    "faculty_breakdown": [{
+                        "faculty_id": faculty_stats["faculty_id"],
+                        "faculty_name": faculty_stats["faculty_name"],
+                        "user_count": faculty_stats["total_users"]
+                    }],
+                    "department_breakdown": department_stats,
+                    "faculty_stats": faculty_stats
+                },
+                "message": "Faculty user statistics retrieved successfully"
+            });
+
+            Ok(Json(response))
+        }
+        _ => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve faculty user statistics"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
 /// Get user statistics by faculty and department (SuperAdmin only)
 pub async fn get_user_statistics(
     State(session_state): State<SessionState>,

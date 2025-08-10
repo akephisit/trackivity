@@ -25,12 +25,12 @@ export const GET: RequestHandler = async (event) => {
             throw error(500, 'API configuration error: Backend URL not configured');
         }
         
-        // Make request to backend API
-        const backendUrl = `${PUBLIC_API_URL}/api/admin/users/stats?faculty_id=${facultyId}`;
+        // Make request to backend API - use the faculty-scoped endpoint
+        const backendUrl = `${PUBLIC_API_URL}/api/admin/faculty-user-statistics?faculty_id=${facultyId}`;
         const response = await event.fetch(backendUrl, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${event.cookies.get('auth_token')}`,
+                'Cookie': `session_id=${event.cookies.get('session_id')}`,
                 'Content-Type': 'application/json'
             }
         });

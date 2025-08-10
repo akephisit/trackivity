@@ -86,6 +86,8 @@ pub fn create_routes() -> Router<SessionState> {
         // Enhanced user management routes (SuperAdmin only)
         .route("/api/admin/system-users", get(user_management::get_system_users))
         .route("/api/admin/user-statistics", get(user_management::get_user_statistics))
+        // Faculty-scoped user statistics (FacultyAdmin and SuperAdmin)
+        .route("/api/admin/faculty-user-statistics", get(user_management::get_faculty_user_statistics))
         .route("/api/admin/user-bulk-operations", post(user_management::bulk_user_operations))
         // Admin session management routes (Super Admin only)
         .route("/api/admin/sessions", get(auth::get_all_sessions))
