@@ -41,6 +41,7 @@ export interface Faculty {
 export interface Department {
 	id: string; // UUID string
 	name: string;
+	code: string;
 	description?: string;
 	faculty_id: string; // UUID string
 	head_name?: string;

@@ -10,6 +10,7 @@ import { requireAdmin } from '$lib/server/auth';
 // Department schemas
 const departmentCreateSchema = z.object({
 	name: z.string().min(1, 'กรุณากรอกชื่อภาควิชา'),
+	code: z.string().min(1, 'กรุณากรอกรหัสภาควิชา'),
 	description: z.string().optional(),
 	head_name: z.string().optional(),
 	head_email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง').optional().or(z.literal('')),
@@ -18,6 +19,7 @@ const departmentCreateSchema = z.object({
 
 const departmentUpdateSchema = z.object({
 	name: z.string().min(1, 'กรุณากรอกชื่อภาควิชา').optional(),
+	code: z.string().min(1, 'กรุณากรอกรหัสภาควิชา').optional(),
 	description: z.string().optional(),
 	head_name: z.string().optional(),
 	head_email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง').optional().or(z.literal('')),

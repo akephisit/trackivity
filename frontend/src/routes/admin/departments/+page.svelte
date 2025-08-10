@@ -6,7 +6,13 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import {
+		Card,
+		CardContent,
+		CardDescription,
+		CardHeader,
+		CardTitle
+	} from '$lib/components/ui/card';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -14,19 +20,18 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Switch } from '$lib/components/ui/switch';
-	import { 
-		IconLoader, 
-		IconPlus, 
-		IconEdit, 
-		IconTrash, 
+	import {
+		IconLoader,
+		IconPlus,
+		IconEdit,
+		IconTrash,
 		IconBuilding,
-		IconToggleLeft, 
+		IconToggleLeft,
 		IconToggleRight,
 		IconUsers,
 		IconSearch,
 		IconFilter,
 		IconUserCheck,
-		IconSchool,
 		IconUserPlus,
 		IconShield
 	} from '@tabler/icons-svelte/icons';
@@ -48,6 +53,7 @@
 	// Department schemas
 	const departmentCreateSchema = z.object({
 		name: z.string().min(1, 'กรุณากรอกชื่อภาควิชา'),
+		code: z.string().min(1, 'กรุณากรอกรหัสภาควิชา'),
 		description: z.string().optional(),
 		head_name: z.string().optional(),
 		head_email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง').optional().or(z.literal('')),
@@ -61,7 +67,7 @@
 			if (result.type === 'success') {
 				toast.success('สร้างภาควิชาสำเร็จ');
 				createDialogOpen = false;
-				
+
 				setTimeout(async () => {
 					try {
 						refreshing = true;
@@ -80,7 +86,12 @@
 		}
 	});
 
-	const { form: createFormData, enhance: createEnhance, errors: createErrors, submitting: createSubmitting } = createForm;
+	const {
+		form: createFormData,
+		enhance: createEnhance,
+		errors: createErrors,
+		submitting: createSubmitting
+	} = createForm;
 
 	// Dialog states
 	let createDialogOpen = $state(false);
@@ -91,6 +102,7 @@
 	let editingDepartment = $state<Department | null>(null);
 	let editFormData = $state({
 		name: '',
+		code: '',
 		description: '',
 		head_name: '',
 		head_email: '',
@@ -98,37 +110,43 @@
 	});
 
 	// Delete state
-	let departmentToDelete = $state<{id: string, name: string} | null>(null);
+	let departmentToDelete = $state<{ id: string; name: string } | null>(null);
 
 	// Remove admin state
 	let removeAdminDialogOpen = $state(false);
-	let adminToRemove = $state<{departmentId: string, adminId: string, adminName: string, departmentName: string} | null>(null);
+	let adminToRemove = $state<{
+		departmentId: string;
+		adminId: string;
+		adminName: string;
+		departmentName: string;
+	} | null>(null);
 	let removingAdmin = $state(false);
 
 	// Toggle loading
-	let toggleLoading = $state<{[key: string]: boolean}>({});
+	let toggleLoading = $state<{ [key: string]: boolean }>({});
 
 	// Search and filter states
 	let searchQuery = $state('');
 	let statusFilter = $state<'all' | 'active' | 'inactive'>('all');
 
 	// Filtered departments
-	let filteredDepartments = $derived(() => {
+	let filteredDepartments = $derived.by(() => {
 		let filtered = data.departments;
 
 		// Apply search filter
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
-			filtered = filtered.filter(dept => 
-				dept.name.toLowerCase().includes(query) ||
-				(dept.description && dept.description.toLowerCase().includes(query)) ||
-				(dept.head_name && dept.head_name.toLowerCase().includes(query))
+			filtered = filtered.filter(
+				(dept) =>
+					dept.name.toLowerCase().includes(query) ||
+					(dept.description && dept.description.toLowerCase().includes(query)) ||
+					(dept.head_name && dept.head_name.toLowerCase().includes(query))
 			);
 		}
 
 		// Apply status filter
 		if (statusFilter !== 'all') {
-			filtered = filtered.filter(dept => 
+			filtered = filtered.filter((dept) =>
 				statusFilter === 'active' ? dept.status : !dept.status
 			);
 		}
@@ -137,17 +155,18 @@
 	});
 
 	// Stats
-	let stats = $derived({
+	let stats = $derived.by(() => ({
 		total: data.departments.length,
-		active: data.departments.filter(d => d.status).length,
-		inactive: data.departments.filter(d => !d.status).length,
+		active: data.departments.filter((d) => d.status).length,
+		inactive: data.departments.filter((d) => !d.status).length,
 		totalStudents: data.departments.reduce((sum, d) => sum + (d.students_count || 0), 0),
 		totalAdmins: data.departments.reduce((sum, d) => sum + (d.admins_count || 0), 0)
-	});
+	}));
 
 	function openCreateDialog() {
 		$createFormData = {
 			name: '',
+			code: '',
 			description: '',
 			head_name: '',
 			head_email: '',
@@ -160,6 +179,7 @@
 		editingDepartment = department;
 		editFormData = {
 			name: department.name,
+			code: department.code || '',
 			description: department.description || '',
 			head_name: department.head_name || '',
 			head_email: department.head_email || '',
@@ -340,7 +360,7 @@
 				assignAdminDialogOpen = false;
 				departmentForAdmin = null;
 				selectedAdminId = '';
-				
+
 				setTimeout(async () => {
 					try {
 						await invalidate('app:page-data');
@@ -361,7 +381,12 @@
 		}
 	}
 
-	function openRemoveAdminDialog(departmentId: string, adminId: string, adminName: string, departmentName: string) {
+	function openRemoveAdminDialog(
+		departmentId: string,
+		adminId: string,
+		adminName: string,
+		departmentName: string
+	) {
 		adminToRemove = { departmentId, adminId, adminName, departmentName };
 		removeAdminDialogOpen = true;
 	}
@@ -387,7 +412,7 @@
 				toast.success('ถอดถอนแอดมินภาควิชาสำเร็จ');
 				removeAdminDialogOpen = false;
 				adminToRemove = null;
-				
+
 				setTimeout(async () => {
 					try {
 						await invalidate('app:page-data');
@@ -420,8 +445,8 @@
 
 	// Get page title based on user role
 	let pageTitle = $derived(
-		data.userRole === 'FacultyAdmin' && data.currentFaculty 
-			? `จัดการภาควิชา - ${data.currentFaculty.name}` 
+		data.userRole === 'FacultyAdmin' && data.currentFaculty
+			? `จัดการภาควิชา - ${data.currentFaculty.name}`
 			: 'จัดการภาควิชา'
 	);
 </script>
@@ -434,7 +459,10 @@
 	<!-- Header -->
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 id="department-management-heading" class="text-4xl font-bold text-gray-900 dark:text-white">
+			<h1
+				id="department-management-heading"
+				class="text-4xl font-bold text-gray-900 dark:text-white"
+			>
 				{#if data.userRole === 'FacultyAdmin' && data.currentFaculty}
 					จัดการภาควิชา - {data.currentFaculty.name}
 				{:else}
@@ -449,18 +477,21 @@
 				{/if}
 			</p>
 		</div>
-		<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
-			<IconPlus class="h-5 w-5 mr-2" />
+		<Button
+			onclick={openCreateDialog}
+			class="bg-blue-600 px-6 py-3 text-base font-medium text-white hover:bg-blue-700"
+		>
+			<IconPlus class="mr-2 h-5 w-5" />
 			เพิ่มภาควิชาใหม่
 		</Button>
 	</div>
 
 	<!-- Stats Cards -->
-	<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+	<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
 		<Card>
 			<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 				<CardTitle class="text-sm font-medium">ภาควิชาทั้งหมด</CardTitle>
-				<IconBuilding class="h-4 w-4 text-muted-foreground" />
+				<IconBuilding class="text-muted-foreground h-4 w-4" />
 			</CardHeader>
 			<CardContent>
 				<div class="text-2xl font-bold">{stats.total}</div>
@@ -525,10 +556,12 @@
 			</CardTitle>
 		</CardHeader>
 		<CardContent class="space-y-4">
-			<div class="flex flex-col sm:flex-row gap-4">
+			<div class="flex flex-col gap-4 sm:flex-row">
 				<div class="flex-1">
 					<div class="relative">
-						<IconSearch class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+						<IconSearch
+							class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400"
+						/>
 						<Input
 							bind:value={searchQuery}
 							placeholder="ค้นหาภาควิชา, หัวหน้าภาค, หรือคำอธิบาย..."
@@ -539,7 +572,7 @@
 								variant="ghost"
 								size="sm"
 								onclick={clearSearch}
-								class="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+								class="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 transform p-0"
 							>
 								<span class="sr-only">ล้างการค้นหา</span>
 								×
@@ -551,23 +584,23 @@
 					<Button
 						variant={statusFilter === 'all' ? 'default' : 'outline'}
 						size="sm"
-						onclick={() => statusFilter = 'all'}
+						onclick={() => (statusFilter = 'all')}
 					>
 						ทั้งหมด ({stats.total})
 					</Button>
 					<Button
 						variant={statusFilter === 'active' ? 'default' : 'outline'}
 						size="sm"
-						onclick={() => statusFilter = 'active'}
-						class="text-green-600 border-green-600 hover:bg-green-50"
+						onclick={() => (statusFilter = 'active')}
+						class="border-green-600 text-green-600 hover:bg-green-50"
 					>
 						เปิดใช้งาน ({stats.active})
 					</Button>
 					<Button
 						variant={statusFilter === 'inactive' ? 'default' : 'outline'}
 						size="sm"
-						onclick={() => statusFilter = 'inactive'}
-						class="text-red-600 border-red-600 hover:bg-red-50"
+						onclick={() => (statusFilter = 'inactive')}
+						class="border-red-600 text-red-600 hover:bg-red-50"
 					>
 						ปิดใช้งาน ({stats.inactive})
 					</Button>
@@ -580,24 +613,25 @@
 	<div class="space-y-6" role="main" aria-labelledby="department-management-heading">
 		{#if refreshing}
 			<div class="flex items-center justify-center py-12" role="status" aria-live="polite">
-				<IconLoader class="h-8 w-8 animate-spin mr-3 text-blue-500" />
+				<IconLoader class="mr-3 h-8 w-8 animate-spin text-blue-500" />
 				<span class="text-lg text-gray-600 dark:text-gray-300">กำลังรีเฟรชข้อมูล...</span>
 			</div>
 		{:else if filteredDepartments.length === 0}
-			<div class="text-center py-16 text-gray-500 dark:text-gray-400">
+			<div class="py-16 text-center text-gray-500 dark:text-gray-400">
 				{#if searchQuery || statusFilter !== 'all'}
-					<IconSearch class="h-16 w-16 mx-auto mb-6 opacity-50" />
-					<h3 class="text-xl font-semibold mb-2">ไม่พบข้อมูลที่ตรงกับการค้นหา</h3>
-					<p class="text-gray-400 mb-6">ลองเปลี่ยนคำค้นหาหรือตัวกรองใหม่</p>
-					<Button onclick={clearSearch} variant="outline">
-						ล้างการค้นหา
-					</Button>
+					<IconSearch class="mx-auto mb-6 h-16 w-16 opacity-50" />
+					<h3 class="mb-2 text-xl font-semibold">ไม่พบข้อมูลที่ตรงกับการค้นหา</h3>
+					<p class="mb-6 text-gray-400">ลองเปลี่ยนคำค้นหาหรือตัวกรองใหม่</p>
+					<Button onclick={clearSearch} variant="outline">ล้างการค้นหา</Button>
 				{:else}
-					<IconBuilding class="h-16 w-16 mx-auto mb-6 opacity-50" />
-					<h3 class="text-xl font-semibold mb-2">ยังไม่มีข้อมูลภาควิชาในระบบ</h3>
-					<p class="text-gray-400 mb-6">เริ่มต้นด้วยการเพิ่มภาควิชาแรก</p>
-					<Button onclick={openCreateDialog} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3">
-						<IconPlus class="h-5 w-5 mr-2" />
+					<IconBuilding class="mx-auto mb-6 h-16 w-16 opacity-50" />
+					<h3 class="mb-2 text-xl font-semibold">ยังไม่มีข้อมูลภาควิชาในระบบ</h3>
+					<p class="mb-6 text-gray-400">เริ่มต้นด้วยการเพิ่มภาควิชาแรก</p>
+					<Button
+						onclick={openCreateDialog}
+						class="bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
+					>
+						<IconPlus class="mr-2 h-5 w-5" />
 						เพิ่มภาควิชาแรก
 					</Button>
 				{/if}
@@ -612,9 +646,7 @@
 							{filteredDepartments.length} รายการ
 						</Badge>
 					</CardTitle>
-					<CardDescription>
-						จัดการข้อมูลภาควิชาต่างๆ ในระบบ
-					</CardDescription>
+					<CardDescription>จัดการข้อมูลภาควิชาต่างๆ ในระบบ</CardDescription>
 				</CardHeader>
 				<CardContent class="p-0">
 					<div class="overflow-hidden">
@@ -622,13 +654,14 @@
 							<Table.Header>
 								<Table.Row class="bg-gray-50 dark:bg-gray-800">
 									<Table.Head class="font-semibold">ชื่อภาควิชา</Table.Head>
+									<Table.Head class="font-semibold">รหัส</Table.Head>
 									{#if data.userRole === 'SuperAdmin'}
 										<Table.Head class="font-semibold">คณะ</Table.Head>
 									{/if}
 									<Table.Head class="font-semibold">หัวหน้าภาค</Table.Head>
 									<Table.Head class="font-semibold">แอดมินภาควิชา</Table.Head>
-									<Table.Head class="font-semibold text-center">จำนวนนักศึกษา</Table.Head>
-									<Table.Head class="font-semibold text-center">จำนวนแอดมิน</Table.Head>
+									<Table.Head class="text-center font-semibold">จำนวนนักศึกษา</Table.Head>
+									<Table.Head class="text-center font-semibold">จำนวนแอดมิน</Table.Head>
 									<Table.Head class="font-semibold">สถานะ</Table.Head>
 									<Table.Head class="font-semibold">วันที่สร้าง</Table.Head>
 									<Table.Head class="text-right font-semibold">การดำเนินการ</Table.Head>
@@ -637,9 +670,11 @@
 							<Table.Body>
 								{#each filteredDepartments as department (department.id)}
 									<Table.Row class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-										<Table.Cell class="font-medium py-4">
+										<Table.Cell class="py-4 font-medium">
 											<div class="flex items-center gap-3">
-												<div class="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+												<div
+													class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900"
+												>
 													<IconBuilding class="h-5 w-5 text-blue-600 dark:text-blue-400" />
 												</div>
 												<div>
@@ -647,12 +682,17 @@
 														{department.name}
 													</div>
 													{#if department.description}
-														<div class="text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+														<div class="max-w-xs truncate text-sm text-gray-500 dark:text-gray-400">
 															{department.description}
 														</div>
 													{/if}
 												</div>
 											</div>
+										</Table.Cell>
+										<Table.Cell class="py-4">
+											<Badge variant="outline" class="font-mono">
+												{department.code}
+											</Badge>
 										</Table.Cell>
 										{#if data.userRole === 'SuperAdmin'}
 											<Table.Cell class="py-4">
@@ -686,14 +726,20 @@
 												<div class="space-y-1">
 													{#each department.department_admins.slice(0, 2) as admin}
 														<div class="flex items-center gap-2">
-															<Badge variant="outline" class="text-xs flex items-center gap-1">
+															<Badge variant="outline" class="flex items-center gap-1 text-xs">
 																<IconShield class="h-3 w-3" />
 																{admin.full_name || admin.user?.email || 'N/A'}
 															</Badge>
 															<Button
 																variant="ghost"
 																size="sm"
-																onclick={() => openRemoveAdminDialog(department.id, admin.id, admin.full_name || admin.user?.email || 'แอดมิน', department.name)}
+																onclick={() =>
+																	openRemoveAdminDialog(
+																		department.id,
+																		admin.id,
+																		admin.full_name || admin.user?.email || 'แอดมิน',
+																		department.name
+																	)}
 																class="h-6 w-6 p-0 text-red-500 hover:text-red-700"
 																title="ถอดถอนแอดมิน"
 															>
@@ -709,14 +755,14 @@
 												</div>
 											{:else}
 												<div class="flex items-center gap-2">
-													<span class="text-gray-400 text-sm">ยังไม่มีแอดมิน</span>
+													<span class="text-sm text-gray-400">ยังไม่มีแอดมิน</span>
 													<Button
 														variant="outline"
 														size="sm"
 														onclick={() => openAssignAdminDialog(department)}
 														class="h-7 px-2 text-xs"
 													>
-														<IconUserPlus class="h-3 w-3 mr-1" />
+														<IconUserPlus class="mr-1 h-3 w-3" />
 														มอบหมาย
 													</Button>
 												</div>
@@ -733,12 +779,15 @@
 											</Badge>
 										</Table.Cell>
 										<Table.Cell class="py-4">
-											<Badge 
+											<Badge
 												variant={department.status ? 'default' : 'secondary'}
-												class={department.status ? 'bg-green-100 text-green-800 hover:bg-green-100' : 'bg-gray-100 text-gray-600'}
+												class={department.status
+													? 'bg-green-100 text-green-800 hover:bg-green-100'
+													: 'bg-gray-100 text-gray-600'}
 											>
-												<span class="w-2 h-2 rounded-full mr-2" 
-													class:bg-green-500={department.status} 
+												<span
+													class="mr-2 h-2 w-2 rounded-full"
+													class:bg-green-500={department.status}
 													class:bg-gray-400={!department.status}
 												></span>
 												{department.status ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}
@@ -747,35 +796,37 @@
 										<Table.Cell class="py-4 text-sm text-gray-500">
 											{formatDateTime(department.created_at)}
 										</Table.Cell>
-										<Table.Cell class="text-right py-4">
-											<div class="flex items-center gap-1 justify-end">
-												{#if (!department.department_admins || department.department_admins.length === 0)}
-													<Button 
-														variant="ghost" 
-														size="sm" 
+										<Table.Cell class="py-4 text-right">
+											<div class="flex items-center justify-end gap-1">
+												{#if !department.department_admins || department.department_admins.length === 0}
+													<Button
+														variant="ghost"
+														size="sm"
 														onclick={() => openAssignAdminDialog(department)}
-														class="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+														class="text-purple-600 hover:bg-purple-50 hover:text-purple-700"
 														title="มอบหมายแอดมินภาควิชา"
 													>
 														<IconUserPlus class="h-4 w-4" />
 													</Button>
 												{:else}
-													<Button 
-														variant="ghost" 
-														size="sm" 
+													<Button
+														variant="ghost"
+														size="sm"
 														onclick={() => openAssignAdminDialog(department)}
-														class="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+														class="text-purple-600 hover:bg-purple-50 hover:text-purple-700"
 														title="เพิ่มแอดมินภาควิชา"
 													>
 														<IconUserPlus class="h-4 w-4" />
 													</Button>
 												{/if}
-												<Button 
-													variant="ghost" 
-													size="sm" 
+												<Button
+													variant="ghost"
+													size="sm"
 													onclick={() => handleToggleStatus(department.id, department.status)}
 													disabled={toggleLoading[department.id] || false}
-													class="{department.status ? 'text-orange-600 hover:text-orange-700 hover:bg-orange-50' : 'text-green-600 hover:text-green-700 hover:bg-green-50'} transition-colors"
+													class="{department.status
+														? 'text-orange-600 hover:bg-orange-50 hover:text-orange-700'
+														: 'text-green-600 hover:bg-green-50 hover:text-green-700'} transition-colors"
 													title="{department.status ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}ภาควิชา"
 												>
 													{#if toggleLoading[department.id]}
@@ -786,11 +837,11 @@
 														<IconToggleRight class="h-4 w-4" />
 													{/if}
 												</Button>
-												<Button 
-													variant="ghost" 
-													size="sm" 
+												<Button
+													variant="ghost"
+													size="sm"
 													onclick={() => openEditDialog(department)}
-													class="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+													class="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
 													title="แก้ไขภาควิชา"
 												>
 													<IconEdit class="h-4 w-4" />
@@ -799,7 +850,7 @@
 													variant="ghost"
 													size="sm"
 													onclick={() => openDeleteDialog(department.id, department.name)}
-													class="text-red-600 hover:text-red-700 hover:bg-red-50"
+													class="text-red-600 hover:bg-red-50 hover:text-red-700"
 													title="ลบภาควิชา"
 												>
 													<IconTrash class="h-4 w-4" />
@@ -822,9 +873,7 @@
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>เพิ่มภาควิชาใหม่</Dialog.Title>
-			<Dialog.Description>
-				กรอกข้อมูลเพื่อสร้างภาควิชาใหม่ในระบบ
-			</Dialog.Description>
+			<Dialog.Description>กรอกข้อมูลเพื่อสร้างภาควิชาใหม่ในระบบ</Dialog.Description>
 		</Dialog.Header>
 
 		<form method="POST" action="?/create" use:createEnhance class="space-y-4">
@@ -844,6 +893,21 @@
 							{...props}
 							bind:value={$createFormData.name}
 							placeholder="เช่น ภาควิชาวิทยาการคอมพิวเตอร์"
+							disabled={$createSubmitting}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field form={createForm} name="code">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>รหัสภาควิชา</Label>
+						<Input
+							{...props}
+							bind:value={$createFormData.code}
+							placeholder="เช่น CS หรือ COMP"
 							disabled={$createSubmitting}
 						/>
 					{/snippet}
@@ -904,7 +968,7 @@
 			</div>
 
 			<Dialog.Footer>
-				<Button type="button" variant="outline" onclick={() => createDialogOpen = false}>
+				<Button type="button" variant="outline" onclick={() => (createDialogOpen = false)}>
 					ยกเลิก
 				</Button>
 				<Button type="submit" disabled={$createSubmitting}>
@@ -925,19 +989,19 @@
 	<Dialog.Content class="sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>แก้ไขภาควิชา</Dialog.Title>
-			<Dialog.Description>
-				แก้ไขข้อมูลของภาควิชา
-			</Dialog.Description>
+			<Dialog.Description>แก้ไขข้อมูลของภาควิชา</Dialog.Description>
 		</Dialog.Header>
 
 		{#if editingDepartment}
 			<div class="space-y-4">
 				<div class="space-y-2">
 					<Label>ชื่อภาควิชา</Label>
-					<Input
-						bind:value={editFormData.name}
-						placeholder="เช่น ภาควิชาวิทยาการคอมพิวเตอร์"
-					/>
+					<Input bind:value={editFormData.name} placeholder="เช่น ภาควิชาวิทยาการคอมพิวเตอร์" />
+				</div>
+
+				<div class="space-y-2">
+					<Label>รหัสภาควิชา</Label>
+					<Input bind:value={editFormData.code} placeholder="เช่น CS หรือ COMP" />
 				</div>
 
 				<div class="space-y-2">
@@ -951,10 +1015,7 @@
 
 				<div class="space-y-2">
 					<Label>ชื่อหัวหน้าภาค</Label>
-					<Input
-						bind:value={editFormData.head_name}
-						placeholder="เช่น รศ.ดร. สมชาย ใจดี"
-					/>
+					<Input bind:value={editFormData.head_name} placeholder="เช่น รศ.ดร. สมชาย ใจดี" />
 				</div>
 
 				<div class="space-y-2">
@@ -972,12 +1033,10 @@
 				</div>
 
 				<Dialog.Footer>
-					<Button type="button" variant="outline" onclick={() => editDialogOpen = false}>
+					<Button type="button" variant="outline" onclick={() => (editDialogOpen = false)}>
 						ยกเลิก
 					</Button>
-					<Button type="button" onclick={handleUpdate}>
-						บันทึกการแก้ไข
-					</Button>
+					<Button type="button" onclick={handleUpdate}>บันทึกการแก้ไข</Button>
 				</Dialog.Footer>
 			</div>
 		{/if}
@@ -992,7 +1051,10 @@
 			<AlertDialog.Description>
 				{#if departmentToDelete}
 					คุณแน่ใจหรือไม่ที่จะลบภาควิชา "{departmentToDelete.name}"?<br />
-					<strong class="text-red-600">การดำเนินการนี้จะลบข้อมูลทั้งหมดที่เกี่ยวข้องกับภาควิชานี้ รวมถึงผู้ใช้และแอดมินในภาควิชา</strong><br />
+					<strong class="text-red-600"
+						>การดำเนินการนี้จะลบข้อมูลทั้งหมดที่เกี่ยวข้องกับภาควิชานี้
+						รวมถึงผู้ใช้และแอดมินในภาควิชา</strong
+					><br />
 					การดำเนินการนี้ไม่สามารถยกเลิกได้
 				{:else}
 					กำลังโหลดข้อมูล...
@@ -1000,16 +1062,15 @@
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
-			<AlertDialog.Cancel onclick={() => {
-				deleteDialogOpen = false;
-				departmentToDelete = null;
-			}}>
+			<AlertDialog.Cancel
+				onclick={() => {
+					deleteDialogOpen = false;
+					departmentToDelete = null;
+				}}
+			>
 				ยกเลิก
 			</AlertDialog.Cancel>
-			<AlertDialog.Action 
-				onclick={handleDelete}
-				class="bg-red-600 hover:bg-red-700 text-white"
-			>
+			<AlertDialog.Action onclick={handleDelete} class="bg-red-600 text-white hover:bg-red-700">
 				ลบภาควิชา
 			</AlertDialog.Action>
 		</AlertDialog.Footer>
@@ -1036,13 +1097,13 @@
 		{#if departmentForAdmin}
 			<div class="space-y-4">
 				<!-- Department Info -->
-				<div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+				<div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
 					<div class="flex items-center gap-2">
 						<IconBuilding class="h-4 w-4 text-blue-600" />
 						<span class="font-medium">{departmentForAdmin.name}</span>
 					</div>
 					{#if departmentForAdmin.description}
-						<p class="text-sm text-gray-600 mt-1">{departmentForAdmin.description}</p>
+						<p class="mt-1 text-sm text-gray-600">{departmentForAdmin.description}</p>
 					{/if}
 				</div>
 
@@ -1051,19 +1112,21 @@
 					<Label>เลือกแอดมินคณะ</Label>
 					{#if loadingAdmins}
 						<div class="flex items-center justify-center py-8">
-							<IconLoader class="h-6 w-6 animate-spin mr-2" />
+							<IconLoader class="mr-2 h-6 w-6 animate-spin" />
 							<span>กำลังโหลดรายชื่อแอดมิน...</span>
 						</div>
 					{:else if availableAdmins.length === 0}
-						<div class="text-center py-8 text-gray-500">
-							<IconShield class="h-12 w-12 mx-auto mb-3 opacity-50" />
+						<div class="py-8 text-center text-gray-500">
+							<IconShield class="mx-auto mb-3 h-12 w-12 opacity-50" />
 							<p class="mb-2">ไม่มีแอดมินคณะที่สามารถมอบหมายได้</p>
 							<p class="text-sm">แอดมินคณะทั้งหมดได้รับการมอบหมายแล้ว</p>
 						</div>
 					{:else}
-						<div class="space-y-2 max-h-64 overflow-y-auto">
+						<div class="max-h-64 space-y-2 overflow-y-auto">
 							{#each availableAdmins as admin}
-								<label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+								<label
+									class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-gray-50 dark:hover:bg-gray-800"
+								>
 									<input
 										type="radio"
 										bind:group={selectedAdminId}
@@ -1088,9 +1151,9 @@
 			</div>
 
 			<Dialog.Footer>
-				<Button 
-					type="button" 
-					variant="outline" 
+				<Button
+					type="button"
+					variant="outline"
 					onclick={() => {
 						assignAdminDialogOpen = false;
 						departmentForAdmin = null;
@@ -1100,8 +1163,8 @@
 				>
 					ยกเลิก
 				</Button>
-				<Button 
-					type="button" 
+				<Button
+					type="button"
 					onclick={handleAssignAdmin}
 					disabled={assigningAdmin || !selectedAdminId || availableAdmins.length === 0}
 					class="bg-purple-600 hover:bg-purple-700"
@@ -1126,8 +1189,10 @@
 			<AlertDialog.Title>ยืนยันการถอดถอนแอดมินภาควิชา</AlertDialog.Title>
 			<AlertDialog.Description>
 				{#if adminToRemove}
-					คุณแน่ใจหรือไม่ที่จะถอดถอน "{adminToRemove.adminName}" จากตำแหน่งแอดมินภาควิชา "{adminToRemove.departmentName}"?<br />
-					<strong class="text-orange-600">แอดมินคนนี้จะไม่สามารถจัดการภาควิชานี้ได้อีกต่อไป</strong><br />
+					คุณแน่ใจหรือไม่ที่จะถอดถอน "{adminToRemove.adminName}" จากตำแหน่งแอดมินภาควิชา "{adminToRemove.departmentName}"?<br
+					/>
+					<strong class="text-orange-600">แอดมินคนนี้จะไม่สามารถจัดการภาควิชานี้ได้อีกต่อไป</strong
+					><br />
 					แต่ยังคงเป็นแอดมินคณะอยู่
 				{:else}
 					กำลังโหลดข้อมูล...
@@ -1135,15 +1200,17 @@
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
-			<AlertDialog.Cancel onclick={() => {
-				removeAdminDialogOpen = false;
-				adminToRemove = null;
-			}}>
+			<AlertDialog.Cancel
+				onclick={() => {
+					removeAdminDialogOpen = false;
+					adminToRemove = null;
+				}}
+			>
 				ยกเลิก
 			</AlertDialog.Cancel>
-			<AlertDialog.Action 
+			<AlertDialog.Action
 				onclick={handleRemoveAdmin}
-				class="bg-orange-600 hover:bg-orange-700 text-white"
+				class="bg-orange-600 text-white hover:bg-orange-700"
 				disabled={removingAdmin}
 			>
 				{#if removingAdmin}
