@@ -93,9 +93,10 @@ export const load: PageServerLoad = async (event) => {
 					.filter((admin: any) => {
 						if (admin.admin_role) {
 							const level = mapAdminLevel(admin.admin_role.admin_level);
-							// For SuperAdmin view: show all FacultyAdmin level
-							// For FacultyAdmin view: show FacultyAdmin in their faculty
-							return level === AdminLevel.FacultyAdmin;
+							// Show both FacultyAdmin and RegularAdmin (general faculty admins)
+							// For SuperAdmin view: show all FacultyAdmin and RegularAdmin with faculty assignment
+							// For FacultyAdmin view: show FacultyAdmin and RegularAdmin in their faculty
+							return (level === AdminLevel.FacultyAdmin || level === AdminLevel.RegularAdmin);
 						}
 						return false;
 					})

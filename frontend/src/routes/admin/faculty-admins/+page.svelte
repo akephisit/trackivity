@@ -637,7 +637,7 @@
 						</Badge>
 					</CardTitle>
 					<CardDescription>
-						จัดการข้อมูลและสิทธิ์การเข้าถึงของแอดมินคณะ
+						จัดการข้อมูลและสิทธิ์การเข้าถึงของแอดมินคณะและแอดมินทั่วไปในคณะ
 					</CardDescription>
 				</CardHeader>
 				<CardContent class="p-0">
@@ -693,9 +693,12 @@
 										{/if}
 										<Table.Cell class="py-4">
 											<div class="flex flex-wrap gap-1">
-												<Badge variant="default" class="text-xs flex items-center gap-1">
+												<Badge 
+													variant={admin.admin_level === AdminLevel.FacultyAdmin ? "default" : "secondary"} 
+													class="text-xs flex items-center gap-1"
+												>
 													<IconShield class="h-3 w-3" />
-													แอดมินคณะ
+													{admin.admin_level === AdminLevel.FacultyAdmin ? 'แอดมินคณะ' : 'แอดมินทั่วไป'}
 												</Badge>
 												{#if admin.assigned_departments && admin.assigned_departments.length > 0}
 													<Badge variant="secondary" class="text-xs flex items-center gap-1">
