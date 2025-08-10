@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ActivitiesTable from "$lib/components/activities-table.svelte";
 	import { mockActivities } from "$lib/data/activities.js";
+	import { Button } from "$lib/components/ui/button";
+	import { IconUser } from '@tabler/icons-svelte/icons';
 </script>
 
 <div class="min-h-screen bg-background">
@@ -14,13 +16,19 @@
 						จัดการและติดตามกิจกรรมทั้งหมดของมหาวิทยาลัยในที่เดียว
 					</p>
 				</div>
-				<div class="text-sm text-muted-foreground">
-					วันที่ {new Date().toLocaleDateString('th-TH', {
-						year: 'numeric',
-						month: 'long',
-						day: 'numeric',
-						weekday: 'long'
-					})}
+				<div class="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+					<div class="text-sm text-muted-foreground">
+						{new Date().toLocaleDateString('th-TH', {
+							year: 'numeric',
+							month: 'long',
+							day: 'numeric',
+							weekday: 'long'
+						})}
+					</div>
+					<Button href="/login" variant="outline" size="sm" class="flex items-center gap-2">
+						<IconUser class="h-4 w-4" />
+						เข้าสู่ระบบ
+					</Button>
 				</div>
 			</div>
 		</div>
