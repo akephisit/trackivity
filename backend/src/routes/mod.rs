@@ -42,11 +42,6 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/faculties/{faculty_id}/departments", post(department::create_faculty_department))
         .route("/api/departments/{id}", put(department::update_department))
         .route("/api/departments/{id}", delete(department::delete_department))
-        // Department admin management routes (Faculty Admin or SuperAdmin only)
-        .route("/api/departments/{department_id}/admins", get(department::get_department_admins))
-        .route("/api/departments/{department_id}/admins", post(department::assign_department_admin))
-        .route("/api/departments/{department_id}/admins/{admin_role_id}", delete(department::remove_department_admin))
-        .route("/api/departments/{source_department_id}/transfer-admin", post(department::transfer_department_admin))
         // Faculty-scoped admin operations
         .route("/api/faculties/{faculty_id}/admins", get(admin::get_faculty_admins))
         .route("/api/faculties/{faculty_id}/users", get(admin::get_faculty_users))
