@@ -6,6 +6,7 @@ pub mod admin_session_mgmt;
 pub mod auth;
 pub mod department;
 pub mod faculty;
+pub mod qr_activity;
 pub mod sse;
 pub mod user;
 pub mod user_management;

@@ -46,6 +46,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Security
 rand = "0.8"
 
+# HMAC and Cryptography
+hmac = "0.12"
+sha2 = "0.10"
+
+# Hex encoding/decoding for QR data
+hex = "0.4"
+
 # Async trait
 async-trait = "0.1"
 

@@ -588,6 +588,19 @@ impl SseConnectionManager {
         self.send_to_user(user_id, message).await
     }
     
+    /// Send a general SSE message
+    pub async fn send_message(&self, message: SseMessage) -> Result<(), String> {
+        // If targeting specific users/permissions, send to relevant connections
+        if message.target_user_id.is_some() {
+            return self.send_to_user(message.target_user_id.unwrap(), message).await;
+        }
+        
+        // For now, just broadcast to all connections when targeting permissions
+        // TODO: Implement proper permission-based filtering
+        self.broadcast(message).await;
+        Ok(())
+    }
+
     /// Send admin alert notification
     pub async fn send_admin_alert(
         &self,
