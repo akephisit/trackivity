@@ -112,21 +112,38 @@ export const actions: Actions = {
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 10000); // timeout 10 วินาที
 			
+			// Validate required fields
+			if (!form.data.faculty_id || form.data.faculty_id.trim() === '') {
+				form.errors.faculty_id = ['กรุณาเลือกคณะ'];
+				return fail(400, { form });
+			}
+			
+			if (!form.data.department_id || form.data.department_id.trim() === '') {
+				form.errors.department_id = ['กรุณาเลือกสาขาวิชา'];
+				return fail(400, { form });
+			}
+
+			// Use department_id as required field
+			const departmentId = form.data.department_id;
+			
+			const requestBody = {
+				student_id: form.data.student_id,
+				email: form.data.email,
+				password: form.data.password,
+				first_name: form.data.first_name,
+				last_name: form.data.last_name,
+				department_id: departmentId
+			};
+			
+			console.log('Registration request body:', JSON.stringify(requestBody, null, 2));
+			
 			const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
 				method: 'POST',
 				signal: controller.signal,
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				body: JSON.stringify({
-					student_id: form.data.student_id,
-					email: form.data.email,
-					password: form.data.password,
-					first_name: form.data.first_name,
-					last_name: form.data.last_name,
-					faculty_id: form.data.faculty_id,
-					department_id: form.data.department_id
-				})
+				body: JSON.stringify(requestBody)
 			});
 
 			clearTimeout(timeoutId);

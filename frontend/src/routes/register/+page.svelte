@@ -17,6 +17,9 @@
 
 	const form = superForm(data.form, {
 		validators: zodClient(registerSchema),
+		onSubmit: () => {
+			console.log('Form data on submit:', $formData);
+		},
 		onResult: ({ result }) => {
 			if (result.type === 'failure') {
 				toast.error('การสมัครสมาชิกไม่สำเร็จ');
@@ -59,27 +62,29 @@
 
 	// Handle faculty selection
 	$effect(() => {
-		if (selectedFaculty) {
+		if (selectedFaculty && selectedFaculty.trim() !== '') {
 			$formData.faculty_id = selectedFaculty;
 			// Reset department when faculty changes
 			selectedDepartment = '';
-			$formData.department_id = undefined;
+			$formData.department_id = '';
 			// Load departments for selected faculty
 			loadDepartments(selectedFaculty);
 		} else {
-			$formData.faculty_id = undefined;
+			$formData.faculty_id = '';
 			selectedDepartment = '';
-			$formData.department_id = undefined;
+			$formData.department_id = '';
 			departments = [];
 		}
 	});
 
 	// Handle department selection
 	$effect(() => {
-		if (selectedDepartment) {
+		if (selectedDepartment && selectedDepartment.trim() !== '') {
 			$formData.department_id = selectedDepartment;
+			console.log('Department selected:', selectedDepartment);
 		} else {
-			$formData.department_id = undefined;
+			$formData.department_id = '';
+			console.log('Department cleared, selectedDepartment:', selectedDepartment);
 		}
 	});
 
@@ -330,7 +335,7 @@
 								{#snippet children({ props })}
 									<Label for={props.id} class="flex items-center gap-2">
 										<IconUser class="h-4 w-4" />
-										คณะ (ไม่บังคับ)
+										คณะ
 									</Label>
 									<Select.Root type="single" bind:value={selectedFaculty} disabled={$submitting}>
 										<Select.Trigger class="w-full">
@@ -355,7 +360,7 @@
 								{#snippet children({ props })}
 									<Label for={props.id} class="flex items-center gap-2">
 										<IconUser class="h-4 w-4" />
-										สาขาวิชา (ไม่บังคับ)
+										สาขาวิชา
 									</Label>
 									<Select.Root type="single" bind:value={selectedDepartment} disabled={$submitting || loadingDepartments || !selectedFaculty}>
 										<Select.Trigger class="w-full">
@@ -394,8 +399,8 @@
 							</div>
 							<div>
 								<ul class="space-y-1 list-disc list-inside">
-									<li>คณะและสาขาวิชาเป็นข้อมูลไม่บังคับ</li>
-									<li>เลือกคณะก่อนเพื่อดูสาขาวิชา</li>
+									<li>เลือกคณะก่อนเพื่อดูรายการสาขาวิชา</li>
+									<li>คณะและสาขาวิชาเป็นข้อมูลที่จำเป็น</li>
 									<li>สามารถแก้ไขข้อมูลได้ภายหลัง</li>
 								</ul>
 							</div>
