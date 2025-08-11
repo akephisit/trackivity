@@ -4,8 +4,25 @@
 	import { Button } from "$lib/components/ui/button";
 	import { IconUser, IconLogout } from '@tabler/icons-svelte/icons';
 	import type { PageData } from './$types';
+    import { onMount } from 'svelte';
+    import { toast } from 'svelte-sonner';
+    import { afterNavigate, goto } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
+
+    onMount(() => {
+        afterNavigate(() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('logout') === '1') {
+                toast.success('ออกจากระบบสำเร็จ');
+                // Clean the URL parameter via router
+                params.delete('logout');
+                const newSearch = params.toString();
+                const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+                goto(newUrl, { replaceState: true, noScroll: true, keepFocus: true });
+            }
+        });
+    });
 </script>
 
 <div class="min-h-screen bg-background">
