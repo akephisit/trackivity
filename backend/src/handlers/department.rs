@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::middleware::session::{SessionState, FacultyAdminUser};
+use crate::middleware::session::{SessionState, FacultyAdminUser, SuperAdminUser};
 use crate::models::{
     department::Department,
     admin_role::AdminLevel,
@@ -63,22 +63,116 @@ pub async fn get_faculty_departments(
         return Err((StatusCode::NOT_FOUND, Json(error_response)));
     }
 
-    // Get departments
-    let departments_result = sqlx::query_as::<_, Department>(
-        "SELECT id, name, code, faculty_id, description, status, created_at, updated_at 
-         FROM departments WHERE faculty_id = $1 ORDER BY name"
-    )
-    .bind(faculty_id)
-    .fetch_all(&session_state.db_pool)
-    .await;
+    // Get departments with accurate student counts per department
+    let query = r#"
+        SELECT 
+            d.id,
+            d.name,
+            d.code,
+            d.faculty_id,
+            d.description,
+            d.status,
+            d.created_at,
+            d.updated_at,
+            COALESCE(COUNT(u.id), 0) AS students_count
+        FROM departments d
+        LEFT JOIN users u ON u.department_id = d.id
+        WHERE d.faculty_id = $1
+        GROUP BY d.id, d.name, d.code, d.faculty_id, d.description, d.status, d.created_at, d.updated_at
+        ORDER BY d.name
+    "#;
 
-    match departments_result {
-        Ok(departments) => {
+    let rows_result = sqlx::query(query)
+        .bind(faculty_id)
+        .fetch_all(&session_state.db_pool)
+        .await;
+
+    match rows_result {
+        Ok(rows) => {
+            let departments: Vec<Value> = rows.into_iter().map(|row| {
+                json!({
+                    "id": row.get::<Uuid, _>("id"),
+                    "name": row.get::<String, _>("name"),
+                    "code": row.get::<String, _>("code"),
+                    "faculty_id": row.get::<Uuid, _>("faculty_id"),
+                    "description": row.get::<Option<String>, _>("description"),
+                    "status": row.get::<bool, _>("status"),
+                    "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+                    "updated_at": row.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
+                    "students_count": row.get::<i64, _>("students_count"),
+                })
+            }).collect();
+
             let response = json!({
                 "status": "success",
                 "data": {
                     "departments": departments,
                     "faculty_id": faculty_id,
+                    "total_count": departments.len()
+                },
+                "message": "Departments retrieved successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to fetch departments: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get all departments (SuperAdmin) with accurate student counts and faculty info
+pub async fn get_all_departments_admin(
+    State(session_state): State<SessionState>,
+    _admin: SuperAdminUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let query = r#"
+        SELECT 
+            d.id,
+            d.name,
+            d.code,
+            d.faculty_id,
+            f.name as faculty_name,
+            d.description,
+            d.status,
+            d.created_at,
+            d.updated_at,
+            COALESCE(COUNT(u.id), 0) AS students_count
+        FROM departments d
+        JOIN faculties f ON d.faculty_id = f.id
+        LEFT JOIN users u ON u.department_id = d.id
+        GROUP BY d.id, d.name, d.code, d.faculty_id, f.name, d.description, d.status, d.created_at, d.updated_at
+        ORDER BY f.name, d.name
+    "#;
+
+    let rows_result = sqlx::query(query)
+        .fetch_all(&session_state.db_pool)
+        .await;
+
+    match rows_result {
+        Ok(rows) => {
+            let departments: Vec<Value> = rows.into_iter().map(|row| {
+                json!({
+                    "id": row.get::<Uuid, _>("id"),
+                    "name": row.get::<String, _>("name"),
+                    "code": row.get::<String, _>("code"),
+                    "faculty_id": row.get::<Uuid, _>("faculty_id"),
+                    "faculty": { "id": row.get::<Uuid, _>("faculty_id"), "name": row.get::<String, _>("faculty_name") },
+                    "description": row.get::<Option<String>, _>("description"),
+                    "status": row.get::<bool, _>("status"),
+                    "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+                    "updated_at": row.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
+                    "students_count": row.get::<i64, _>("students_count"),
+                })
+            }).collect();
+
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "departments": departments,
                     "total_count": departments.len()
                 },
                 "message": "Departments retrieved successfully"
@@ -555,4 +649,3 @@ pub async fn get_faculty_departments_public(
         }
     }
 }
-
