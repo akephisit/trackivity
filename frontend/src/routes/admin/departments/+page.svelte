@@ -555,7 +555,7 @@
 											</div>
 										</Table.Cell>
 										<Table.Cell class="py-4">
-											<Badge variant="outline" class="font-mono">
+											<Badge variant="outline">
 												{department.code}
 											</Badge>
 										</Table.Cell>
@@ -587,7 +587,7 @@
 											{/if}
 										</Table.Cell>
 										<Table.Cell class="py-4 text-center">
-											<Badge variant="secondary" class="font-mono">
+											<Badge variant="secondary">
 												{department.students_count || 0}
 											</Badge>
 										</Table.Cell>
@@ -874,4 +874,3 @@
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
-
