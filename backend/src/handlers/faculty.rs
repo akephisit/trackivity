@@ -8,7 +8,7 @@ use serde_json::json;
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::middleware::session::{SessionState, SuperAdminUser};
+use crate::middleware::session::{SessionState, SuperAdminUser, FacultyAdminUser};
 use crate::models::{
     faculty::Faculty,
     department::Department,
@@ -39,6 +39,38 @@ pub async fn get_faculties(
     // Query active faculties only for public access
     let query_result = sqlx::query_as::<_, Faculty>(
         "SELECT id, name, code, description, status, created_at, updated_at FROM faculties WHERE status = true ORDER BY name",
+    )
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    match query_result {
+        Ok(faculties) => {
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "faculties": faculties
+                }
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to fetch faculties: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get all faculties for admin (including inactive ones)
+pub async fn get_all_faculties_admin(
+    State(session_state): State<SessionState>,
+    admin: FacultyAdminUser,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Query all faculties for admin (including inactive)
+    let query_result = sqlx::query_as::<_, Faculty>(
+        "SELECT id, name, code, description, status, created_at, updated_at FROM faculties ORDER BY name",
     )
     .fetch_all(&session_state.db_pool)
     .await;

@@ -29,6 +29,7 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/admin/auth/me", get(auth::admin_me))
         // Faculty routes
         .route("/api/faculties", get(faculty::get_faculties))
+        .route("/api/admin/faculties", get(faculty::get_all_faculties_admin))
         .route("/api/faculties/{id}", get(faculty::get_faculty))
         .route("/api/faculties", post(faculty::create_faculty))
         .route("/api/faculties/{id}", put(faculty::update_faculty))

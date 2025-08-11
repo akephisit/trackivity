@@ -31,8 +31,8 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 	}
 
 	try {
-		// Fetch faculties
-		const facultiesResponse = await fetch(`${API_BASE_URL}/api/faculties`, {
+		// Fetch all faculties for admin (including inactive ones)
+		const facultiesResponse = await fetch(`${API_BASE_URL}/api/admin/faculties`, {
 			headers: {
 				'Cookie': `session_id=${sessionId}`
 			}
