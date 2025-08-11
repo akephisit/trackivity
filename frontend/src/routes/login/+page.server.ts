@@ -75,7 +75,7 @@ export const actions: Actions = {
 					httpOnly: true,
 					secure: process.env.NODE_ENV === 'production',
 					sameSite: 'lax',
-					maxAge: 60 * 60 * 24 * 7 // 7 วัน
+					maxAge: form.data.remember_me ? 30 * 24 * 60 * 60 : 24 * 60 * 60 // 30 days or 1 day
 				});
 
 				// Redirect ไปยังหน้าที่ต้องการ
