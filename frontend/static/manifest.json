@@ -1,0 +1,138 @@
+{
+  "name": "Trackivity - ระบบติดตามกิจกรรม",
+  "short_name": "Trackivity",
+  "description": "ระบบติดตามการเข้าร่วมกิจกรรมด้วย QR Code",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "th",
+  "categories": ["education", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-dashboard.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "หน้าแดชบอร์ดสำหรับนักศึกษา"
+    },
+    {
+      "src": "/screenshots/mobile-qr.png", 
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "หน้าแสดง QR Code"
+    },
+    {
+      "src": "/screenshots/desktop-admin.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "หน้าแดชบอร์ดผู้ดูแลระบบ"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "QR Code ของฉัน",
+      "short_name": "QR Code",
+      "description": "ดู QR Code สำหรับเช็คชื่อกิจกรรม",
+      "url": "/qr",
+      "icons": [
+        {
+          "src": "/icons/qr-shortcut.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "สแกน QR Code",
+      "short_name": "สแกน",
+      "description": "สแกน QR Code ของนักศึกษา (สำหรับผู้ดูแล)",
+      "url": "/admin/scanner",
+      "icons": [
+        {
+          "src": "/icons/scan-shortcut.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "กิจกรรมของฉัน",
+      "short_name": "กิจกรรม",
+      "description": "ดูกิจกรรมที่เข้าร่วม",
+      "url": "/activities",
+      "icons": [
+        {
+          "src": "/icons/activities-shortcut.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "protocol_handlers": [
+    {
+      "protocol": "web+trackivity",
+      "url": "/qr?data=%s"
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  }
+}

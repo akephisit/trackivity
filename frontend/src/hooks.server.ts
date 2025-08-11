@@ -1,26 +1,6 @@
 import { type Handle, type HandleServerError } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-
-// Types for session management
-interface AdminRole {
-    id: string;
-    admin_level: 'SuperAdmin' | 'FacultyAdmin' | 'RegularAdmin';
-    faculty_id?: string;
-    permissions: string[];
-}
-
-interface SessionUser {
-    user_id: string;
-    student_id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    department_id?: string;
-    admin_role?: AdminRole;
-    permissions: string[];
-    faculty_id?: string;
-    session_id: string;
-}
+import type { SessionUser, Permission, AdminLevel } from '$lib/types';
 
 // Backend API base URL
 const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:3000';
@@ -88,7 +68,7 @@ function requiresSuperAdmin(pathname: string): boolean {
 }
 
 // Permission checking
-function hasPermission(user: SessionUser, permission: string): boolean {
+function hasPermission(user: SessionUser, permission: Permission): boolean {
     return user.permissions.includes(permission);
 }
 

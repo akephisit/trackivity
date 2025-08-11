@@ -1,10 +1,13 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
+import type { SessionUser, ApiError } from '$lib/types';
+
 declare global {
 	namespace App {
 		interface Error {
 			message: string;
 			code?: string;
+			details?: Record<string, any>;
 		}
 		
 		interface Locals {
@@ -12,31 +15,15 @@ declare global {
 			session_id: string | null;
 		}
 		
-		// interface PageData {}
-		// interface PageState {}
+		interface PageData {
+			user?: SessionUser | null;
+		}
+		
+		interface PageState {
+			user?: SessionUser | null;
+		}
 		// interface Platform {}
 	}
-}
-
-// Type definitions for session management
-interface SessionUser {
-	user_id: string;
-	student_id: string;
-	email: string;
-	first_name: string;
-	last_name: string;
-	department_id?: string;
-	admin_role?: AdminRole;
-	session_id: string;
-	permissions: string[];
-	faculty_id?: string;
-}
-
-interface AdminRole {
-	id: string;
-	admin_level: 'SuperAdmin' | 'FacultyAdmin' | 'RegularAdmin';
-	faculty_id?: string;
-	permissions: string[];
 }
 
 export {};
