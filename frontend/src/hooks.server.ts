@@ -36,7 +36,8 @@ async function validateSession(sessionId: string): Promise<SessionUser | null> {
         });
 
         if (response.ok) {
-            return await response.json();
+            const data = await response.json();
+            return (data as any)?.user as SessionUser;
         }
     } catch (error) {
         console.error('Session validation failed:', error);

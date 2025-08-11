@@ -35,9 +35,7 @@ export async function requireAuth(event: RequestEvent): Promise<AuthenticatedUse
         }
 
         const data = await response.json();
-        // Backend returns raw SessionUser for /api/auth/me.
-        // Accept both shapes: { user, ... } or plain user object.
-        const user = (data && typeof data === 'object' && 'user' in data) ? (data as any).user : data;
+        const user = (data as any)?.user;
 
         if (!user) {
             event.cookies.delete('session_id', { path: '/' });
@@ -210,7 +208,7 @@ export async function getAuthUser(event: RequestEvent): Promise<AuthenticatedUse
         }
 
         const data = await response.json();
-        const user = (data && typeof data === 'object' && 'user' in data) ? (data as any).user : data;
+        const user = (data as any)?.user;
 
         if (!user) {
             event.cookies.delete('session_id', { path: '/' });

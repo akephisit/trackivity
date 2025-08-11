@@ -512,8 +512,10 @@ pub async fn logout(
 }
 
 // Get current user session info
-pub async fn me(session_user: SessionUser) -> Result<Json<SessionUser>, StatusCode> {
-    Ok(Json(session_user))
+pub async fn me(session_user: SessionUser) -> Result<Json<serde_json::Value>, StatusCode> {
+    Ok(Json(serde_json::json!({
+        "user": session_user
+    })))
 }
 
 // Admin logout
