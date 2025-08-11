@@ -82,6 +82,7 @@ pub async fn redis_pubsub_task(
     tracing::info!("Starting Redis PubSub task for channel: {}", channel);
 
     loop {
+        #[allow(deprecated)]
         match redis_client.get_async_connection().await {
             Ok(conn) => {
                 let mut pubsub = conn.into_pubsub();
@@ -316,7 +317,7 @@ pub async fn sse_connection_overflow_handler(
         }
 
         // Also check for memory usage patterns that might indicate leaks
-        if stats.stale_connections > (stats.total_connections / 4) {
+        if stats.stale_connections > ((stats.total_connections / 4) as u32) {
             tracing::warn!(
                 "High stale connection ratio: {}/{} may indicate connection leaks",
                 stats.stale_connections,

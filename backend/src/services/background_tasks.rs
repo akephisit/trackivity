@@ -267,27 +267,37 @@ async fn notify_expiring_sessions(
 
             // Notify if session expires within 1 hour
             if time_to_expiry > 0 && time_to_expiry <= 3600 {
-                let notification = crate::handlers::sse::SseMessage {
-                    event_type: "session_warning".to_string(),
-                    data: serde_json::json!({
-                        "title": "Session Expiring Soon",
-                        "message": format!("Your session will expire in {} minutes", time_to_expiry / 60),
-                        "notification_type": "warning",
-                        "expires_at": session.expires_at,
-                        "can_extend": true
-                    }),
-                    timestamp: Utc::now(),
-                    target_permissions: None,
-                    target_user_id: Some(session.user_id),
-                    target_faculty_id: None,
-                };
+                let notification_data = serde_json::json!({
+                    "title": "Session Expiring Soon",
+                    "message": format!("Your session will expire in {} minutes", time_to_expiry / 60),
+                    "notification_type": "warning",
+                    "expires_at": session.expires_at,
+                    "can_extend": true
+                });
 
-                if sse_manager
-                    .send_to_session(&session_id, notification)
+                use crate::handlers::sse_enhanced::*;
+                let notification = SseMessageBuilder::new(
+                    SseEventType::Custom("session_warning".to_string()),
+                    notification_data,
+                )
+                .to_user(session.user_id)
+                .with_priority(MessagePriority::High)
+                .with_ttl(300) // 5 minutes
+                .build();
+
+                match sse_manager
+                    .send_to_user(session.user_id, notification)
                     .await
-                    .is_ok()
                 {
-                    notified_count += 1;
+                    Ok(sent_count) if sent_count > 0 => {
+                        notified_count += 1;
+                    }
+                    Ok(_) => {
+                        tracing::debug!("No active connections for user {}", session.user_id);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to send session warning to user {}: {}", session.user_id, e);
+                    }
                 }
             }
         }

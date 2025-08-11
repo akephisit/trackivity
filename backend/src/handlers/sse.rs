@@ -206,7 +206,7 @@ impl SseConnectionManager {
 pub async fn sse_handler(
     State(session_state): State<SessionState>,
     Path(session_id): Path<String>,
-    _headers: HeaderMap,
+    headers: HeaderMap,
     session_user: SessionUser, // This ensures authentication
 ) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
     let sse_manager = session_state
@@ -218,8 +218,30 @@ pub async fn sse_handler(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    // Extract client information
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse().ok());
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
     // Add connection to manager
-    let rx = sse_manager.add_connection(session_id.clone()).await;
+    let rx = match sse_manager.add_connection(session_id.clone(), session_user.clone(), ip_address, user_agent).await {
+        Ok(rx) => rx,
+        Err(crate::handlers::sse_enhanced::SseError::RateLimited) => {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+        Err(crate::handlers::sse_enhanced::SseError::TooManyConnections) => {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
+        }
+        Err(_) => {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     // Create the stream
     let stream = tokio_stream::wrappers::BroadcastStream::new(rx).map(|result| {
@@ -228,7 +250,7 @@ pub async fn sse_handler(
                 let event_data =
                     serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
 
-                Ok(Event::default().event(&message.event_type).data(event_data))
+                Ok(Event::default().event(&message.event_type.to_string()).data(event_data))
             }
             Err(_) => {
                 // Channel closed or lagged
@@ -255,14 +277,14 @@ pub async fn send_notification(
         .sse_manager
         .as_ref()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let message = SseMessage {
-        event_type: "notification".to_string(),
-        data: serde_json::to_value(notification).unwrap(),
-        timestamp: Utc::now(),
-        target_permissions: None,
-        target_user_id: Some(session_user.user_id),
-        target_faculty_id: None,
-    };
+    use crate::handlers::sse_enhanced::*;
+    let message = SseMessageBuilder::new(
+        SseEventType::Custom("notification".to_string()),
+        serde_json::to_value(notification).unwrap(),
+    )
+    .to_user(session_user.user_id)
+    .with_priority(MessagePriority::Normal)
+    .build();
 
     if let Err(e) = sse_manager
         .send_to_session(&session_user.session_id, message)
@@ -299,17 +321,17 @@ pub async fn admin_send_notification_by_permission(
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    let message = SseMessage {
-        event_type: "notification".to_string(),
-        data: serde_json::to_value(notification).unwrap(),
-        timestamp: Utc::now(),
-        target_permissions: Some(vec![format!("{:?}", permission)]),
-        target_user_id: None,
-        target_faculty_id: None,
-    };
+    use crate::handlers::sse_enhanced::*;
+    let message = SseMessageBuilder::new(
+        SseEventType::Custom("notification".to_string()),
+        serde_json::to_value(notification).unwrap(),
+    )
+    .with_permissions(vec![format!("{:?}", permission)])
+    .with_priority(MessagePriority::Normal)
+    .build();
 
-    sse_manager
-        .send_to_permission(&session_state, &permission, message)
+    let _ = sse_manager
+        .send_to_permission(&permission, message)
         .await;
 
     Ok(axum::Json(serde_json::json!({
@@ -339,14 +361,14 @@ pub async fn admin_send_force_logout(
         new_expires_at: None,
     };
 
-    let message = SseMessage {
-        event_type: "session_update".to_string(),
-        data: serde_json::to_value(logout_message).unwrap(),
-        timestamp: Utc::now(),
-        target_permissions: None,
-        target_user_id: None,
-        target_faculty_id: None,
-    };
+    use crate::handlers::sse_enhanced::*;
+    let message = SseMessageBuilder::new(
+        SseEventType::SessionRevoked,
+        serde_json::to_value(logout_message).unwrap(),
+    )
+    .to_sessions(vec![target_session_id.clone()])
+    .with_priority(MessagePriority::Critical)
+    .build();
 
     if let Err(e) = sse_manager
         .send_to_session(&target_session_id, message)
@@ -453,7 +475,7 @@ pub async fn handle_sse(
                 let event_data =
                     serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
 
-                Ok(Event::default().event(&message.event_type).data(event_data))
+                Ok(Event::default().event(&message.event_type.to_string()).data(event_data))
             }
             Err(_) => Ok(Event::default().event("error").data("Connection error")),
         });
@@ -487,7 +509,7 @@ pub async fn handle_admin_sse(
                         let event_data =
                             serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
 
-                        Ok(Event::default().event(&message.event_type).data(event_data))
+                        Ok(Event::default().event(&message.event_type.to_string()).data(event_data))
                     }
                     Err(_) => Ok(Event::default().event("error").data("Connection error")),
                 });

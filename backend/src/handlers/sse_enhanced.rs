@@ -643,6 +643,7 @@ impl SseConnectionManager {
 
     // Publish message to Redis for multi-instance support
     async fn publish_to_redis(&self, message: &SseMessage) -> Result<(), SseError> {
+        #[allow(deprecated)]
         let mut conn = self.redis_client.get_async_connection().await
             .map_err(|e| SseError::Redis(e.to_string()))?;
         
@@ -1238,11 +1239,7 @@ pub async fn sse_handler(
 
                     Ok(event)
                 }
-                Err(broadcast::error::RecvError::Closed) => {
-                    tracing::info!("SSE connection closed for session: {}", cleanup_session_id);
-                    Ok(Event::default().event("close").data("Connection closed"))
-                }
-                Err(broadcast::error::RecvError::Lagged(count)) => {
+                Err(tokio_stream::wrappers::errors::BroadcastStreamRecvError::Lagged(count)) => {
                     tracing::warn!(
                         "SSE connection lagged {} messages for session: {}",
                         count,

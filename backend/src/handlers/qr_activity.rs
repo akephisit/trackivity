@@ -277,16 +277,21 @@ pub async fn qr_checkin(
                             "checked_in_at": checked_in_at
                         });
 
-                        let sse_message = crate::handlers::sse::SseMessage {
-                            event_type: "activity_checkin".to_string(),
-                            data: notification_data,
-                            timestamp: Utc::now(),
-                            target_permissions: Some(vec!["ManageActivities".to_string(), "ViewParticipations".to_string()]),
-                            target_user_id: None,
-                            target_faculty_id: activity.faculty_id,
+                        use crate::handlers::sse_enhanced::*;
+                        let sse_message = SseMessageBuilder::new(
+                            SseEventType::ActivityCheckedIn,
+                            notification_data,
+                        )
+                        .with_permissions(vec!["ManageActivities".to_string(), "ViewParticipations".to_string()])
+                        .with_priority(MessagePriority::Normal);
+
+                        let final_message = if let Some(faculty_id) = activity.faculty_id {
+                            sse_message.to_faculty(faculty_id).build()
+                        } else {
+                            sse_message.build()
                         };
 
-                        sse_manager.send_message(sse_message).await;
+                        let _ = sse_manager.send_message(final_message).await;
                     }
                     
                     Ok(Json(response))
@@ -344,16 +349,21 @@ pub async fn qr_checkin(
                             "checked_in_at": checked_in_at
                         });
 
-                        let sse_message = crate::handlers::sse::SseMessage {
-                            event_type: "activity_checkin".to_string(),
-                            data: notification_data,
-                            timestamp: Utc::now(),
-                            target_permissions: Some(vec!["ManageActivities".to_string(), "ViewParticipations".to_string()]),
-                            target_user_id: None,
-                            target_faculty_id: activity.faculty_id,
+                        use crate::handlers::sse_enhanced::*;
+                        let sse_message = SseMessageBuilder::new(
+                            SseEventType::ActivityCheckedIn,
+                            notification_data,
+                        )
+                        .with_permissions(vec!["ManageActivities".to_string(), "ViewParticipations".to_string()])
+                        .with_priority(MessagePriority::Normal);
+
+                        let final_message = if let Some(faculty_id) = activity.faculty_id {
+                            sse_message.to_faculty(faculty_id).build()
+                        } else {
+                            sse_message.build()
                         };
 
-                        sse_manager.send_message(sse_message).await;
+                        let _ = sse_manager.send_message(final_message).await;
                     }
 
                     Ok(Json(response))
