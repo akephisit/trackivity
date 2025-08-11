@@ -233,13 +233,21 @@
 									{#if user.role === 'super_admin'}
 										<!-- ซุปเปอร์แอดมินไม่ต้องแสดงคณะ -->
 										<span class="text-sm text-muted-foreground">-</span>
-									{:else}
+									{:else if user.role === 'faculty_admin' || user.role === 'regular_admin'}
+										<!-- แอดมินคณะและแอดมินทั่วไป แสดงเฉพาะคณะ -->
 										{#if user.faculty}
 											<span class="text-sm">{user.faculty.name}</span>
 										{:else}
 											<span class="text-sm text-muted-foreground">ไม่ระบุคณะ</span>
 										{/if}
-										{#if user.department && (user.role === 'faculty_admin' || user.role === 'regular_admin')}
+									{:else}
+										<!-- นักศึกษาและอื่นๆ แสดงทั้งคณะและสาขาวิชา -->
+										{#if user.faculty}
+											<span class="text-sm">{user.faculty.name}</span>
+										{:else}
+											<span class="text-sm text-muted-foreground">ไม่ระบุคณะ</span>
+										{/if}
+										{#if user.department}
 											<span class="text-xs text-muted-foreground">{user.department.name}</span>
 										{/if}
 									{/if}
