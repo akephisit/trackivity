@@ -65,7 +65,7 @@ pub async fn get_faculty_departments(
 
     // Get departments
     let departments_result = sqlx::query_as::<_, Department>(
-        "SELECT id, name, code, faculty_id, description, created_at, updated_at 
+        "SELECT id, name, code, faculty_id, description, status, created_at, updated_at 
          FROM departments WHERE faculty_id = $1 ORDER BY name"
     )
     .bind(faculty_id)
@@ -151,9 +151,9 @@ pub async fn create_faculty_department(
 
     // Create department
     let department_result = sqlx::query_as::<_, Department>(
-        "INSERT INTO departments (name, code, faculty_id, description) 
-         VALUES ($1, $2, $3, $4) 
-         RETURNING id, name, code, faculty_id, description, created_at, updated_at"
+        "INSERT INTO departments (name, code, faculty_id, description, status) 
+         VALUES ($1, $2, $3, $4, true) 
+         RETURNING id, name, code, faculty_id, description, status, created_at, updated_at"
     )
     .bind(&request.name)
     .bind(&request.code)
@@ -252,7 +252,7 @@ pub async fn update_department(
     }
 
     query.push_str(&format!(
-        " WHERE id = ${} RETURNING id, name, code, faculty_id, description, created_at, updated_at",
+        " WHERE id = ${} RETURNING id, name, code, faculty_id, description, status, created_at, updated_at",
         param_count
     ));
 
@@ -396,4 +396,92 @@ pub async fn delete_department(
     }
 }
 
+/// Toggle department status with proper authorization
+/// FacultyAdmin+ for their faculty departments, SuperAdmin for any
+pub async fn toggle_department_status(
+    State(session_state): State<SessionState>,
+    Path(department_id): Path<Uuid>,
+    admin: FacultyAdminUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // First, get the department to check faculty ownership and current status
+    let department_info = sqlx::query(
+        "SELECT d.id, d.faculty_id, d.status, f.name as faculty_name 
+         FROM departments d 
+         JOIN faculties f ON d.faculty_id = f.id 
+         WHERE d.id = $1"
+    )
+    .bind(department_id)
+    .fetch_optional(&session_state.db_pool)
+    .await;
+
+    let department_info = match department_info {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Department not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to fetch department: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    let department_faculty_id: Uuid = department_info.get("faculty_id");
+    let current_status: bool = department_info.get("status");
+
+    // Check authorization - FacultyAdmin can only toggle departments in their faculty
+    if admin.admin_role.admin_level != AdminLevel::SuperAdmin {
+        if admin.admin_role.faculty_id != Some(department_faculty_id) {
+            let error_response = json!({
+                "status": "error",
+                "message": "Access denied: You can only toggle departments in your faculty"
+            });
+            return Err((StatusCode::FORBIDDEN, Json(error_response)));
+        }
+    }
+
+    // Toggle the status
+    let new_status = !current_status;
+    let toggle_result = sqlx::query_as::<_, Department>(
+        "UPDATE departments SET status = $1, updated_at = NOW() 
+         WHERE id = $2 
+         RETURNING id, name, code, faculty_id, description, status, created_at, updated_at"
+    )
+    .bind(new_status)
+    .bind(department_id)
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match toggle_result {
+        Ok(department) => {
+            let response = json!({
+                "status": "success",
+                "data": department,
+                "message": format!("Department status {} successfully", 
+                    if new_status { "activated" } else { "deactivated" })
+            });
+            Ok(Json(response))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Department not found"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to toggle department status: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
 

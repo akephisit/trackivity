@@ -42,6 +42,7 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/faculties/{faculty_id}/departments", post(department::create_faculty_department))
         .route("/api/departments/{id}", put(department::update_department))
         .route("/api/departments/{id}", delete(department::delete_department))
+        .route("/api/departments/{id}/toggle-status", put(department::toggle_department_status))
         // Faculty-scoped admin operations
         .route("/api/faculties/{faculty_id}/admins", get(admin::get_faculty_admins))
         .route("/api/faculties/{faculty_id}/users", get(admin::get_faculty_users))

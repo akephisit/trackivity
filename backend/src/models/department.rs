@@ -10,6 +10,7 @@ pub struct Department {
     pub code: String,
     pub faculty_id: Uuid,
     pub description: Option<String>,
+    pub status: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

@@ -21,6 +21,7 @@ CREATE TABLE departments (
     code VARCHAR(10) NOT NULL,
     faculty_id UUID NOT NULL REFERENCES faculties(id) ON DELETE CASCADE,
     description TEXT,
+    status BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(code, faculty_id)
