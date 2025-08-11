@@ -46,10 +46,10 @@
 	}
 
 	// Faculty options for registration
-	let facultyOptions = $derived(Array.isArray(data.faculties) ? data.faculties.map(faculty => ({
+	let facultyOptions = $derived(data.faculties.map(faculty => ({
 		value: faculty.id,
 		label: faculty.name
-	})) : []);
+	})));
 
 	// Department options based on selected faculty
 	let departmentOptions = $derived(departments.map(dept => ({
@@ -148,40 +148,6 @@
 
 				<Card class="w-full shadow-lg">
 					<CardContent class="space-y-4 p-6 lg:p-8">
-				<!-- แสดงสถานะการเชื่อมต่อ Backend -->
-				{#if !data.backendAvailable}
-					<Alert variant="destructive">
-						<IconWifiOff class="h-4 w-4" />
-						<AlertDescription>
-							<div class="space-y-2">
-								<p class="font-medium">ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้</p>
-								<p class="text-sm">
-									{data.backendErrorMessage || 'เซิร์ฟเวอร์ไม่พร้อมใช้งานในขณะนี้'} 
-									ระบบจะใช้ข้อมูลคณะแบบออฟไลน์แทน
-								</p>
-							</div>
-						</AlertDescription>
-					</Alert>
-				{:else if !data.facultiesFromBackend}
-					<Alert>
-						<IconAlertTriangle class="h-4 w-4" />
-						<AlertDescription>
-							<div class="space-y-2">
-								<p class="font-medium">ใช้ข้อมูลคณะแบบออฟไลน์</p>
-								<p class="text-sm">
-									ไม่สามารถโหลดข้อมูลคณะจากเซิร์ฟเวอร์ได้ ระบบจะใช้ข้อมูลสำรองแทน
-								</p>
-							</div>
-						</AlertDescription>
-					</Alert>
-				{:else}
-					<Alert>
-						<IconWifi class="h-4 w-4" />
-						<AlertDescription>
-							<p class="text-sm">เชื่อมต่อกับเซิร์ฟเวอร์สำเร็จ - ข้อมูลคณะเป็นปัจจุบัน</p>
-						</AlertDescription>
-					</Alert>
-				{/if}
 
 				<form method="POST" use:enhance class="space-y-4">
 					{#if $errors._errors}
@@ -191,11 +157,6 @@
 								<div class="space-y-2">
 									<p class="font-medium">เกิดข้อผิดพลาดในการสมัครสมาชิก</p>
 									<p class="text-sm">{$errors._errors[0]}</p>
-									{#if !data.backendAvailable}
-										<p class="text-xs opacity-75">
-											หมายเหตุ: ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต
-										</p>
-									{/if}
 								</div>
 							</AlertDescription>
 						</Alert>
@@ -445,16 +406,11 @@
 						type="submit" 
 						class="w-full" 
 						disabled={$submitting}
-						variant={!data.backendAvailable ? "secondary" : "default"}
 					>
 						{#if $submitting}
 							<IconLoader class="mr-2 h-4 w-4 animate-spin" />
 							กำลังสมัครสมาชิก...
-						{:else if !data.backendAvailable}
-							<IconWifiOff class="mr-2 h-4 w-4" />
-							ลองสมัครสมาชิก (อาจไม่สำเร็จ)
 						{:else}
-							<IconWifi class="mr-2 h-4 w-4" />
 							สมัครสมาชิก
 						{/if}
 					</Button>

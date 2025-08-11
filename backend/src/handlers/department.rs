@@ -485,3 +485,74 @@ pub async fn toggle_department_status(
     }
 }
 
+/// Get departments in a faculty (public endpoint - no authentication required)
+/// Used for registration form and other public access
+pub async fn get_faculty_departments_public(
+    State(session_state): State<SessionState>,
+    Path(faculty_id): Path<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Verify faculty exists and is active
+    let faculty_info = sqlx::query(
+        "SELECT id, name, status FROM faculties WHERE id = $1"
+    )
+    .bind(faculty_id)
+    .fetch_optional(&session_state.db_pool)
+    .await;
+
+    let faculty_info = match faculty_info {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Faculty not found"
+            });
+            return Err((StatusCode::NOT_FOUND, Json(error_response)));
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to fetch faculty: {}", e)
+            });
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
+        }
+    };
+
+    let faculty_status: bool = faculty_info.get("status");
+    if !faculty_status {
+        let error_response = json!({
+            "status": "error",
+            "message": "Faculty is not active"
+        });
+        return Err((StatusCode::FORBIDDEN, Json(error_response)));
+    }
+
+    // Get active departments only
+    let departments_result = sqlx::query_as::<_, Department>(
+        "SELECT id, name, code, faculty_id, description, status, created_at, updated_at 
+         FROM departments 
+         WHERE faculty_id = $1 AND status = true 
+         ORDER BY name"
+    )
+    .bind(faculty_id)
+    .fetch_all(&session_state.db_pool)
+    .await;
+
+    match departments_result {
+        Ok(departments) => {
+            let response = json!({
+                "status": "success",
+                "data": departments,
+                "message": "Departments retrieved successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to fetch departments: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+

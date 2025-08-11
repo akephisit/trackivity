@@ -8,49 +8,6 @@ import { PUBLIC_API_URL } from '$env/static/public';
 
 const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
-// Fallback faculties data สำหรับกรณีที่ backend ไม่สามารถเชื่อมต่อได้
-const FALLBACK_FACULTIES: Faculty[] = [
-	{
-		id: '1',
-		name: 'คณะวิทยาศาสตร์',
-		code: 'SCI',
-		status: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString()
-	},
-	{
-		id: '2',
-		name: 'คณะวิศวกรรมศาสตร์',
-		code: 'ENG',
-		status: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString()
-	},
-	{
-		id: '3',
-		name: 'คณะครุศาสตร์',
-		code: 'EDU',
-		status: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString()
-	},
-	{
-		id: '4',
-		name: 'คณะมนุษยศาสตร์และสังคมศาสตร์',
-		code: 'HUM',
-		status: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString()
-	},
-	{
-		id: '5',
-		name: 'คณะบริหารธุรกิจ',
-		code: 'BUS',
-		status: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString()
-	}
-];
 
 // ฟังก์ชันสำหรับตรวจสอบการเชื่อมต่อ backend
 async function checkBackendConnection(): Promise<boolean> {
@@ -75,7 +32,6 @@ async function checkBackendConnection(): Promise<boolean> {
 export const load: PageServerLoad = async ({ cookies }) => {
 	// ตรวจสอบว่ามี session อยู่แล้วหรือไม่
 	const sessionId = cookies.get('session_id');
-	let backendAvailable = true;
 	
 	if (sessionId) {
 		try {
@@ -100,21 +56,18 @@ export const load: PageServerLoad = async ({ cookies }) => {
 				throw error;
 			}
 			
-			// ถ้าเป็น connection error ให้ลบ session และทำเครื่องหมายว่า backend ไม่พร้อมใช้งาน
+			// ถ้าเป็น connection error ให้ลบ session
 			console.warn('Backend not available for session check:', error);
 			cookies.delete('session_id', { path: '/' });
-			backendAvailable = false;
 		}
 	}
 
-	// โหลดรายการคณะ
+	// โหลดรายการคณะจากฐานข้อมูล
 	let faculties: Faculty[] = [];
-	let facultiesFromBackend = false;
-	let backendErrorMessage: string | null = null;
 
 	try {
 		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), 5000); // timeout 5 วินาที
+		const timeoutId = setTimeout(() => controller.abort(), 5000);
 		
 		const response = await fetch(`${API_BASE_URL}/api/faculties`, {
 			signal: controller.signal,
@@ -127,41 +80,21 @@ export const load: PageServerLoad = async ({ cookies }) => {
 		
 		if (response.ok) {
 			const result = await response.json();
-			faculties = result.data || [];
-			facultiesFromBackend = true;
-			backendAvailable = true;
+			faculties = result.data?.faculties || [];
 		} else {
 			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 		}
 	} catch (error) {
-		console.warn('Failed to load faculties from backend:', error);
-		
-		// ใช้ fallback data
-		faculties = FALLBACK_FACULTIES;
-		backendAvailable = false;
-		
-		// กำหนดข้อความ error ตามประเภทของ error
-		if (error instanceof Error) {
-			if (error.name === 'AbortError') {
-				backendErrorMessage = 'การเชื่อมต่อกับเซิร์ฟเวอร์ใช้เวลานานเกินไป';
-			} else if (error.message.includes('ECONNREFUSED')) {
-				backendErrorMessage = 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้';
-			} else {
-				backendErrorMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูลจากเซิร์ฟเวอร์';
-			}
-		} else {
-			backendErrorMessage = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
-		}
+		console.error('Failed to load faculties from backend:', error);
+		// ไม่มี fallback data - ต้องเชื่อมต่อกับเซิร์ฟเวอร์ได้
+		throw new Error('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง');
 	}
 
 	const form = await superValidate(zod(registerSchema));
 	
 	return {
 		form,
-		faculties,
-		backendAvailable,
-		facultiesFromBackend,
-		backendErrorMessage
+		faculties
 	};
 };
 
@@ -173,19 +106,6 @@ export const actions: Actions = {
 			return fail(400, { form });
 		}
 
-		// ตรวจสอบการเชื่อมต่อ backend ก่อนส่งข้อมูล
-		const backendConnected = await checkBackendConnection();
-		
-		if (!backendConnected) {
-			form.errors._errors = [
-				'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ในขณะนี้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ'
-			];
-			return fail(503, { 
-				form,
-				backendError: true,
-				backendErrorMessage: 'เซิร์ฟเวอร์ไม่พร้อมใช้งาน'
-			});
-		}
 
 		try {
 			// ส่งข้อมูลการสมัครไป backend
@@ -250,11 +170,7 @@ export const actions: Actions = {
 				form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง'];
 			}
 			
-			return fail(503, { 
-				form,
-				backendError: true,
-				backendErrorMessage: 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์'
-			});
+			return fail(503, { form });
 		}
 	}
 };

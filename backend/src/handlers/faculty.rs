@@ -36,9 +36,9 @@ pub struct UpdateFacultyRequest {
 pub async fn get_faculties(
     State(session_state): State<SessionState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    // Query all faculties from database
+    // Query active faculties only for public access
     let query_result = sqlx::query_as::<_, Faculty>(
-        "SELECT id, name, code, description, status, created_at, updated_at FROM faculties ORDER BY name",
+        "SELECT id, name, code, description, status, created_at, updated_at FROM faculties WHERE status = true ORDER BY name",
     )
     .fetch_all(&session_state.db_pool)
     .await;
