@@ -21,28 +21,31 @@ export async function requireAuth(event: RequestEvent): Promise<AuthenticatedUse
 	}
 
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+                'Cookie': `session_id=${sessionId}`
+            }
+        });
 
-		if (!response.ok) {
-			// Session หมดอายุหรือไม่ถูกต้อง
-			event.cookies.delete('session_id', { path: '/' });
-			const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
-			throw redirect(303, `/login?redirectTo=${redirectTo}`);
-		}
+        if (!response.ok) {
+            // Session หมดอายุหรือไม่ถูกต้อง
+            event.cookies.delete('session_id', { path: '/' });
+            const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+            throw redirect(303, `/login?redirectTo=${redirectTo}`);
+        }
 
-		const result = await response.json();
-		
-		if (!result.success || !result.user) {
-			event.cookies.delete('session_id', { path: '/' });
-			const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
-			throw redirect(303, `/login?redirectTo=${redirectTo}`);
-		}
+        const data = await response.json();
+        // Backend returns raw SessionUser for /api/auth/me.
+        // Accept both shapes: { user, ... } or plain user object.
+        const user = (data && typeof data === 'object' && 'user' in data) ? (data as any).user : data;
 
-		return result.user as AuthenticatedUser;
+        if (!user) {
+            event.cookies.delete('session_id', { path: '/' });
+            const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+            throw redirect(303, `/login?redirectTo=${redirectTo}`);
+        }
+
+        return user as AuthenticatedUser;
 	} catch (error) {
 		console.error('Auth check failed:', error);
 		event.cookies.delete('session_id', { path: '/' });
@@ -151,8 +154,8 @@ export async function requireFacultyAdmin(event: RequestEvent): Promise<Authenti
  * ตรวจสอบว่าแอดมินสามารถจัดการคณะนี้ได้หรือไม่
  */
 export async function requireFacultyAccess(
-	event: RequestEvent, 
-	facultyId: number
+    event: RequestEvent,
+    facultyId: string
 ): Promise<AuthenticatedUser> {
 	const user = await requireAdmin(event);
 	
@@ -163,10 +166,10 @@ export async function requireFacultyAccess(
 		return user;
 	}
 	
-	// FacultyAdmin สามารถเข้าถึงเฉพาะคณะของตัวเอง
-	if (level === 'FacultyAdmin' && user.admin_role!.faculty_id === facultyId) {
-		return user;
-	}
+    // FacultyAdmin สามารถเข้าถึงเฉพาะคณะของตัวเอง (UUID string)
+    if (level === 'FacultyAdmin' && user.admin_role!.faculty_id === facultyId) {
+        return user;
+    }
 	
 	throw redirect(303, '/unauthorized');
 }
@@ -195,25 +198,26 @@ export async function getAuthUser(event: RequestEvent): Promise<AuthenticatedUse
 	}
 
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+                'Cookie': `session_id=${sessionId}`
+            }
+        });
 
-		if (!response.ok) {
-			event.cookies.delete('session_id', { path: '/' });
-			return null;
-		}
+        if (!response.ok) {
+            event.cookies.delete('session_id', { path: '/' });
+            return null;
+        }
 
-		const result = await response.json();
-		
-		if (!result.success || !result.user) {
-			event.cookies.delete('session_id', { path: '/' });
-			return null;
-		}
+        const data = await response.json();
+        const user = (data && typeof data === 'object' && 'user' in data) ? (data as any).user : data;
 
-		return result.user as AuthenticatedUser;
+        if (!user) {
+            event.cookies.delete('session_id', { path: '/' });
+            return null;
+        }
+
+        return user as AuthenticatedUser;
 	} catch (error) {
 		console.error('Optional auth check failed:', error);
 		event.cookies.delete('session_id', { path: '/' });
