@@ -4,7 +4,6 @@ import { Checkbox as DataTableCheckbox } from '$lib/components/ui/checkbox';
 import type { User } from '$lib/types/admin';
 import {
 	UserProfileCell,
-	EmailCell,
 	IdentifierCell,
 	StatusBadge,
 	FacultyCell,
@@ -66,14 +65,7 @@ export const userTableColumns: ColumnDef<User>[] = [
         },
     },
 
-    // Email column (sortable, searchable)
-    {
-        accessorKey: 'email',
-        header: 'อีเมล',
-        cell: ({ row }) => renderSnippet(EmailCell, { user: row.original }),
-        size: 200,
-        filterFn: 'includesString',
-    },
+    // Removed standalone Email column: email now shows under name
 
     // Student/Employee ID column
     {
@@ -216,7 +208,7 @@ export function getUserTableColumns(
 export const columnVisibilityPresets = {
     compact: {
         user: true,
-        email: true,
+        // email column removed
         status: true,
         actions: true,
         // Hide other columns
@@ -232,7 +224,7 @@ export const columnVisibilityPresets = {
     detailed: {
         // Show all columns
         user: true,
-        email: true,
+        // email column removed
         identifier: true,
         status: true,
         faculty: true,
@@ -246,7 +238,7 @@ export const columnVisibilityPresets = {
     
     faculty_admin: {
         user: true,
-        email: true,
+        // email column removed
         identifier: true,
         status: true,
         faculty: false, // Hidden for faculty admin

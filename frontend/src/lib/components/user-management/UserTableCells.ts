@@ -153,22 +153,29 @@ export const RoleBadge = createRawSnippet<[{ role: string }]>((getProps) => {
 
 // Status Badge Snippet
 export const StatusBadge = createRawSnippet<[{ status: string }]>((getProps) => {
-	const { status } = getProps();
-	const variant = getStatusVariant(status);
-	const label = getStatusLabel(status);
-	const variantClasses = {
-		default: 'bg-gray-900 text-white',
-		secondary: 'bg-gray-100 text-gray-900',
-		destructive: 'bg-red-600 text-white',
-		outline: 'border border-gray-200 text-gray-900'
-	};
-	return {
-		render: () => `
-			<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${variantClasses[variant]}">
-				${label}
-			</span>
-		`
-	};
+    const { status } = getProps();
+    const variant = getStatusVariant(status);
+    const label = getStatusLabel(status);
+    const variantClasses = {
+        default: 'bg-green-100 text-green-800',
+        secondary: 'bg-yellow-100 text-yellow-800',
+        destructive: 'bg-red-100 text-red-800',
+        outline: 'border border-gray-200 text-gray-900'
+    } as const;
+    const dotClasses: Record<string, string> = {
+        default: 'bg-green-500',
+        secondary: 'bg-yellow-500',
+        destructive: 'bg-red-500',
+        outline: 'bg-gray-400'
+    };
+    return {
+        render: () => `
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${variantClasses[variant]}">
+                <span class="inline-block h-2 w-2 rounded-full mr-1 ${dotClasses[variant]}"></span>
+                ${label}
+            </span>
+        `
+    };
 });
 
 // Faculty Cell Snippet
