@@ -1536,11 +1536,17 @@ pub async fn get_faculty_users(
             u.created_at,
             u.updated_at,
             d.name as department_name,
+            f.id as faculty_id,
+            f.name as faculty_name,
+            f.code as faculty_code,
+            (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id) as last_login,
+            CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) THEN true ELSE false END as is_active,
             ar.id as admin_role_id,
             ar.admin_level,
             ar.permissions
         FROM users u
         JOIN departments d ON u.department_id = d.id
+        LEFT JOIN faculties f ON d.faculty_id = f.id
         LEFT JOIN admin_roles ar ON u.id = ar.user_id
         WHERE d.faculty_id = $3
     "#
@@ -1614,8 +1620,13 @@ pub async fn get_faculty_users(
                     "last_name": row.get::<String, _>("last_name"),
                     "department_id": row.get::<Option<Uuid>, _>("department_id"),
                     "department_name": row.get::<Option<String>, _>("department_name"),
+                    "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
+                    "faculty_name": row.get::<Option<String>, _>("faculty_name"),
+                    "faculty_code": row.get::<Option<String>, _>("faculty_code"),
                     "created_at": row.get::<Option<DateTime<Utc>>, _>("created_at"),
                     "updated_at": row.get::<Option<DateTime<Utc>>, _>("updated_at"),
+                    "last_login": row.get::<Option<DateTime<Utc>>, _>("last_login"),
+                    "is_active": row.get::<Option<bool>, _>("is_active").unwrap_or(false),
                     "is_admin": row.get::<Option<Uuid>, _>("admin_role_id").is_some(),
                     "admin_level": row.get::<Option<AdminLevel>, _>("admin_level"),
                     "permissions": row.get::<Option<Vec<String>>, _>("permissions").unwrap_or_else(|| vec![])

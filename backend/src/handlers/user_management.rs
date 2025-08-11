@@ -66,6 +66,8 @@ pub async fn get_system_users(
             ar.is_enabled,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
+            (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id) as last_login,
+            CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) THEN true ELSE false END as is_active,
             COALESCE(COUNT(p.id), 0) as activity_count,
             MAX(p.registered_at) as last_activity
         FROM users u
@@ -175,6 +177,8 @@ pub async fn get_system_users(
                     "admin_role": admin_role,
                     "created_at": row.get::<Option<DateTime<Utc>>, _>("created_at"),
                     "updated_at": row.get::<Option<DateTime<Utc>>, _>("updated_at"),
+                    "last_login": row.get::<Option<DateTime<Utc>>, _>("last_login"),
+                    "is_active": row.get::<Option<bool>, _>("is_active").unwrap_or(false),
                     "activity_count": row.get::<Option<i64>, _>("activity_count").unwrap_or(0),
                     "last_activity": row.get::<Option<DateTime<Utc>>, _>("last_activity"),
                     "is_admin": admin_role.is_some()

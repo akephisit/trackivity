@@ -19,6 +19,7 @@ export const GET: RequestHandler = async (event) => {
         
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '10');
+        const offset = parseInt(searchParams.get('offset') || String((page - 1) * limit));
         const search = searchParams.get('search') || '';
         const status = searchParams.get('status') || 'all';
         const department_id = searchParams.get('department_id') || '';
@@ -31,12 +32,11 @@ export const GET: RequestHandler = async (event) => {
         
         // Build query parameters for backend API
         const queryParams = new URLSearchParams({
-            page: page.toString(),
             limit: limit.toString(),
+            offset: offset.toString(),
             ...(search && { search }),
             ...(status !== 'all' && { status }),
-            ...(department_id && { department_id }),
-            faculty_id: facultyId
+            ...(department_id && { department_id })
         });
         
         // Validate backend URL configuration
