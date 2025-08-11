@@ -11,8 +11,7 @@ const DYNAMIC_CACHE_NAME = 'trackivity-dynamic-v1.0.0';
 const STATIC_FILES = [
   '/',
   '/offline',
-  '/manifest.json',
-  '/favicon.ico',
+  '/manifest.json'
   // Add other static assets as needed
 ];
 
@@ -328,20 +327,16 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Trackivity';
   const options = {
     body: data.body || 'คุณมีการแจ้งเตือนใหม่',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/badge-72x72.png',
     tag: data.tag || 'general',
     data: data.data || {},
     actions: [
       {
         action: 'view',
-        title: 'ดูรายละเอียด',
-        icon: '/icons/view-action.png'
+        title: 'ดูรายละเอียด'
       },
       {
         action: 'dismiss',
-        title: 'ปิด',
-        icon: '/icons/dismiss-action.png'
+        title: 'ปิด'
       }
     ],
     vibrate: [200, 100, 200]
