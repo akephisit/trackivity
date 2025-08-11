@@ -247,11 +247,12 @@
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>
-            <DropdownMenuTrigger let:builder>
-              <button
-                {...builder}
-                class="flex items-center gap-3 w-full p-2 rounded-lg data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
-              >
+            <DropdownMenuTrigger>
+              {#snippet child({ props })}
+                <button
+                  {...props}
+                  class="flex items-center gap-3 w-full p-2 rounded-lg data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
+                >
                 <Avatar class="h-8 w-8 rounded-lg">
                   <AvatarImage src={$currentUser?.avatar_url} alt={$currentUser?.first_name || 'User'} />
                   <AvatarFallback class="rounded-lg">
@@ -267,7 +268,8 @@
                   </span>
                 </div>
                 <IconChevronDown class="ml-auto size-4" />
-              </button>
+                </button>
+              {/snippet}
             </DropdownMenuTrigger>
             <DropdownMenuContent
               class="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
