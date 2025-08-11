@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 			
 			if (response.ok) {
 				// มี session ที่ใช้งานได้ ให้ redirect ไป dashboard
-				const redirectTo = url.searchParams.get('redirectTo') || '/admin';
+				const redirectTo = url.searchParams.get('redirectTo') || '/';
 				throw redirect(303, redirectTo);
 			}
 		} catch (error) {
@@ -79,13 +79,17 @@ export const actions: Actions = {
 				});
 
 				// Redirect ไปยังหน้าที่ต้องการ
-				const redirectTo = url.searchParams.get('redirectTo') || '/admin';
+				const redirectTo = url.searchParams.get('redirectTo') || '/';
 				throw redirect(303, redirectTo);
 			} else {
 				form.errors.student_id = [result.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ'];
 				return fail(400, { form });
 			}
 		} catch (error) {
+			// ถ้าเป็น redirect error ให้ผ่านต่อไป
+			if (error && typeof error === 'object' && 'status' in error && 'location' in error) {
+				throw error;
+			}
 			console.error('Login error:', error);
 			form.errors.student_id = ['เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง'];
 			return fail(500, { form });

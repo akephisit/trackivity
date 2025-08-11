@@ -30,6 +30,8 @@
 		onResult: ({ result }) => {
 			if (result.type === 'failure') {
 				toast.error('เข้าสู่ระบบไม่สำเร็จ');
+			} else if (result.type === 'redirect') {
+				toast.success('เข้าสู่ระบบสำเร็จ');
 			}
 		}
 	});

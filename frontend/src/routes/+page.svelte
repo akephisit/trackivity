@@ -2,7 +2,10 @@
 	import ActivitiesTable from "$lib/components/activities-table.svelte";
 	import { mockActivities } from "$lib/data/activities.js";
 	import { Button } from "$lib/components/ui/button";
-	import { IconUser } from '@tabler/icons-svelte/icons';
+	import { IconUser, IconLogout } from '@tabler/icons-svelte/icons';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 </script>
 
 <div class="min-h-screen bg-background">
@@ -15,6 +18,11 @@
 					<p class="text-muted-foreground mt-1">
 						จัดการและติดตามกิจกรรมทั้งหมดของมหาวิทยาลัยในที่เดียว
 					</p>
+					{#if data.user}
+						<p class="text-sm text-muted-foreground mt-2">
+							ยินดีต้อนรับ, {data.user.first_name} {data.user.last_name}
+						</p>
+					{/if}
 				</div>
 				<div class="flex flex-col sm:flex-row items-end sm:items-center gap-3">
 					<div class="text-sm text-muted-foreground">
@@ -25,10 +33,27 @@
 							weekday: 'long'
 						})}
 					</div>
-					<Button href="/login" variant="outline" size="sm" class="flex items-center gap-2">
-						<IconUser class="h-4 w-4" />
-						เข้าสู่ระบบ
-					</Button>
+					{#if data.user}
+						<div class="flex items-center gap-2">
+							{#if data.user.admin_role}
+								<Button href="/admin" variant="outline" size="sm" class="flex items-center gap-2">
+									<IconUser class="h-4 w-4" />
+									แอดมิน
+								</Button>
+							{/if}
+							<form method="POST" action="/api/auth/logout">
+								<Button type="submit" variant="outline" size="sm" class="flex items-center gap-2">
+									<IconLogout class="h-4 w-4" />
+									ออกจากระบบ
+								</Button>
+							</form>
+						</div>
+					{:else}
+						<Button href="/login" variant="outline" size="sm" class="flex items-center gap-2">
+							<IconUser class="h-4 w-4" />
+							เข้าสู่ระบบ
+						</Button>
+					{/if}
 				</div>
 			</div>
 		</div>
