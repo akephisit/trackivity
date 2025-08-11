@@ -51,21 +51,30 @@ function getRoleVariant(role: string): "default" | "secondary" | "destructive" |
 }
 
 function getStatusLabel(status: string): string {
-	const statusLabels = {
-		active: 'เปิดใช้งาน',
-		inactive: 'ปิดใช้งาน',
-		suspended: 'ถูกระงับ'
-	};
-	return statusLabels[status as keyof typeof statusLabels] || status;
+    const statusLabels: Record<string, string> = {
+        // New semantics aligned with admin page
+        online: 'ใช้งานอยู่',
+        offline: 'ไม่ออนไลน์',
+        disabled: 'ปิดใช้งาน',
+        // Backward compatibility
+        active: 'ใช้งานอยู่',
+        inactive: 'ไม่ออนไลน์',
+        suspended: 'ถูกระงับ'
+    };
+    return statusLabels[status] || status;
 }
 
 function getStatusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
-	const variants = {
-		active: 'default' as const,
-		inactive: 'secondary' as const,
-		suspended: 'destructive' as const
-	};
-	return variants[status as keyof typeof variants] || 'outline';
+    // Map to visual variants; customize classes below
+    const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+        online: 'default',
+        active: 'default',
+        offline: 'secondary',
+        inactive: 'secondary',
+        disabled: 'destructive',
+        suspended: 'destructive'
+    };
+    return variants[status] || 'outline';
 }
 
 // User Profile Cell Snippet
@@ -126,12 +135,13 @@ export const RoleBadge = createRawSnippet<[{ role: string }]>((getProps) => {
 	const { role } = getProps();
 	const variant = getRoleVariant(role);
 	const label = getRoleLabel(role);
-	const variantClasses = {
-		default: 'bg-gray-900 text-white',
-		secondary: 'bg-gray-100 text-gray-900',
-		destructive: 'bg-red-600 text-white',
-		outline: 'border border-gray-200 text-gray-900'
-	};
+    // Align colors with admin status badges
+    const variantClasses = {
+        default: 'bg-green-100 text-green-800',
+        secondary: 'bg-yellow-100 text-yellow-800',
+        destructive: 'bg-red-100 text-red-800',
+        outline: 'border border-gray-200 text-gray-900'
+    };
 	return {
 		render: () => `
 			<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${variantClasses[variant]}">

@@ -16,7 +16,7 @@ export interface User {
 	employee_id?: string;
 	department_id?: string;
 	faculty_id?: string;
-	status: 'active' | 'inactive' | 'suspended';
+    status: 'active' | 'inactive' | 'suspended' | 'online' | 'offline' | 'disabled';
 	role: 'student' | 'faculty' | 'staff' | 'admin';
 	phone?: string;
 	avatar?: string;

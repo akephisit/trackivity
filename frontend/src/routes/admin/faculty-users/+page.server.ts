@@ -172,7 +172,8 @@ export const load: PageServerLoad = async (event) => {
                 : u.faculty || undefined;
 
             const role: User['role'] = u.admin_role ? 'admin' : (u.role || 'student');
-            const status: User['status'] = isActive ? 'active' : 'inactive';
+            // Use admin-like semantics for status display
+            const status: User['status'] = isActive ? 'online' : 'offline';
 
             return {
                 id: u.id,
