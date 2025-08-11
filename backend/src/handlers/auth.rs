@@ -243,10 +243,7 @@ pub async fn student_login(
     // Build session user
     let session_user = build_session_user(&user, &admin_role, &session.id);
 
-    // Set session cookie
-    let max_age_seconds = (expires_at - Utc::now()).num_seconds();
-    let cookie = create_session_cookie(&session.id, max_age_seconds);
-    cookies.add(cookie);
+    // Frontend will handle cookie setting
 
     let response = SessionResponse {
         session_id: session.id,
@@ -420,10 +417,7 @@ pub async fn admin_login(
     // Build session user with admin role
     let session_user = build_session_user(&user, &admin_role, &session.id);
 
-    // Set session cookie
-    let max_age_seconds = (expires_at - Utc::now()).num_seconds();
-    let cookie = create_session_cookie(&session.id, max_age_seconds);
-    cookies.add(cookie);
+    // Frontend will handle cookie setting
 
     let response = SessionResponse {
         session_id: session.id,
