@@ -54,12 +54,18 @@
 		{ value: 'student', label: 'นักศึกษา' },
 		{ value: 'faculty', label: 'อาจารย์' },
 		{ value: 'staff', label: 'เจ้าหน้าที่' },
-		{ value: 'admin', label: 'ผู้ดูแลระบบ' }
+		{ value: 'super_admin', label: 'ซุปเปอร์แอดมิน' },
+		{ value: 'faculty_admin', label: 'แอดมินคณะ' },
+		{ value: 'regular_admin', label: 'แอดมินทั่วไป' },
+		{ value: 'admin', label: 'แอดมินอื่นๆ' }
 	];
 
 	// Status options
 	const statusOptions = [
 		{ value: 'all', label: 'ทุกสถานะ' },
+		{ value: 'online', label: 'ใช้งานอยู่' },
+		{ value: 'offline', label: 'ไม่ออนไลน์' },
+		{ value: 'disabled', label: 'ปิดใช้งาน' },
 		{ value: 'active', label: 'เปิดใช้งาน' },
 		{ value: 'inactive', label: 'ปิดใช้งาน' },
 		{ value: 'suspended', label: 'ถูกระงับ' }

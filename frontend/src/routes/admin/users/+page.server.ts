@@ -10,8 +10,6 @@ import type {
 import { AdminLevel } from '$lib/types/admin';
 import { PUBLIC_API_URL } from '$env/static/public';
 
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
-
 /**
  * Server Load Function for General User Management
  * Implements role-based access control:
@@ -40,6 +38,7 @@ export const load: PageServerLoad = async (event) => {
 
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = (page - 1) * limit;
 
     try {
         // Determine API endpoint based on admin level
@@ -47,16 +46,16 @@ export const load: PageServerLoad = async (event) => {
         let statsEndpoint: string;
 
         if (adminLevel === AdminLevel.SuperAdmin) {
-            // SuperAdmin can view all users
-            apiEndpoint = `${API_BASE_URL}/api/admin/system-users`;
-            statsEndpoint = `${API_BASE_URL}/api/admin/user-statistics`;
+            // SuperAdmin can view all users via local proxy
+            apiEndpoint = `/api/admin/system-users`;
+            statsEndpoint = `/api/admin/user-statistics`;
         } else if (adminLevel === AdminLevel.FacultyAdmin) {
             // FacultyAdmin can only view users within their faculty
             if (!facultyId) {
                 throw error(403, 'Faculty admin must be associated with a faculty');
             }
-            apiEndpoint = `${API_BASE_URL}/api/faculties/${facultyId}/users`;
-            statsEndpoint = `${API_BASE_URL}/api/admin/faculty-user-statistics?faculty_id=${facultyId}`;
+            apiEndpoint = `/api/faculties/${facultyId}/users`;
+            statsEndpoint = `/api/faculties/${facultyId}/users/stats`;
         } else {
             throw error(403, 'Insufficient permissions to view user data');
         }
@@ -70,45 +69,94 @@ export const load: PageServerLoad = async (event) => {
         if (filters.role && filters.role !== 'all') queryParams.set('role', filters.role);
         if (filters.created_after) queryParams.set('created_after', filters.created_after);
         if (filters.created_before) queryParams.set('created_before', filters.created_before);
-        queryParams.set('page', page.toString());
+        // Use limit/offset as expected by backend
         queryParams.set('limit', limit.toString());
+        queryParams.set('offset', offset.toString());
 
         // Make API requests
-        const sessionId = event.cookies.get('session_id');
         const [usersResponse, statsResponse, facultiesResponse] = await Promise.all([
-            event.fetch(`${apiEndpoint}?${queryParams.toString()}`, {
-                headers: {
-                    'Cookie': `session_id=${sessionId}`
-                }
-            }),
-            event.fetch(statsEndpoint, {
-                headers: {
-                    'Cookie': `session_id=${sessionId}`
-                }
-            }),
+            event.fetch(`${apiEndpoint}?${queryParams.toString()}`),
+            event.fetch(statsEndpoint),
             // Load faculties for filtering (only for SuperAdmin)
-            adminLevel === AdminLevel.SuperAdmin ? event.fetch(`${API_BASE_URL}/api/faculties`, {
-                headers: {
-                    'Cookie': `session_id=${sessionId}`
-                }
-            }) : Promise.resolve(null)
+            adminLevel === AdminLevel.SuperAdmin ? event.fetch(`/api/faculties`) : Promise.resolve(null)
         ]);
 
         // Process users response
         let users: User[] = [];
-        let pagination = { page: 1, total_pages: 1, total_count: 0, limit: 20 };
+        let pagination = { page: page, total_pages: 1, total_count: 0, limit: limit } as any;
 
         if (usersResponse.ok) {
             const usersResult = await usersResponse.json();
-            users = usersResult.users || usersResult.data || [];
-            if (usersResult.pagination) {
-                pagination = {
-                    page: usersResult.pagination.page,
-                    total_pages: usersResult.pagination.pages,
-                    total_count: usersResult.pagination.total,
-                    limit: usersResult.pagination.limit
-                };
-            }
+            const src = (usersResult.data || usersResult) as any;
+            const rawUsers: any[] = src.users || src.data?.users || [];
+            const totalCount: number = src.total_count ?? src.pagination?.total ?? rawUsers.length;
+
+            users = rawUsers.map((u: any) => {
+                // Determine user status similar to admin/admins page
+                const isEnabled = u.is_enabled !== undefined ? Boolean(u.is_enabled) : true;
+                const isActive = u.is_active !== undefined && u.is_active !== null ? Boolean(u.is_active) : false;
+                
+                let status: User['status'];
+                if (!isEnabled) {
+                    status = 'disabled';
+                } else if (isActive) {
+                    status = 'online';
+                } else {
+                    status = 'offline';
+                }
+                const lastLogin = u.last_login ? new Date(u.last_login).toISOString() : undefined;
+                const department = u.department_name ? { id: u.department_id, name: u.department_name } : u.department;
+                const faculty = u.faculty_name ? { id: u.faculty_id, name: u.faculty_name } : u.faculty;
+                // Determine user role based on admin_role and user data
+                let role: User['role'] = 'student'; // default
+                
+                if (u.admin_role) {
+                    // If user has admin role, determine the specific admin type
+                    const adminLevel = u.admin_role.admin_level;
+                    switch (adminLevel) {
+                        case 'SuperAdmin':
+                            role = 'super_admin';
+                            break;
+                        case 'FacultyAdmin':
+                            role = 'faculty_admin';
+                            break;
+                        case 'RegularAdmin':
+                            role = 'regular_admin';
+                            break;
+                        default:
+                            role = 'admin';
+                    }
+                } else {
+                    role = u.role || 'student';
+                }
+                return {
+                    id: u.id,
+                    email: u.email,
+                    first_name: u.first_name,
+                    last_name: u.last_name,
+                    student_id: u.student_id,
+                    employee_id: u.employee_id,
+                    department_id: u.department_id,
+                    faculty_id: u.faculty_id,
+                    status,
+                    role,
+                    phone: u.phone,
+                    avatar: u.avatar,
+                    last_login: lastLogin,
+                    email_verified_at: u.email_verified_at,
+                    created_at: u.created_at ? new Date(u.created_at).toISOString() : new Date().toISOString(),
+                    updated_at: u.updated_at ? new Date(u.updated_at).toISOString() : new Date().toISOString(),
+                    department,
+                    faculty,
+                } as User;
+            });
+
+            pagination = {
+                page,
+                limit,
+                total_count: totalCount,
+                total_pages: Math.max(1, Math.ceil(totalCount / limit))
+            };
         } else {
             console.error('Failed to load users:', await usersResponse.text());
         }
@@ -126,7 +174,21 @@ export const load: PageServerLoad = async (event) => {
 
         if (statsResponse.ok) {
             const statsResult = await statsResponse.json();
-            stats = statsResult.data || stats;
+            const rawStats = statsResult.data || statsResult;
+            // Support both system-wide and faculty-scoped shapes
+            if (rawStats.system_stats) {
+                stats = {
+                    total_users: rawStats.system_stats.total_users || 0,
+                    active_users: rawStats.system_stats.active_users_30_days || 0,
+                    inactive_users: Math.max(0, (rawStats.system_stats.total_users || 0) - (rawStats.system_stats.active_users_30_days || 0)),
+                    students: rawStats.system_stats.total_users || 0,
+                    faculty: 0,
+                    staff: 0,
+                    recent_registrations: rawStats.system_stats.new_users_30_days || 0,
+                } as UserStats;
+            } else if (rawStats.total_users !== undefined) {
+                stats = rawStats as UserStats;
+            }
         } else {
             console.error('Failed to load user stats:', await statsResponse.text());
         }
@@ -135,7 +197,8 @@ export const load: PageServerLoad = async (event) => {
         let faculties: Faculty[] = [];
         if (facultiesResponse && facultiesResponse.ok) {
             const facultiesResult = await facultiesResponse.json();
-            faculties = facultiesResult.data || [];
+            const rawFaculties = facultiesResult.data || facultiesResult;
+            faculties = rawFaculties?.faculties || rawFaculties || [];
         }
 
         return {

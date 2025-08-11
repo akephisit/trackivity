@@ -17,7 +17,7 @@ export interface User {
 	department_id?: string;
 	faculty_id?: string;
     status: 'active' | 'inactive' | 'suspended' | 'online' | 'offline' | 'disabled';
-	role: 'student' | 'faculty' | 'staff' | 'admin';
+	role: 'student' | 'faculty' | 'staff' | 'admin' | 'super_admin' | 'faculty_admin' | 'regular_admin';
 	phone?: string;
 	avatar?: string;
 	last_login?: string;
@@ -124,8 +124,8 @@ export interface UserFilter {
 	search?: string;
 	faculty_id?: string;
 	department_id?: string;
-	status?: 'active' | 'inactive' | 'suspended' | 'all';
-	role?: 'student' | 'faculty' | 'staff' | 'admin' | 'all';
+	status?: 'active' | 'inactive' | 'suspended' | 'online' | 'offline' | 'disabled' | 'all';
+	role?: 'student' | 'faculty' | 'staff' | 'admin' | 'super_admin' | 'faculty_admin' | 'regular_admin' | 'all';
 	created_after?: string;
 	created_before?: string;
 }

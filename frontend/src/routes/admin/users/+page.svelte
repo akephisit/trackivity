@@ -12,6 +12,9 @@
 		IconRefresh,
 		IconSettings
 	} from '@tabler/icons-svelte/icons';
+	
+	// Import filtering component
+	import UserFilters from '$lib/components/user-management/UserFilters.svelte';
 
 	// Get data from server load function
 	let { data } = $props();
@@ -20,28 +23,62 @@
 	const { 
 		users = [], 
 		stats = { total_users: 0, active_users: 0, inactive_users: 0, students: 0, faculty: 0, staff: 0, recent_registrations: 0 }, 
+		faculties = [],
+		filters = {},
 		pagination = { page: 1, limit: 20, total_count: 0, total_pages: 1 }, 
-		canManageAllUsers = false
+		canManageAllUsers = false,
+		adminLevel
 	} = $derived(data || {});
 
-	// Status badge colors
+	// Status badge colors and display text (similar to admin/admins)
 	function getStatusBadgeVariant(status: string) {
 		switch (status) {
+			case 'online': return 'default';
+			case 'offline': return 'secondary';
+			case 'disabled': return 'destructive';
 			case 'active': return 'default';
 			case 'inactive': return 'secondary';
 			case 'suspended': return 'destructive';
 			default: return 'secondary';
 		}
 	}
+	
+	function getStatusText(status: string): string {
+		switch (status) {
+			case 'online': return 'ใช้งานอยู่';
+			case 'offline': return 'ไม่ออนไลน์';
+			case 'disabled': return 'ปิดใช้งาน';
+			case 'active': return 'เปิดใช้งาน';
+			case 'inactive': return 'ไม่ใช้งาน';
+			case 'suspended': return 'ระงับ';
+			default: return status;
+		}
+	}
 
-	// Role badge colors
+	// Role badge colors and display text
 	function getRoleBadgeVariant(role: string) {
 		switch (role) {
+			case 'super_admin': return 'destructive';
+			case 'faculty_admin': return 'default';
+			case 'regular_admin': return 'secondary';
 			case 'admin': return 'destructive';
 			case 'faculty': return 'default';
 			case 'staff': return 'secondary';
 			case 'student': return 'outline';
 			default: return 'secondary';
+		}
+	}
+	
+	function getRoleText(role: string): string {
+		switch (role) {
+			case 'super_admin': return 'ซุปเปอร์แอดมิน';
+			case 'faculty_admin': return 'แอดมินคณะ';
+			case 'regular_admin': return 'แอดมินทั่วไป';
+			case 'admin': return 'แอดมิน';
+			case 'faculty': return 'อาจารย์';
+			case 'staff': return 'เจ้าหน้าที่';
+			case 'student': return 'นักศึกษา';
+			default: return role;
 		}
 	}
 
@@ -123,6 +160,26 @@
 		</Card>
 	</div>
 
+	<!-- Advanced Filters -->
+	<UserFilters
+		filters={filters || {}}
+		faculties={Array.isArray(faculties) ? faculties : []}
+		departments={[]}
+		showFacultyFilter={canManageAllUsers}
+		on:filtersChanged={(e) => {
+			// Handle filter changes by navigating with new filters
+			console.log('Filters changed:', e.detail);
+		}}
+		on:export={(e) => {
+			// Handle export
+			console.log('Export requested with filters:', e.detail);
+		}}
+		on:clearFilters={() => {
+			// Handle clear filters
+			console.log('Clear filters');
+		}}
+	/>
+
 	<!-- Users Table -->
 	<Card>
 		<CardHeader>
@@ -161,18 +218,30 @@
 							</Table.Cell>
 							<Table.Cell>{user.email}</Table.Cell>
 							<Table.Cell>
-								<Badge variant={getRoleBadgeVariant(user.role)}>{user.role}</Badge>
+								<Badge variant={getRoleBadgeVariant(user.role)}>{getRoleText(user.role)}</Badge>
 							</Table.Cell>
 							<Table.Cell>
-								<Badge variant={getStatusBadgeVariant(user.status)}>{user.status}</Badge>
+								<Badge variant={getStatusBadgeVariant(user.status)}>
+									{#if user.status === 'online' || user.status === 'offline' || user.status === 'disabled'}
+										<span class="w-2 h-2 rounded-full mr-2 {user.status === 'online' ? 'bg-green-500' : user.status === 'offline' ? 'bg-yellow-500' : 'bg-red-500'}"></span>
+									{/if}
+									{getStatusText(user.status)}
+								</Badge>
 							</Table.Cell>
 							<Table.Cell>
 								<div class="flex flex-col">
-									{#if user.faculty}
-									<span class="text-sm">{user.faculty.name}</span>
-									{/if}
-									{#if user.department}
-									<span class="text-xs text-muted-foreground">{user.department.name}</span>
+									{#if user.role === 'super_admin'}
+										<!-- ซุปเปอร์แอดมินไม่ต้องแสดงคณะ -->
+										<span class="text-sm text-muted-foreground">-</span>
+									{:else}
+										{#if user.faculty}
+											<span class="text-sm">{user.faculty.name}</span>
+										{:else}
+											<span class="text-sm text-muted-foreground">ไม่ระบุคณะ</span>
+										{/if}
+										{#if user.department && (user.role === 'faculty_admin' || user.role === 'regular_admin')}
+											<span class="text-xs text-muted-foreground">{user.department.name}</span>
+										{/if}
 									{/if}
 								</div>
 							</Table.Cell>
