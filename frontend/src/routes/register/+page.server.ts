@@ -112,18 +112,7 @@ export const actions: Actions = {
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), 10000); // timeout 10 วินาที
 			
-			// Validate required fields
-			if (!form.data.faculty_id || form.data.faculty_id.trim() === '') {
-				form.errors.faculty_id = ['กรุณาเลือกคณะ'];
-				return fail(400, { form });
-			}
-			
-			if (!form.data.department_id || form.data.department_id.trim() === '') {
-				form.errors.department_id = ['กรุณาเลือกสาขาวิชา'];
-				return fail(400, { form });
-			}
-
-			// Use department_id as required field
+			// Use department_id directly (validation handled by client)
 			const departmentId = form.data.department_id;
 			
 			const requestBody = {

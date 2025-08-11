@@ -19,6 +19,8 @@
 		validators: zodClient(registerSchema),
 		onSubmit: () => {
 			console.log('Form data on submit:', $formData);
+			console.log('Selected faculty:', selectedFaculty);
+			console.log('Selected department:', selectedDepartment);
 		},
 		onResult: ({ result }) => {
 			if (result.type === 'failure') {
@@ -349,6 +351,7 @@
 											{/each}
 										</Select.Content>
 									</Select.Root>
+									<input type="hidden" {...props} bind:value={$formData.faculty_id} />
 								{/snippet}
 							</Form.Control>
 							<Form.FieldErrors />
@@ -382,6 +385,7 @@
 											{/each}
 										</Select.Content>
 									</Select.Root>
+									<input type="hidden" {...props} bind:value={$formData.department_id} />
 								{/snippet}
 							</Form.Control>
 							<Form.FieldErrors />
