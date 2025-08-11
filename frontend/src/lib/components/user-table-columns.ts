@@ -6,7 +6,6 @@ import {
 	UserProfileCell,
 	EmailCell,
 	IdentifierCell,
-	RoleBadge,
 	StatusBadge,
 	FacultyCell,
 	DepartmentCell,
@@ -86,17 +85,6 @@ export const userTableColumns: ColumnDef<User>[] = [
         filterFn: 'includesString',
     },
 
-    // Role column with badge styling
-    {
-        accessorKey: 'role',
-        header: 'บทบาท',
-        cell: ({ row }) => renderSnippet(RoleBadge, { role: row.original.role }),
-        size: 100,
-        filterFn: (row, id, value) => {
-            if (value === 'all' || !value) return true;
-            return row.original.role === value;
-        },
-    },
 
     // Status column with color-coded badges
     {
@@ -229,7 +217,6 @@ export const columnVisibilityPresets = {
     compact: {
         user: true,
         email: true,
-        role: true,
         status: true,
         actions: true,
         // Hide other columns
@@ -247,7 +234,6 @@ export const columnVisibilityPresets = {
         user: true,
         email: true,
         identifier: true,
-        role: true,
         status: true,
         faculty: true,
         department: true,
@@ -262,7 +248,6 @@ export const columnVisibilityPresets = {
         user: true,
         email: true,
         identifier: true,
-        role: true,
         status: true,
         faculty: false, // Hidden for faculty admin
         department: true,
@@ -277,7 +262,6 @@ export const columnVisibilityPresets = {
 // Export column accessor functions for filtering
 export const userColumnAccessors = {
     search: (user: User) => `${user.first_name} ${user.last_name} ${user.email} ${user.student_id || ''} ${user.employee_id || ''}`,
-    role: (user: User) => user.role,
     status: (user: User) => user.status,
     faculty: (user: User) => user.faculty_id || '',
     department: (user: User) => user.department_id || '',
