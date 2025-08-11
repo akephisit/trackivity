@@ -81,6 +81,18 @@ export const load: PageServerLoad = async (event) => {
             adminLevel === AdminLevel.SuperAdmin ? event.fetch(`/api/faculties`) : Promise.resolve(null)
         ]);
 
+        // Process faculties response first (for SuperAdmin only)
+        let faculties: Faculty[] = [];
+        if (facultiesResponse && facultiesResponse.ok) {
+            const facultiesResult = await facultiesResponse.json();
+            const rawFaculties = facultiesResult.data || facultiesResult;
+            faculties = rawFaculties?.faculties || rawFaculties || [];
+        }
+
+        // Create a faculty lookup map for better performance
+        const facultyMap = new Map();
+        faculties.forEach(f => facultyMap.set(f.id, f));
+
         // Process users response
         let users: User[] = [];
         let pagination = { page: page, total_pages: 1, total_count: 0, limit: limit } as any;
@@ -106,7 +118,35 @@ export const load: PageServerLoad = async (event) => {
                 }
                 const lastLogin = u.last_login ? new Date(u.last_login).toISOString() : undefined;
                 const department = u.department_name ? { id: u.department_id, name: u.department_name } : u.department;
-                const faculty = u.faculty_name ? { id: u.faculty_id, name: u.faculty_name } : u.faculty;
+                // Handle faculty data - check multiple possible sources
+                let faculty = null;
+                
+                // For admin users, prioritize faculty_id from admin_role
+                if (u.admin_role && u.admin_role.faculty_id) {
+                    // Get faculty from admin_role first
+                    if (u.admin_role.faculty && u.admin_role.faculty.name) {
+                        faculty = u.admin_role.faculty;
+                    } else {
+                        // Look up faculty from faculties list
+                        const facultyFromMap = facultyMap.get(u.admin_role.faculty_id);
+                        if (facultyFromMap) {
+                            faculty = facultyFromMap;
+                        } else {
+                            faculty = { 
+                                id: u.admin_role.faculty_id, 
+                                name: u.admin_role.faculty_name || 'Unknown Faculty' 
+                            };
+                        }
+                    }
+                }
+                // For non-admin users or if admin doesn't have faculty_id
+                else if (u.faculty_name && u.faculty_id) {
+                    faculty = { id: u.faculty_id, name: u.faculty_name };
+                } else if (u.faculty) {
+                    faculty = u.faculty;
+                } else if (u.faculty_id) {
+                    faculty = facultyMap.get(u.faculty_id) || { id: u.faculty_id, name: 'Unknown Faculty' };
+                }
                 // Determine user role based on admin_role and user data
                 let role: User['role'] = 'student'; // default
                 
@@ -193,13 +233,6 @@ export const load: PageServerLoad = async (event) => {
             console.error('Failed to load user stats:', await statsResponse.text());
         }
 
-        // Process faculties response (for SuperAdmin only)
-        let faculties: Faculty[] = [];
-        if (facultiesResponse && facultiesResponse.ok) {
-            const facultiesResult = await facultiesResponse.json();
-            const rawFaculties = facultiesResult.data || facultiesResult;
-            faculties = rawFaculties?.faculties || rawFaculties || [];
-        }
 
         return {
             users,

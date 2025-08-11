@@ -56,9 +56,11 @@ pub async fn get_system_users(
             u.updated_at,
             d.name as department_name,
             d.code as department_code,
+            -- For non-admin users: faculty info from departments
             f.id as faculty_id,
             f.name as faculty_name,
             f.code as faculty_code,
+            -- For admin users: admin role info and faculty info from admin_roles
             ar.id as admin_role_id,
             ar.admin_level,
             ar.faculty_id as admin_faculty_id,
@@ -66,6 +68,9 @@ pub async fn get_system_users(
             ar.is_enabled,
             ar.created_at as role_created_at,
             ar.updated_at as role_updated_at,
+            af.id as admin_faculty_real_id,
+            af.name as admin_faculty_name,
+            af.code as admin_faculty_code,
             (SELECT MAX(s.last_accessed) FROM sessions s WHERE s.user_id = u.id) as last_login,
             CASE WHEN EXISTS(SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.is_active = true) THEN true ELSE false END as is_active,
             COALESCE(COUNT(p.id), 0) as activity_count,
@@ -74,6 +79,7 @@ pub async fn get_system_users(
         LEFT JOIN departments d ON u.department_id = d.id
         LEFT JOIN faculties f ON d.faculty_id = f.id
         LEFT JOIN admin_roles ar ON u.id = ar.user_id
+        LEFT JOIN faculties af ON ar.faculty_id = af.id
         LEFT JOIN participations p ON u.id = p.user_id
     "#.to_string();
 
@@ -114,7 +120,7 @@ pub async fn get_system_users(
         count_query.push_str(&where_clause);
     }
 
-    query.push_str(" GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, d.code, f.id, f.name, f.code, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.is_enabled, ar.created_at, ar.updated_at");
+    query.push_str(" GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, d.code, f.id, f.name, f.code, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.is_enabled, ar.created_at, ar.updated_at, af.id, af.name, af.code");
     query.push_str(" ORDER BY f.name NULLS LAST, d.name NULLS LAST, u.last_name, u.first_name LIMIT $1 OFFSET $2");
 
     let mut query_builder = sqlx::query(&query).bind(limit).bind(offset);
@@ -162,6 +168,23 @@ pub async fn get_system_users(
                     None => None,
                 };
 
+                // Determine which faculty info to use based on whether user is admin
+                let (final_faculty_id, final_faculty_name, final_faculty_code) = if admin_role.is_some() {
+                    // For admin users, use faculty info from admin_roles table
+                    (
+                        row.get::<Option<Uuid>, _>("admin_faculty_real_id"),
+                        row.get::<Option<String>, _>("admin_faculty_name"), 
+                        row.get::<Option<String>, _>("admin_faculty_code")
+                    )
+                } else {
+                    // For non-admin users, use faculty info from departments table
+                    (
+                        row.get::<Option<Uuid>, _>("faculty_id"),
+                        row.get::<Option<String>, _>("faculty_name"),
+                        row.get::<Option<String>, _>("faculty_code")
+                    )
+                };
+
                 let user_detail = json!({
                     "id": row.get::<Uuid, _>("id"),
                     "student_id": row.get::<String, _>("student_id"),
@@ -171,14 +194,15 @@ pub async fn get_system_users(
                     "department_id": row.get::<Option<Uuid>, _>("department_id"),
                     "department_name": row.get::<Option<String>, _>("department_name"),
                     "department_code": row.get::<Option<String>, _>("department_code"),
-                    "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
-                    "faculty_name": row.get::<Option<String>, _>("faculty_name"),
-                    "faculty_code": row.get::<Option<String>, _>("faculty_code"),
+                    "faculty_id": final_faculty_id,
+                    "faculty_name": final_faculty_name,
+                    "faculty_code": final_faculty_code,
                     "admin_role": admin_role,
                     "created_at": row.get::<Option<DateTime<Utc>>, _>("created_at"),
                     "updated_at": row.get::<Option<DateTime<Utc>>, _>("updated_at"),
                     "last_login": row.get::<Option<DateTime<Utc>>, _>("last_login"),
                     "is_active": row.get::<Option<bool>, _>("is_active").unwrap_or(false),
+                    "is_enabled": admin_role.as_ref().map(|ar| ar.is_enabled).unwrap_or(true),
                     "activity_count": row.get::<Option<i64>, _>("activity_count").unwrap_or(0),
                     "last_activity": row.get::<Option<DateTime<Utc>>, _>("last_activity"),
                     "is_admin": admin_role.is_some()
