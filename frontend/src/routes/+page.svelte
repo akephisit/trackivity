@@ -4,25 +4,28 @@
 	import { Button } from "$lib/components/ui/button";
 	import { IconUser, IconLogout } from '@tabler/icons-svelte/icons';
 	import type { PageData } from './$types';
-    import { onMount } from 'svelte';
     import { toast } from 'svelte-sonner';
-    import { afterNavigate, goto } from '$app/navigation';
+    import { goto } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
 
-    onMount(() => {
-        afterNavigate(() => {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('logout') === '1') {
-                toast.success('ออกจากระบบสำเร็จ');
-                // Clean the URL parameter via router
-                params.delete('logout');
-                const newSearch = params.toString();
-                const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '');
-                goto(newUrl, { replaceState: true, noScroll: true, keepFocus: true });
-            }
-        });
-    });
+	async function handleLogout() {
+		try {
+			const response = await fetch('/api/auth/logout', {
+				method: 'POST'
+			});
+
+			if (response.ok) {
+				toast.success('ออกจากระบบสำเร็จ');
+				goto('/login');
+			} else {
+				toast.error('เกิดข้อผิดพลาดในการออกจากระบบ');
+			}
+		} catch (error) {
+			console.error('Logout error:', error);
+			toast.error('เกิดข้อผิดพลาดในการออกจากระบบ');
+		}
+	}
 </script>
 
 <div class="min-h-screen bg-background">
@@ -58,12 +61,10 @@
 									แอดมิน
 								</Button>
 							{/if}
-							<form method="POST" action="/api/auth/logout">
-								<Button type="submit" variant="outline" size="sm" class="flex items-center gap-2">
-									<IconLogout class="h-4 w-4" />
-									ออกจากระบบ
-								</Button>
-							</form>
+							<Button onclick={handleLogout} variant="outline" size="sm" class="flex items-center gap-2">
+								<IconLogout class="h-4 w-4" />
+								ออกจากระบบ
+							</Button>
 						</div>
 					{:else}
 						<Button href="/login" variant="outline" size="sm" class="flex items-center gap-2">
