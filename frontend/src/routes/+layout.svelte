@@ -12,6 +12,6 @@
 </svelte:head>
 
 <ModeWatcher />
-<Toaster richColors closeButton visibleToasts={5} expand={true} />
+<Toaster richColors closeButton />
 
 {@render children?.()}
