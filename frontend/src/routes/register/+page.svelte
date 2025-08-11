@@ -17,11 +17,6 @@
 
 	const form = superForm(data.form, {
 		validators: zodClient(registerSchema),
-		onSubmit: () => {
-			console.log('Form data on submit:', $formData);
-			console.log('Selected faculty:', selectedFaculty);
-			console.log('Selected department:', selectedDepartment);
-		},
 		onResult: ({ result }) => {
 			if (result.type === 'failure') {
 				toast.error('การสมัครสมาชิกไม่สำเร็จ');
@@ -83,10 +78,8 @@
 	$effect(() => {
 		if (selectedDepartment && selectedDepartment.trim() !== '') {
 			$formData.department_id = selectedDepartment;
-			console.log('Department selected:', selectedDepartment);
 		} else {
 			$formData.department_id = '';
-			console.log('Department cleared, selectedDepartment:', selectedDepartment);
 		}
 	});
 

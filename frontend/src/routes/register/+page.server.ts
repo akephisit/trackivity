@@ -124,7 +124,6 @@ export const actions: Actions = {
 				department_id: departmentId
 			};
 			
-			console.log('Registration request body:', JSON.stringify(requestBody, null, 2));
 			
 			const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
 				method: 'POST',
@@ -153,13 +152,20 @@ export const actions: Actions = {
 
 			if (result.success) {
 				// สมัครสำเร็จ - redirect ไป login พร้อมข้อความแจ้ง
+				clearTimeout(timeoutId);
 				throw redirect(303, '/login?registered=true');
 			} else {
 				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก'];
 				return fail(400, { form });
 			}
 		} catch (error) {
-			console.error('Register error:', error);
+			// ตรวจสอบว่าเป็น redirect object หรือไม่
+			if (error instanceof Response || 
+				(error && typeof error === 'object' && (error as any).status === 303) ||
+				(error && typeof error === 'object' && (error as any).location) ||
+				(error && error.toString && error.toString().includes('Redirect'))) {
+				throw error;
+			}
 			
 			// จัดการ error แต่ละประเภท
 			if (error instanceof Error) {
