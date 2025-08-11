@@ -20,7 +20,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
 use crate::database::Database;
-use crate::handlers::sse::SseConnectionManager;
+use crate::handlers::sse_enhanced::{SseConnectionManager, SseConfig};
+use crate::handlers::sse_tasks;
 use crate::routes::create_routes;
 use crate::services::background_tasks::BackgroundTaskManager;
 
@@ -51,8 +52,18 @@ async fn main() -> anyhow::Result<()> {
     // Build Redis session store
     let redis_store = Arc::new(crate::services::RedisSessionStore::new(&config.redis_url)?);
 
-    // Initialize SSE connection manager
-    let sse_manager = Arc::new(SseConnectionManager::new());
+    // Initialize enhanced SSE connection manager
+    let redis_client_for_sse = redis::Client::open(config.redis_url.clone())?;
+    let sse_config = SseConfig {
+        max_connections_per_user: 5,
+        heartbeat_interval: std::time::Duration::from_secs(30),
+        connection_timeout: std::time::Duration::from_secs(300),
+        rate_limit_per_minute: 100,
+        channel_buffer_size: 1000,
+        redis_pubsub_channel: "trackivity_sse".to_string(),
+        enable_compression: false,
+    };
+    let sse_manager = Arc::new(SseConnectionManager::with_config(redis_client_for_sse, sse_config.clone()));
 
     // Build session state with SSE manager
     let session_state = crate::middleware::session::SessionState {
@@ -62,10 +73,20 @@ async fn main() -> anyhow::Result<()> {
         sse_manager: Some(sse_manager.clone()),
     };
 
-    // Start background tasks
+    // Start background tasks including SSE tasks
     let background_task_manager =
         BackgroundTaskManager::new(session_state.clone(), sse_manager.clone());
     background_task_manager.start_all_tasks().await;
+
+    // Start SSE-specific background tasks
+    let sse_tasks = sse_tasks::spawn_sse_background_tasks(
+        session_state.clone(),
+        (*sse_manager).clone(),
+        sse_config,
+        redis::Client::open(config.redis_url.clone())?,
+    );
+    
+    tracing::info!("Started {} SSE background tasks", sse_tasks.len());
 
     tracing::info!("Background tasks started successfully");
 

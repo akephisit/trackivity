@@ -2,24 +2,89 @@ import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { authStore } from './auth';
 import { goto } from '$app/navigation';
+import { toast } from 'svelte-sonner';
 
-// Types for SSE messages
+// Enhanced types for SSE messages
 export interface SseMessage {
     event_type: string;
     data: any;
     timestamp: string;
+    message_id: string;
     target_permissions?: string[];
     target_user_id?: string;
     target_faculty_id?: string;
+    target_sessions?: string[];
+    priority: MessagePriority;
+    ttl_seconds?: number;
+    retry_count: number;
+    broadcast_id?: string;
+}
+
+export enum MessagePriority {
+    Low = 'Low',
+    Normal = 'Normal',
+    High = 'High',
+    Critical = 'Critical'
+}
+
+export enum SseEventType {
+    ActivityCheckedIn = 'activity_checked_in',
+    NewActivityCreated = 'new_activity_created',
+    SubscriptionExpiryWarning = 'subscription_expiry_warning',
+    SystemAnnouncement = 'system_announcement',
+    AdminAssignment = 'admin_assignment',
+    PermissionUpdated = 'permission_updated',
+    SessionRevoked = 'session_revoked',
+    AdminPromoted = 'admin_promoted',
+    Heartbeat = 'heartbeat',
+    ConnectionStatus = 'connection_status',
+    Custom = 'custom'
 }
 
 export interface NotificationMessage {
     title: string;
     message: string;
-    notification_type: 'info' | 'warning' | 'error' | 'success';
+    notification_type: 'Info' | 'Warning' | 'Error' | 'Success';
     action_url?: string;
     expires_at?: string;
     timestamp?: string;
+    read_receipt_required?: boolean;
+    sound_enabled?: boolean;
+    category?: 'Activity' | 'System' | 'Admin' | 'Security' | 'Subscription';
+}
+
+export interface ActivityCheckedInMessage {
+    activity_id: string;
+    activity_title: string;
+    user_id: string;
+    user_name: string;
+    checked_in_at: string;
+    qr_code_id?: string;
+}
+
+export interface NewActivityMessage {
+    activity_id: string;
+    title: string;
+    description?: string;
+    start_time: string;
+    end_time: string;
+    faculty_id?: string;
+    created_by: string;
+}
+
+export interface SystemAnnouncementMessage {
+    announcement_id: string;
+    title: string;
+    content: string;
+    severity: 'Info' | 'Important' | 'Critical' | 'Maintenance';
+    target_audience: string[];
+    display_until?: string;
+}
+
+export interface ConnectionStatusMessage {
+    status: 'Connected' | 'Reconnecting' | 'Disconnected' | 'Error' | 'RateLimited' | 'Unauthorized';
+    message: string;
+    reconnect_recommended: boolean;
 }
 
 export interface SessionUpdateMessage {
@@ -36,7 +101,7 @@ export interface ActivityUpdateMessage {
     message: string;
 }
 
-// SSE store state
+// Enhanced SSE store state
 interface SseState {
     connected: boolean;
     connecting: boolean;
@@ -44,6 +109,20 @@ interface SseState {
     lastMessage: SseMessage | null;
     notifications: NotificationMessage[];
     connectionCount: number;
+    connectionStats?: ConnectionStats;
+    lastHeartbeat?: string;
+    messagesReceived: number;
+    duplicateMessages: Set<string>;
+    reconnectAttempts: number;
+    connectionStartTime?: string;
+}
+
+export interface ConnectionStats {
+    total_connections: number;
+    connections_by_faculty: Record<string, number>;
+    connections_by_role: Record<string, number>;
+    average_connection_duration: number;
+    stale_connections: number;
 }
 
 const initialState: SseState = {
@@ -52,7 +131,10 @@ const initialState: SseState = {
     error: null,
     lastMessage: null,
     notifications: [],
-    connectionCount: 0
+    connectionCount: 0,
+    messagesReceived: 0,
+    duplicateMessages: new Set<string>(),
+    reconnectAttempts: 0
 };
 
 // Create writable store
@@ -65,41 +147,83 @@ export const unreadCount = derived(notifications, $notifications =>
     $notifications.filter(n => !n.expires_at || new Date(n.expires_at) > new Date()).length
 );
 
-// SSE Service class
+// Enhanced SSE Service class
 class SseService {
     private eventSource: EventSource | null = null;
-    private maxReconnectAttempts = 5;
+    private maxReconnectAttempts = 10;
     private reconnectAttempt = 0;
     private reconnectTimeout: NodeJS.Timeout | null = null;
+    private heartbeatTimeout: NodeJS.Timeout | null = null;
+    private messageBuffer: Map<string, SseMessage> = new Map();
+    private connectionStartTime: Date | null = null;
+    private connectionId: string | null = null;
 
-    // Connect to SSE endpoint
-    connect(sessionId: string): void {
+    // Enhanced connect to SSE endpoint with improved error handling
+    connect(sessionId: string, endpoint?: 'student' | 'admin'): void {
         if (!browser || this.eventSource?.readyState === EventSource.OPEN) {
             return;
         }
 
         this.cleanup();
+        this.connectionId = `${sessionId}_${Date.now()}`;
+        this.connectionStartTime = new Date();
         
         sseStore.update(state => ({
             ...state,
             connecting: true,
-            error: null
+            error: null,
+            reconnectAttempts: this.reconnectAttempt,
+            connectionStartTime: this.connectionStartTime?.toISOString()
         }));
 
         try {
-            this.eventSource = new EventSource(`/api/sse/${sessionId}`, {
+            // Select appropriate endpoint
+            let url = `/api/sse/${sessionId}`;
+            if (endpoint === 'student') {
+                url = `/api/sse/student/${sessionId}`;
+            } else if (endpoint === 'admin') {
+                url = `/api/sse/admin/${sessionId}`;
+            }
+
+            this.eventSource = new EventSource(url, {
                 withCredentials: true
             });
 
             this.setupEventListeners();
+            this.startHeartbeatMonitor();
             
         } catch (error) {
             console.error('Failed to create SSE connection:', error);
             sseStore.update(state => ({
                 ...state,
                 connecting: false,
-                error: error instanceof Error ? error.message : 'Connection failed'
+                error: error instanceof Error ? error.message : 'Connection failed',
+                reconnectAttempts: this.reconnectAttempt
             }));
+        }
+    }
+
+    // Start heartbeat monitoring
+    private startHeartbeatMonitor(): void {
+        this.clearHeartbeatTimeout();
+        
+        // Expect heartbeat every 60 seconds, timeout after 90 seconds
+        this.heartbeatTimeout = setTimeout(() => {
+            console.warn('SSE heartbeat timeout - connection may be stale');
+            sseStore.update(state => ({
+                ...state,
+                error: 'Connection heartbeat timeout'
+            }));
+            
+            // Attempt reconnection
+            this.handleReconnect();
+        }, 90000);
+    }
+
+    private clearHeartbeatTimeout(): void {
+        if (this.heartbeatTimeout) {
+            clearTimeout(this.heartbeatTimeout);
+            this.heartbeatTimeout = null;
         }
     }
 
@@ -114,19 +238,36 @@ class SseService {
                 ...state,
                 connected: true,
                 connecting: false,
-                error: null
+                error: null,
+                reconnectAttempts: 0
             }));
+
+            // Show success toast for reconnection
+            if (this.reconnectAttempt > 0) {
+                toast.success('เชื่อมต่อแบบเรียลไทม์สำเร็จแล้ว', {
+                    description: 'กลับมาออนไลน์แล้ว'
+                });
+            }
         };
 
         this.eventSource.onerror = (event) => {
             console.error('SSE connection error:', event);
+            this.clearHeartbeatTimeout();
             
             sseStore.update(state => ({
                 ...state,
                 connected: false,
                 connecting: false,
-                error: 'Connection error occurred'
+                error: 'Connection error occurred',
+                reconnectAttempts: this.reconnectAttempt
             }));
+
+            // Show error toast only if not already reconnecting
+            if (this.reconnectAttempt === 0) {
+                toast.error('การเชื่อมต่อขาดหาย', {
+                    description: 'กำลังพยายามเชื่อมต่อใหม่...'
+                });
+            }
 
             // Attempt to reconnect
             this.handleReconnect();
@@ -136,7 +277,7 @@ class SseService {
             this.handleMessage(event);
         };
 
-        // Handle specific event types
+        // Handle specific event types with enhanced processing
         this.eventSource.addEventListener('notification', (event) => {
             this.handleNotification(event);
         });
@@ -149,6 +290,38 @@ class SseService {
             this.handleActivityUpdate(event);
         });
 
+        this.eventSource.addEventListener('activity_checked_in', (event) => {
+            this.handleActivityCheckedIn(event);
+        });
+
+        this.eventSource.addEventListener('new_activity_created', (event) => {
+            this.handleNewActivityCreated(event);
+        });
+
+        this.eventSource.addEventListener('system_announcement', (event) => {
+            this.handleSystemAnnouncement(event);
+        });
+
+        this.eventSource.addEventListener('permission_updated', (event) => {
+            this.handlePermissionUpdated(event);
+        });
+
+        this.eventSource.addEventListener('session_revoked', (event) => {
+            this.handleSessionRevoked(event);
+        });
+
+        this.eventSource.addEventListener('admin_promoted', (event) => {
+            this.handleAdminPromoted(event);
+        });
+
+        this.eventSource.addEventListener('heartbeat', (event) => {
+            this.handleHeartbeat(event);
+        });
+
+        this.eventSource.addEventListener('connection_status', (event) => {
+            this.handleConnectionStatus(event);
+        });
+
         this.eventSource.addEventListener('error', (event) => {
             console.error('SSE error event:', event);
         });
@@ -158,14 +331,68 @@ class SseService {
         try {
             const message: SseMessage = JSON.parse(event.data);
             
+            // Check for duplicate messages
+            if (message.message_id && this.isDuplicateMessage(message.message_id)) {
+                console.debug('Ignoring duplicate SSE message:', message.message_id);
+                return;
+            }
+
+            // Add to message buffer for deduplication
+            if (message.message_id) {
+                this.messageBuffer.set(message.message_id, message);
+                
+                // Clean old messages (keep last 100)
+                if (this.messageBuffer.size > 100) {
+                    const keys = Array.from(this.messageBuffer.keys());
+                    this.messageBuffer.delete(keys[0]);
+                }
+            }
+
             sseStore.update(state => ({
                 ...state,
-                lastMessage: message
+                lastMessage: message,
+                messagesReceived: state.messagesReceived + 1,
+                duplicateMessages: message.message_id 
+                    ? new Set([...state.duplicateMessages, message.message_id])
+                    : state.duplicateMessages
             }));
 
             console.log('SSE message received:', message);
+            
+            // Handle message based on priority
+            this.handleMessageByPriority(message);
         } catch (error) {
             console.error('Failed to parse SSE message:', error);
+        }
+    }
+
+    private isDuplicateMessage(messageId: string): boolean {
+        return this.messageBuffer.has(messageId);
+    }
+
+    private handleMessageByPriority(message: SseMessage): void {
+        switch (message.priority) {
+            case MessagePriority.Critical:
+                // Show critical messages immediately
+                toast.error('ข้อความสำคัญ', {
+                    description: 'มีข้อความสำคัญที่ต้องการความสนใจ',
+                    duration: 10000,
+                });
+                this.playNotificationSound('error');
+                break;
+            
+            case MessagePriority.High:
+                // Show high priority messages prominently
+                toast.warning('ข้อความสำคัญ', {
+                    description: 'มีข้อความที่ต้องการความสนใจ',
+                    duration: 7000,
+                });
+                this.playNotificationSound('warning');
+                break;
+            
+            default:
+                // Normal and low priority messages don't need immediate attention
+                break;
         }
     }
 

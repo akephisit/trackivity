@@ -274,6 +274,17 @@ pub async fn force_logout_session(
         .reason
         .unwrap_or_else(|| "Force logout by admin".to_string());
 
+    // Get the session to get user_id before revoking
+    let session_user_id = match session_state.redis_store.get_session(&session_id).await {
+        Ok(Some(session)) => session.user_id,
+        _ => {
+            return Ok(Json(serde_json::json!({
+                "success": false,
+                "message": "Session not found"
+            })));
+        }
+    };
+
     let success = session_state
         .redis_store
         .revoke_session_by_admin(
@@ -287,20 +298,28 @@ pub async fn force_logout_session(
     if success {
         // Send SSE notification to the affected user if connected
         if let Some(sse_manager) = &session_state.sse_manager {
-            let notification = crate::handlers::sse::SessionUpdateMessage {
+            let notification = crate::handlers::sse_enhanced::SessionRevokedMessage {
                 session_id: session_id.clone(),
-                action: "force_logout".to_string(),
-                reason: Some(reason),
-                new_expires_at: None,
+                user_id: session_user_id,
+                reason: crate::handlers::sse_enhanced::SessionRevocationReason::AdminAction,
+                message: reason.to_string(),
+                revoked_by: Some(admin_user.session_user.user_id),
+                force_logout_all_devices: false,
             };
 
-            let sse_message = crate::handlers::sse::SseMessage {
-                event_type: "session_update".to_string(),
+            let sse_message = crate::handlers::sse_enhanced::SseMessage {
+                event_type: crate::handlers::sse_enhanced::SseEventType::SessionRevoked,
                 data: serde_json::to_value(notification).unwrap(),
                 timestamp: Utc::now(),
+                message_id: format!("force_logout_{}", uuid::Uuid::new_v4()),
                 target_permissions: None,
-                target_user_id: None,
+                target_user_id: Some(session_user_id),
                 target_faculty_id: None,
+                target_sessions: Some(vec![session_id.clone()]),
+                priority: crate::handlers::sse_enhanced::MessagePriority::Critical,
+                ttl_seconds: None,
+                retry_count: 0,
+                broadcast_id: None,
             };
 
             let _ = sse_manager.send_to_session(&session_id, sse_message).await;
@@ -330,28 +349,7 @@ pub async fn batch_force_logout_sessions(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Send SSE notifications for successfully revoked sessions
-    if let Some(sse_manager) = &session_state.sse_manager {
-        for session_id in &response.revoked_sessions {
-            let notification = crate::handlers::sse::SessionUpdateMessage {
-                session_id: session_id.clone(),
-                action: "force_logout".to_string(),
-                reason: response.errors.first().cloned(),
-                new_expires_at: None,
-            };
-
-            let sse_message = crate::handlers::sse::SseMessage {
-                event_type: "session_update".to_string(),
-                data: serde_json::to_value(notification).unwrap(),
-                timestamp: Utc::now(),
-                target_permissions: None,
-                target_user_id: None,
-                target_faculty_id: None,
-            };
-
-            let _ = sse_manager.send_to_session(session_id, sse_message).await;
-        }
-    }
+    // SSE notifications for batch operations are handled by individual session revocation
 
     Ok(Json(response))
 }

@@ -8,6 +8,9 @@ pub mod department;
 pub mod faculty;
 pub mod qr_activity;
 pub mod sse;
+pub mod sse_enhanced;
+pub mod sse_api;
+pub mod sse_tasks;
 pub mod user;
 pub mod user_management;
 

@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::time::interval;
 use uuid::Uuid;
 
-use crate::handlers::sse::SseConnectionManager;
+use crate::handlers::sse_enhanced::SseConnectionManager;
 use crate::middleware::session::SessionState;
 
 // Background task manager
