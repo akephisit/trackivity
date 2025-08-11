@@ -120,14 +120,14 @@ export const EmailCell = createRawSnippet<[{ user: User }]>((getProps) => {
 
 // Identifier Cell Snippet
 export const IdentifierCell = createRawSnippet<[{ user: User }]>((getProps) => {
-	const { user } = getProps();
-	return {
-		render: () => `
-			<div class="text-sm font-mono">
-				${user.student_id || user.employee_id || '-'}
-			</div>
-		`
-	};
+    const { user } = getProps();
+    return {
+        render: () => `
+            <div class="text-sm">
+                ${user.student_id || user.employee_id || '-'}
+            </div>
+        `
+    };
 });
 
 // Role Badge Snippet
