@@ -59,12 +59,10 @@ export class SSEClient {
   public connect(user?: SessionUser): void {
     if (!browser) return;
 
-    // Check if we have a session before attempting to connect
+    // Try to read a session for diagnostics, but allow cookie-based connection even if not readable
     const sessionId = this.getSessionId();
     if (!sessionId) {
-      console.log('[SSE] No session ID found - skipping SSE connection');
-      this.connectionStatus.set('disconnected');
-      return;
+      console.log('[SSE] No readable session ID; attempting cookie-based SSE connection');
     }
 
     this.isManualClose = false;
