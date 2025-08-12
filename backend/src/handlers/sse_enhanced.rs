@@ -1296,6 +1296,61 @@ pub async fn sse_admin_handler(
     sse_handler(State(session_state), Path(session_id), headers, session_user).await
 }
 
+// Cookie-based universal SSE endpoint (no path param)
+// Uses authenticated session from cookie/header and derives session_id internally
+pub async fn sse_handler_cookie(
+    State(session_state): State<SessionState>,
+    headers: HeaderMap,
+    session_user: SessionUser,
+) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
+    let session_id = session_user.session_id.clone();
+    sse_handler(
+        State(session_state),
+        Path(session_id),
+        headers,
+        session_user,
+    )
+    .await
+}
+
+// Cookie-based student SSE endpoint
+pub async fn sse_student_handler_cookie(
+    State(session_state): State<SessionState>,
+    headers: HeaderMap,
+    session_user: SessionUser,
+) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
+    if session_user.admin_role.is_some() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let session_id = session_user.session_id.clone();
+    sse_handler(
+        State(session_state),
+        Path(session_id),
+        headers,
+        session_user,
+    )
+    .await
+}
+
+// Cookie-based admin SSE endpoint
+pub async fn sse_admin_handler_cookie(
+    State(session_state): State<SessionState>,
+    headers: HeaderMap,
+    session_user: SessionUser,
+) -> Result<Sse<impl Stream<Item = Result<Event, axum::Error>>>, StatusCode> {
+    if session_user.admin_role.is_none() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let session_id = session_user.session_id.clone();
+    sse_handler(
+        State(session_state),
+        Path(session_id),
+        headers,
+        session_user,
+    )
+    .await
+}
+
 // Helper function to extract client IP
 fn extract_client_ip(headers: &HeaderMap) -> Option<IpAddr> {
     // Try X-Forwarded-For header first (for proxies)

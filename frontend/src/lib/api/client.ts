@@ -190,7 +190,8 @@ export class ApiClient {
     const requestOptions: RequestInit = {
       ...options,
       headers: this.buildHeaders(options),
-      signal: controller.signal
+      signal: controller.signal,
+      credentials: 'include'
     };
 
     try {
@@ -237,13 +238,10 @@ export class ApiClient {
       // Handle authentication errors
       if (response.status === 401) {
         if (browser) {
-          // Clear invalid session
+          // Clear invalid session but do not force navigation here.
+          // Route protection is handled server-side in hooks; public pages must remain accessible.
           document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
           localStorage.removeItem('session_id');
-          // Only redirect if not already on login page
-          if (!window.location.pathname.includes('/login')) {
-            goto('/login');
-          }
         }
         throw new AuthenticationError(data.error?.message || 'Authentication failed');
       }
@@ -266,13 +264,9 @@ export class ApiClient {
       const errorCode = data.error?.code;
       if (browser && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(errorCode)) {
         console.log(`[Client] Session error detected: ${errorCode}`);
-        // Clear invalid session
+        // Clear invalid session but do not force navigation; allow public routes to continue.
         document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
         localStorage.removeItem('session_id');
-        // Only redirect if not already on login page
-        if (!window.location.pathname.includes('/login')) {
-          goto('/login');
-        }
       }
       
       throw new ApiClientError(

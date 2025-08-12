@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
-import { apiClient, isApiSuccess, handleApiError } from '$lib/api/client';
+import { apiClient, isApiSuccess, handleApiError, isApiError } from '$lib/api/client';
 import { sseClient } from '$lib/sse/client';
 import type { 
   SessionUser, 
@@ -160,18 +160,12 @@ function createAuthStore() {
           return user;
         }
       } catch (error) {
-        console.log('[Auth] Refresh user failed:', error);
-        
-        // Handle specific auth errors
-        if (error instanceof Error) {
-          const errorMessage = error.message;
-          if (errorMessage.includes('SESSION_EXPIRED') || 
-              errorMessage.includes('SESSION_REVOKED') || 
-              errorMessage.includes('SESSION_INVALID') || 
-              errorMessage.includes('NO_SESSION') ||
-              errorMessage.includes('Authentication failed')) {
-            // Clear auth state for session issues but don't redirect (already handled in API client)
-            console.log('[Auth] Clearing auth state due to session error');
+        // Normalize known session/auth issues without noisy errors in console
+        if (isApiError(error)) {
+          const code = error.code;
+          if (['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION', 'AUTH_ERROR'].includes(code)) {
+            // Clear auth state for session issues but don't redirect (handled elsewhere)
+            console.debug('[Auth] Session not active or invalid; clearing auth state');
             update(state => ({
               ...state,
               user: null,
@@ -180,9 +174,10 @@ function createAuthStore() {
             }));
             sseClient.disconnect();
           } else {
-            // Log unexpected errors but don't clear auth state
-            console.error('[Auth] Unexpected error during refresh:', error);
+            console.error('[Auth] Unexpected API error during refresh:', error);
           }
+        } else {
+          console.error('[Auth] Unexpected error during refresh:', error);
         }
       }
       return null;
@@ -341,25 +336,16 @@ export const facultyId = derived(
 
 // ===== INITIALIZATION =====
 if (browser) {
-  // Check if we have a session before attempting to refresh
-  const hasSession = () => {
-    const cookieMatch = document.cookie.match(/session_id=([^;]+)/);
-    return cookieMatch || localStorage.getItem('session_id');
-  };
-
-  // Auto-refresh user on page load only if we have a session
-  if (hasSession()) {
-    console.log('[Auth] Session found, attempting to refresh user...');
-    auth.refreshUser().then(user => {
-      // Only attempt SSE connection if user authentication was successful
-      if (user && !sseClient.isConnected()) {
-        console.log('[Auth] User authenticated, connecting SSE...');
-        sseClient.connect(user);
-      }
-    });
-  } else {
-    console.log('[Auth] No session found, skipping auto-refresh');
-  }
+  // Always probe server for an existing httpOnly session
+  console.log('[Auth] Probing server session...');
+  auth.refreshUser().then(user => {
+    if (user && !sseClient.isConnected()) {
+      console.log('[Auth] User authenticated, connecting SSE...');
+      sseClient.connect(user);
+    } else if (!user) {
+      console.log('[Auth] No active session on server');
+    }
+  });
 
   // Listen for SSE session events
   sseClient.on('session_updated', (event) => {
@@ -389,6 +375,17 @@ if (browser) {
 }
 
 // ===== UTILITY FUNCTIONS =====
+function hasSession(): boolean {
+  if (!browser) return false;
+  try {
+    const hasCookie = /(?:^|; )session_id=/.test(document.cookie);
+    const hasLocal = typeof localStorage !== 'undefined' && !!localStorage.getItem('session_id');
+    return hasCookie || hasLocal;
+  } catch {
+    return false;
+  }
+}
+
 export function requireAuth(): SessionUser {
   let user: SessionUser | null = null;
   currentUser.subscribe(u => user = u)();

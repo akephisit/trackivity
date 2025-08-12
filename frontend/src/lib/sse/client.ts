@@ -166,11 +166,11 @@ export class SSEClient {
     
     const sessionId = this.getSessionId();
     if (!sessionId) {
-      throw new Error('No session ID available for SSE connection');
+      // Fall back to cookie-based endpoint; browser will send httpOnly cookie
+      return `${baseUrl}/api/sse`;
     }
 
-    // Backend expects session_id as path parameter, not query parameter
-    // Route: /api/sse/{session_id}
+    // Prefer path-parameter endpoint when session id is available
     return `${baseUrl}/api/sse/${sessionId}`;
   }
 

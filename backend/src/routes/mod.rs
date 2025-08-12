@@ -141,6 +141,10 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/sse/{session_id}", get(sse_enhanced::sse_handler))
         .route("/api/sse/student/{session_id}", get(sse_enhanced::sse_student_handler))
         .route("/api/sse/admin/{session_id}", get(sse_enhanced::sse_admin_handler))
+        // Cookie-based SSE routes (session_id derived from cookie/header)
+        .route("/api/sse", get(sse_enhanced::sse_handler_cookie))
+        .route("/api/sse/student", get(sse_enhanced::sse_student_handler_cookie))
+        .route("/api/sse/admin", get(sse_enhanced::sse_admin_handler_cookie))
         
         // SSE API endpoints
         .route("/api/sse/notification", post(sse_api::send_notification))
