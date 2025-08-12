@@ -59,6 +59,14 @@ export class SSEClient {
   public connect(user?: SessionUser): void {
     if (!browser) return;
 
+    // Check if we have a session before attempting to connect
+    const sessionId = this.getSessionId();
+    if (!sessionId) {
+      console.log('[SSE] No session ID found - skipping SSE connection');
+      this.connectionStatus.set('disconnected');
+      return;
+    }
+
     this.isManualClose = false;
     this.connectionStatus.set('connecting');
     this.errorMessage.set(null);
@@ -158,7 +166,6 @@ export class SSEClient {
     
     const sessionId = this.getSessionId();
     if (!sessionId) {
-      console.log('[SSE] No session ID found - cannot establish SSE connection');
       throw new Error('No session ID available for SSE connection');
     }
 

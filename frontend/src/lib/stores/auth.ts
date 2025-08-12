@@ -350,7 +350,13 @@ if (browser) {
   // Auto-refresh user on page load only if we have a session
   if (hasSession()) {
     console.log('[Auth] Session found, attempting to refresh user...');
-    auth.refreshUser();
+    auth.refreshUser().then(user => {
+      // Only attempt SSE connection if user authentication was successful
+      if (user && !sseClient.isConnected()) {
+        console.log('[Auth] User authenticated, connecting SSE...');
+        sseClient.connect(user);
+      }
+    });
   } else {
     console.log('[Auth] No session found, skipping auto-refresh');
   }
