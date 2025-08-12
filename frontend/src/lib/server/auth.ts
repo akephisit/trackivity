@@ -227,7 +227,7 @@ export async function getAuthUser(event: RequestEvent): Promise<AuthenticatedUse
  * Logout helper
  */
 export async function logout(event: RequestEvent): Promise<void> {
-	const sessionId = event.cookies.get('session_id');
+    const sessionId = event.cookies.get('session_id');
 	
 	if (sessionId) {
 		try {
@@ -242,5 +242,5 @@ export async function logout(event: RequestEvent): Promise<void> {
 		}
 	}
 	
-	event.cookies.delete('session_id', { path: '/' });
+    event.cookies.delete('session_id', { path: '/' });
 }

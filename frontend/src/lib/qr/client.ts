@@ -234,11 +234,6 @@ export class QRClient {
     this.error.set(null);
 
     try {
-      const sessionId = this.getSessionId();
-      if (!sessionId) {
-        throw new Error('No active session found');
-      }
-
       // Try to generate via API first
       let qrCode: QRCode;
       try {
@@ -247,7 +242,8 @@ export class QRClient {
       } catch (apiError) {
         // Fallback to offline generation
         console.warn('API generation failed, using offline mode:', apiError);
-        qrCode = await this.generateOfflineQRCode(sessionId, user);
+        const sessionId = this.getSessionId();
+        qrCode = await this.generateOfflineQRCode(sessionId || undefined, user);
       }
 
       // Generate visual QR code
@@ -268,23 +264,25 @@ export class QRClient {
     }
   }
 
-  private async generateOfflineQRCode(sessionId: string, user?: SessionUser): Promise<QRCode> {
+  private async generateOfflineQRCode(sessionId?: string, user?: SessionUser): Promise<QRCode> {
     const qrData: QRData = {
       user_id: user?.user_id || 'unknown',
       timestamp: Date.now(),
-      session_id: sessionId,
+      session_id: sessionId || 'unknown',
       device_fingerprint: generateDeviceFingerprint()
     };
 
     // Sign the data if possible
     try {
-      const dataString = JSON.stringify({
-        user_id: qrData.user_id,
-        timestamp: qrData.timestamp,
-        device_fingerprint: qrData.device_fingerprint
-      });
-      
-      qrData.signature = await CryptoHelper.signData(dataString, sessionId);
+      if (sessionId) {
+        const dataString = JSON.stringify({
+          user_id: qrData.user_id,
+          timestamp: qrData.timestamp,
+          device_fingerprint: qrData.device_fingerprint
+        });
+        
+        qrData.signature = await CryptoHelper.signData(dataString, sessionId);
+      }
     } catch (error) {
       console.warn('Failed to sign QR data:', error);
     }
@@ -398,14 +396,7 @@ export class QRClient {
   }
 
   // ===== UTILITY METHODS =====
-  private getSessionId(): string | null {
-    if (!browser) return null;
-    
-    const cookieMatch = document.cookie.match(/session_id=([^;]+)/);
-    if (cookieMatch) return cookieMatch[1];
-    
-    return localStorage.getItem('session_id');
-  }
+  private getSessionId(): string | null { return null; }
 
   public downloadQRCode(filename = 'qr-code.png'): void {
     const dataURL = get(this.qrDataURL);

@@ -25,8 +25,9 @@ import type {
 } from '$lib/types';
 
 // ===== CONFIGURATION =====
+// Use same-origin for browser; SvelteKit proxies /api/* to backend.
 const API_BASE_URL = browser 
-  ? (window.location.origin.includes('localhost') ? 'http://localhost:3000' : window.location.origin)
+  ? ''
   : (process.env.BACKEND_URL || 'http://localhost:3000');
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
@@ -106,16 +107,8 @@ export class ApiClient {
   }
 
   // ===== PRIVATE HELPERS =====
-  private getSessionId(): string | null {
-    if (!browser) return null;
-    
-    // Try to get from cookie first
-    const cookieMatch = document.cookie.match(/session_id=([^;]+)/);
-    if (cookieMatch) return cookieMatch[1];
-    
-    // For mobile apps, check localStorage
-    return localStorage.getItem('session_id');
-  }
+  // Browser no longer needs to read session; proxy attaches httpOnly cookie.
+  private getSessionId(): string | null { return null; }
 
   private getDeviceInfo(): DeviceInfo {
     if (!browser) return { device_type: 'web' };
@@ -154,12 +147,7 @@ export class ApiClient {
 
     // Add session authentication if not skipped
     if (!options.skipAuth && browser) {
-      const sessionId = this.getSessionId();
-      if (sessionId) {
-        headers['X-Session-ID'] = sessionId;
-        headers['Cookie'] = `session_id=${sessionId}`;
-      }
-
+      // Same-origin requests with credentials; proxy attaches cookies server-side
       // Add device info for mobile apps
       const deviceInfo = this.getDeviceInfo();
       if (deviceInfo.device_type !== 'web') {
@@ -355,19 +343,12 @@ export class ApiClient {
     try {
       const response = await this.post<void>('/api/auth/logout');
       
-      // Clear session data
-      if (browser) {
-        document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        localStorage.removeItem('session_id');
-      }
+      // For safety, clear localStorage legacy key if present (not required for proxy flow)
+      if (browser) localStorage.removeItem('session_id');
       
       return response;
     } catch (error) {
-      // Still clear local session even if server request fails
-      if (browser) {
-        document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        localStorage.removeItem('session_id');
-      }
+      if (browser) localStorage.removeItem('session_id');
       throw error;
     }
   }

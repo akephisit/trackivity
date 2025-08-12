@@ -158,30 +158,11 @@ export class SSEClient {
 
   // ===== PRIVATE METHODS =====
   private buildSSEUrl(): string {
-    const baseUrl = browser 
-      ? (window.location.origin.includes('localhost') ? 'http://localhost:3000' : window.location.origin)
-      : 'http://localhost:3000';
-    
-    const sessionId = this.getSessionId();
-    if (!sessionId) {
-      // Fall back to cookie-based endpoint; browser will send httpOnly cookie
-      return `${baseUrl}/api/sse`;
-    }
-
-    // Prefer path-parameter endpoint when session id is available
-    return `${baseUrl}/api/sse/${sessionId}`;
+    // Use same-origin proxy; backend will read httpOnly cookie via proxy
+    return `/api/sse`;
   }
 
-  private getSessionId(): string | null {
-    if (!browser) return null;
-    
-    // Try cookie first
-    const cookieMatch = document.cookie.match(/session_id=([^;]+)/);
-    if (cookieMatch) return cookieMatch[1];
-    
-    // Try localStorage for mobile
-    return localStorage.getItem('session_id');
-  }
+  private getSessionId(): string | null { return null; }
 
   private getDeviceInfo(): { device_type: 'web' | 'mobile' | 'tablet' } {
     if (!browser) return { device_type: 'web' };
