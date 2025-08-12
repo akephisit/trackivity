@@ -142,13 +142,22 @@ function createAuthStore() {
         const response = await apiClient.me();
         
         if (isApiSuccess(response)) {
+          const user = response.data;
+          
           update(state => ({
             ...state,
-            user: response.data,
+            user,
             isAuthenticated: true,
             error: null
           }));
-          return response.data;
+
+          // Connect SSE if not already connected and user is authenticated
+          if (!sseClient.isConnected()) {
+            console.log('[Auth] Connecting SSE for existing session...');
+            sseClient.connect(user);
+          }
+
+          return user;
         }
       } catch (error) {
         console.error('Failed to refresh user:', error);
