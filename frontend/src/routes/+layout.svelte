@@ -1,12 +1,14 @@
 <script lang="ts">
 	import '../app.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import { sseClient } from '$lib/sse/client';
 	import { isAuthenticated } from '$lib/stores/auth';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
+	let mounted = $state(false);
+	onMount(() => (mounted = true));
 
 	// SSE Connection Status
 	const connectionStatus = sseClient.connectionStatus;
@@ -26,15 +28,15 @@
 	}
 </script>
 
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
+<!-- Move favicon to app.html to avoid head manipulation during hydration -->
 
-<ModeWatcher />
-<Toaster richColors closeButton />
+{#if mounted}
+	<ModeWatcher />
+	<Toaster richColors closeButton />
+{/if}
 
 <!-- SSE Connection Status Indicator (Development Only) -->
-{#if typeof window !== 'undefined' && window.location.hostname === 'localhost' && $isAuthenticated}
+{#if mounted && typeof window !== 'undefined' && window.location.hostname === 'localhost' && $isAuthenticated}
 	<div class="fixed top-4 right-4 z-50 flex items-center gap-2 text-xs bg-background/80 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-sm">
 		<div class="flex items-center gap-2">
 			{#if $connectionStatus === 'connected'}
@@ -57,4 +59,4 @@
 	</div>
 {/if}
 
-{@render children?.()}
+{@render children()}
