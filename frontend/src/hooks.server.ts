@@ -34,6 +34,7 @@ const PROTECTED_ROUTES = [
     '/dashboard',
     '/profile',
     '/activities',
+    '/student',
     '/admin'
 ];
 
@@ -134,7 +135,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         if (!event.locals.user) {
             // Redirect to login with return URL
             const returnUrl = encodeURIComponent(url.pathname + url.search);
-            throw redirect(307, `/login?redirect=${returnUrl}`);
+            throw redirect(307, `/login?redirectTo=${returnUrl}`);
         }
 
         // Check admin requirements

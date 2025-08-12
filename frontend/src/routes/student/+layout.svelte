@@ -28,28 +28,37 @@
 		{ href: '/student/profile', icon: IconUser, label: 'โปรไฟล์' }
 	];
 
-	// Check authentication and user role
-	onMount(() => {
-		const unsubscribe = isAuthenticated.subscribe(authenticated => {
-			if (!authenticated) {
-				goto('/login');
-				return;
-			}
-		});
+    // Check authentication and user role
+    onMount(() => {
+        let unsubscribe: () => void = () => {};
+        let userUnsubscribe: () => void = () => {};
 
-		const userUnsubscribe = currentUser.subscribe(user => {
-			if (user && user.admin_role) {
-				// If user is admin, redirect to admin panel
-				goto('/admin');
-				return;
-			}
-		});
+        (async () => {
+            // Ensure we probe server first so store reflects real session
+            const { auth } = await import('$lib/stores/auth');
+            await auth.refreshUser();
 
-		return () => {
-			unsubscribe();
-			userUnsubscribe();
-		};
-	});
+            unsubscribe = isAuthenticated.subscribe((authenticated) => {
+                if (!authenticated) {
+                    goto('/login');
+                    return;
+                }
+            });
+
+            userUnsubscribe = currentUser.subscribe((user) => {
+                if (user && user.admin_role) {
+                    // If user is admin, redirect to admin panel
+                    goto('/admin');
+                    return;
+                }
+            });
+        })();
+
+        return () => {
+            unsubscribe();
+            userUnsubscribe();
+        };
+    });
 
 	function isActiveRoute(href: string, exact = false) {
 		if (exact) {
