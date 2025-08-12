@@ -60,6 +60,11 @@
 									<IconUser class="h-4 w-4" />
 									แอดมิน
 								</Button>
+							{:else}
+								<Button href="/student" variant="outline" size="sm" class="flex items-center gap-2">
+									<IconUser class="h-4 w-4" />
+									นักศึกษา
+								</Button>
 							{/if}
 							<Button onclick={handleLogout} variant="outline" size="sm" class="flex items-center gap-2">
 								<IconLogout class="h-4 w-4" />
