@@ -225,12 +225,6 @@ export class ApiClient {
     if (!response.ok) {
       // Handle authentication errors
       if (response.status === 401) {
-        if (browser) {
-          // Clear invalid session but do not force navigation here.
-          // Route protection is handled server-side in hooks; public pages must remain accessible.
-          document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-          localStorage.removeItem('session_id');
-        }
         throw new AuthenticationError(data.error?.message || 'Authentication failed');
       }
 
@@ -252,9 +246,6 @@ export class ApiClient {
       const errorCode = data.error?.code;
       if (browser && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(errorCode)) {
         console.log(`[Client] Session error detected: ${errorCode}`);
-        // Clear invalid session but do not force navigation; allow public routes to continue.
-        document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        localStorage.removeItem('session_id');
       }
       
       throw new ApiClientError(
@@ -343,12 +334,11 @@ export class ApiClient {
     try {
       const response = await this.post<void>('/api/auth/logout');
       
-      // For safety, clear localStorage legacy key if present (not required for proxy flow)
-      if (browser) localStorage.removeItem('session_id');
+      // No client-side session storage to clear
       
       return response;
     } catch (error) {
-      if (browser) localStorage.removeItem('session_id');
+      // No client-side session storage to clear
       throw error;
     }
   }

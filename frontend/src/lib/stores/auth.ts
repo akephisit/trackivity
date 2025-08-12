@@ -47,12 +47,7 @@ function createAuthStore() {
         const response = await apiClient.login(credentials);
         
         if (isApiSuccess(response)) {
-          const { user, session_id } = response.data;
-          
-          // Store session for mobile apps
-          if (browser && localStorage) {
-            localStorage.setItem('session_id', session_id);
-          }
+          const { user } = response.data;
 
           // Update auth state
           update(state => ({
@@ -126,10 +121,7 @@ function createAuthStore() {
       // Disconnect SSE
       sseClient.disconnect();
 
-      // Clear mobile session storage
-      if (browser && localStorage) {
-        localStorage.removeItem('session_id');
-      }
+      // No client-side session storage to clear
 
       // Redirect to login
       if (browser) {
@@ -188,11 +180,7 @@ function createAuthStore() {
         const response = await apiClient.refreshSession();
         
         if (isApiSuccess(response)) {
-          const { user, session_id } = response.data;
-          
-          if (browser && localStorage) {
-            localStorage.setItem('session_id', session_id);
-          }
+          const { user } = response.data;
 
           update(state => ({
             ...state,
@@ -368,23 +356,13 @@ if (browser) {
     const currentState = { isAuthenticated: false };
     auth.subscribe(state => Object.assign(currentState, state))();
     
-    if (currentState.isAuthenticated && hasSession()) {
+    if (currentState.isAuthenticated) {
       auth.refreshUser();
     }
   }, 15 * 60 * 1000);
 }
 
 // ===== UTILITY FUNCTIONS =====
-function hasSession(): boolean {
-  if (!browser) return false;
-  try {
-    const hasCookie = /(?:^|; )session_id=/.test(document.cookie);
-    const hasLocal = typeof localStorage !== 'undefined' && !!localStorage.getItem('session_id');
-    return hasCookie || hasLocal;
-  } catch {
-    return false;
-  }
-}
 
 export function requireAuth(): SessionUser {
   let user: SessionUser | null = null;

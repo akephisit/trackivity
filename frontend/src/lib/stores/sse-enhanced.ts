@@ -198,7 +198,7 @@ class EnhancedSseService {
     private lastEventId: string | null = null;
 
     // Enhanced connect to SSE endpoint
-    connect(sessionId: string, role?: 'student' | 'admin'): void {
+    connect(role?: 'student' | 'admin'): void {
         if (!browser || this.eventSource?.readyState === EventSource.OPEN) {
             return;
         }
@@ -216,13 +216,8 @@ class EnhancedSseService {
         }));
 
         try {
-            // Select appropriate endpoint based on role
-            let url = `/api/sse/${sessionId}`;
-            if (role === 'student') {
-                url = `/api/sse/student/${sessionId}`;
-            } else if (role === 'admin') {
-                url = `/api/sse/admin/${sessionId}`;
-            }
+            // Use same-origin SSE proxy; backend reads httpOnly cookie
+            let url = `/api/sse`;
 
             // Add last event ID for resumption
             if (this.lastEventId) {
@@ -575,19 +570,15 @@ class EnhancedSseService {
         });
 
         // Clear auth and redirect
-        authStore.set({
+        authStore.update(state => ({
+            ...state,
             user: null,
-            session_id: null,
-            expires_at: null,
-            loading: false,
+            isAuthenticated: false,
+            isLoading: false,
             error: 'Session revoked by administrator'
-        });
+        }));
 
-        if (browser) {
-            localStorage.removeItem('session_id');
-            localStorage.removeItem('user');
-            localStorage.removeItem('expires_at');
-        }
+        // No client-side session storage to clear
 
         setTimeout(() => {
             goto('/login?message=session_revoked');
@@ -681,9 +672,7 @@ class EnhancedSseService {
                     user
                 }));
 
-                if (browser) {
-                    localStorage.setItem('user', JSON.stringify(user));
-                }
+                // No client-side storage persistence
             }
         } catch (error) {
             console.error('Failed to refresh user data:', error);
@@ -717,11 +706,8 @@ class EnhancedSseService {
         }));
 
         this.reconnectTimeout = setTimeout(() => {
-            const auth = get(authStore);
-            if (auth.session_id) {
-                const currentState = get(sseStore);
-                this.connect(auth.session_id, currentState.role);
-            }
+            const currentState = get(sseStore);
+            this.connect(currentState.role);
         }, delay);
     }
 
@@ -866,11 +852,11 @@ export const enhancedSseService = new EnhancedSseService();
 // Auto-connect when authenticated with role detection
 if (browser) {
     authStore.subscribe(auth => {
-        if (auth.session_id && !get(sseStore).connected) {
-            // Determine role from user data
+        const connected = get(sseStore).connected;
+        if (auth.isAuthenticated && !connected) {
             const role = auth.user?.admin_role ? 'admin' : 'student';
-            enhancedSseService.connect(auth.session_id, role);
-        } else if (!auth.session_id && get(sseStore).connected) {
+            enhancedSseService.connect(role);
+        } else if (!auth.isAuthenticated && connected) {
             enhancedSseService.disconnect();
         }
     });

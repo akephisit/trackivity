@@ -159,13 +159,13 @@ class SseService {
     private connectionId: string | null = null;
 
     // Enhanced connect to SSE endpoint with improved error handling
-    connect(sessionId: string, endpoint?: 'student' | 'admin'): void {
+    connect(): void {
         if (!browser || this.eventSource?.readyState === EventSource.OPEN) {
             return;
         }
 
         this.cleanup();
-        this.connectionId = `${sessionId}_${Date.now()}`;
+        this.connectionId = `${Date.now()}`;
         this.connectionStartTime = new Date();
         
         sseStore.update(state => ({
@@ -177,13 +177,8 @@ class SseService {
         }));
 
         try {
-            // Select appropriate endpoint
-            let url = `/api/sse/${sessionId}`;
-            if (endpoint === 'student') {
-                url = `/api/sse/student/${sessionId}`;
-            } else if (endpoint === 'admin') {
-                url = `/api/sse/admin/${sessionId}`;
-            }
+            // Use same-origin SSE proxy; backend reads httpOnly cookie
+            let url = `/api/sse`;
 
             this.eventSource = new EventSource(url, {
                 withCredentials: true
@@ -411,7 +406,7 @@ class SseService {
             this.showBrowserNotification(notification);
 
             // Play notification sound
-            this.playNotificationSound(notification.notification_type);
+            this.playNotificationSound((notification.notification_type as string).toLowerCase());
 
         } catch (error) {
             console.error('Failed to handle notification:', error);
@@ -450,7 +445,7 @@ class SseService {
             const notification: NotificationMessage = {
                 title: `Activity ${activityUpdate.update_type}`,
                 message: `${activityUpdate.title}: ${activityUpdate.message}`,
-                notification_type: activityUpdate.update_type === 'cancelled' ? 'warning' : 'info',
+                notification_type: activityUpdate.update_type === 'cancelled' ? 'Warning' : 'Info',
                 action_url: `/activities/${activityUpdate.activity_id}`
             };
 
@@ -464,11 +459,138 @@ class SseService {
         }
     }
 
+    // Added minimal handlers for specific SSE event types to satisfy typing
+    private handleActivityCheckedIn(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            const data = message.data as ActivityCheckedInMessage;
+            const notification: NotificationMessage = {
+                title: 'Check-in สำเร็จ',
+                message: `${data.user_name} เช็คอินกิจกรรมแล้ว`,
+                notification_type: 'Success',
+                action_url: `/activities/${data.activity_id}`
+            };
+            sseStore.update(state => ({
+                ...state,
+                notifications: [notification, ...state.notifications].slice(0, 50)
+            }));
+        } catch (error) {
+            console.error('Failed to handle activity_checked_in:', error);
+        }
+    }
+
+    private handleNewActivityCreated(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            const data = message.data as NewActivityMessage;
+            const notification: NotificationMessage = {
+                title: 'มีกิจกรรมใหม่',
+                message: data.title,
+                notification_type: 'Info',
+                action_url: `/activities/${data.activity_id}`
+            };
+            sseStore.update(state => ({
+                ...state,
+                notifications: [notification, ...state.notifications].slice(0, 50)
+            }));
+        } catch (error) {
+            console.error('Failed to handle new_activity_created:', error);
+        }
+    }
+
+    private handleSystemAnnouncement(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            const ann = message.data as SystemAnnouncementMessage;
+            const notification: NotificationMessage = {
+                title: ann.title,
+                message: ann.content,
+                notification_type: 'Info'
+            };
+            sseStore.update(state => ({
+                ...state,
+                notifications: [notification, ...state.notifications].slice(0, 50)
+            }));
+        } catch (error) {
+            console.error('Failed to handle system_announcement:', error);
+        }
+    }
+
+    private handlePermissionUpdated(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            console.log('Permissions updated event:', message);
+            const notification: NotificationMessage = {
+                title: 'สิทธิ์การใช้งานเปลี่ยนแปลง',
+                message: 'ระบบได้อัปเดตสิทธิ์การใช้งานของคุณ',
+                notification_type: 'Info'
+            };
+            sseStore.update(state => ({
+                ...state,
+                notifications: [notification, ...state.notifications].slice(0, 50)
+            }));
+            this.refreshUserData();
+        } catch (error) {
+            console.error('Failed to handle permission_updated:', error);
+        }
+    }
+
+    private handleSessionRevoked(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            const reason = message.data?.reason || 'Your session has been revoked.';
+            this.handleForceLogout({ action: 'force_logout', reason } as SessionUpdateMessage);
+        } catch (error) {
+            console.error('Failed to handle session_revoked:', error);
+        }
+    }
+
+    private handleAdminPromoted(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            const notification: NotificationMessage = {
+                title: 'ได้รับสิทธิ์ผู้ดูแลระบบ',
+                message: 'บัญชีของคุณได้รับการเลื่อนสิทธิ์การจัดการ',
+                notification_type: 'Success'
+            };
+            sseStore.update(state => ({
+                ...state,
+                notifications: [notification, ...state.notifications].slice(0, 50)
+            }));
+            this.refreshUserData();
+        } catch (error) {
+            console.error('Failed to handle admin_promoted:', error);
+        }
+    }
+
+    private handleHeartbeat(event: MessageEvent): void {
+        try {
+            const now = new Date().toISOString();
+            sseStore.update(state => ({ ...state, lastHeartbeat: now }));
+            this.startHeartbeatMonitor();
+        } catch {
+            // ignore
+        }
+    }
+
+    private handleConnectionStatus(event: MessageEvent): void {
+        try {
+            const message: SseMessage = JSON.parse(event.data);
+            const status = message.data as ConnectionStatusMessage;
+            sseStore.update(state => ({
+                ...state,
+                error: status.status === 'Error' ? status.message : state.error
+            }));
+        } catch (error) {
+            console.error('Failed to handle connection_status:', error);
+        }
+    }
+
     private handleForceLogout(sessionUpdate: SessionUpdateMessage): void {
         const notification: NotificationMessage = {
             title: 'Session Terminated',
             message: sessionUpdate.reason || 'Your session has been terminated by an administrator.',
-            notification_type: 'error'
+            notification_type: 'Error'
         };
 
         // Show notification
@@ -481,20 +603,15 @@ class SseService {
         this.disconnect();
 
         // Clear auth and redirect to login
-        authStore.set({
+        authStore.update(state => ({
+            ...state,
             user: null,
-            session_id: null,
-            expires_at: null,
-            loading: false,
+            isAuthenticated: false,
+            isLoading: false,
             error: 'Session terminated by administrator'
-        });
+        }));
 
-        // Clear localStorage
-        if (browser) {
-            localStorage.removeItem('session_id');
-            localStorage.removeItem('user');
-            localStorage.removeItem('expires_at');
-        }
+        // No client-side session storage to clear
 
         // Redirect to login with message
         goto('/login?message=session_terminated');
@@ -504,7 +621,7 @@ class SseService {
         const notification: NotificationMessage = {
             title: 'Permissions Updated',
             message: sessionUpdate.reason || 'Your account permissions have been updated.',
-            notification_type: 'info'
+            notification_type: 'Info'
         };
 
         sseStore.update(state => ({
@@ -518,20 +635,10 @@ class SseService {
 
     private handleSessionExtended(sessionUpdate: SessionUpdateMessage): void {
         if (sessionUpdate.new_expires_at) {
-            // Update auth store with new expiry
-            authStore.update(state => ({
-                ...state,
-                expires_at: sessionUpdate.new_expires_at!
-            }));
-
-            if (browser) {
-                localStorage.setItem('expires_at', sessionUpdate.new_expires_at);
-            }
-
             const notification: NotificationMessage = {
                 title: 'Session Extended',
                 message: 'Your session has been extended.',
-                notification_type: 'success'
+                notification_type: 'Success'
             };
 
             sseStore.update(state => ({
@@ -555,7 +662,7 @@ class SseService {
                 }));
 
                 if (browser) {
-                    localStorage.setItem('user', JSON.stringify(user));
+                    // No client-side storage persistence
                 }
             }
         } catch (error) {
@@ -620,10 +727,7 @@ class SseService {
         console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempt})`);
 
         this.reconnectTimeout = setTimeout(() => {
-            const auth = get(authStore);
-            if (auth.session_id) {
-                this.connect(auth.session_id);
-            }
+            this.connect();
         }, delay);
     }
 
@@ -704,9 +808,10 @@ export const sseService = new SseService();
 // Auto-connect when authenticated
 if (browser) {
     authStore.subscribe(auth => {
-        if (auth.session_id && !get(sseStore).connected) {
-            sseService.connect(auth.session_id);
-        } else if (!auth.session_id && get(sseStore).connected) {
+        const connected = get(sseStore).connected;
+        if (auth.isAuthenticated && !connected) {
+            sseService.connect();
+        } else if (!auth.isAuthenticated && connected) {
             sseService.disconnect();
         }
     });
