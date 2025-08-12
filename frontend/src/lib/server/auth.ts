@@ -63,36 +63,76 @@ export async function requireAdmin(event: RequestEvent): Promise<AuthenticatedUs
 		throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
 	}
 
-	try {
-		// Use admin-specific endpoint
-		const response = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
+	// Add retry logic for race conditions after login
+	let lastError: any;
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		try {
+			console.log(`[Server Auth] Admin auth check attempt ${attempt}/3 for session: ${sessionId.substring(0, 8)}...`);
+			
+			// Add debug header only on first attempt to avoid "already set" error
+			if (attempt === 1 && event.setHeaders) {
+				try {
+					event.setHeaders({
+						'X-Debug-Server-Auth': `session-${sessionId.substring(0, 8)}`
+					});
+				} catch (headerError) {
+					// Ignore header setting errors
+					console.log('[Server Auth] Header already set, continuing...');
+				}
 			}
-		});
+			
+			// Use admin-specific endpoint
+			const response = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
+				headers: {
+					'Cookie': `session_id=${sessionId}`
+				}
+			});
 
-		if (!response.ok) {
-			// Session หมดอายุหรือไม่ถูกต้อง
-			event.cookies.delete('session_id', { path: '/' });
-			const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
-			throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
+			if (!response.ok) {
+				if (attempt < 3) {
+					console.log(`[Server Auth] Attempt ${attempt} failed with status ${response.status}, retrying...`);
+					await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+					continue;
+				}
+				
+				// Final attempt failed
+				console.log(`[Server Auth] All attempts failed, redirecting to login`);
+				event.cookies.delete('session_id', { path: '/' });
+				const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+				throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
+			}
+
+			const result = await response.json();
+			
+			if (!result.user || !result.user.admin_role) {
+				if (attempt < 3) {
+					console.log(`[Server Auth] Attempt ${attempt} - invalid response, retrying...`);
+					await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+					continue;
+				}
+				
+				event.cookies.delete('session_id', { path: '/' });
+				const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+				throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
+			}
+
+			console.log(`[Server Auth] Auth check successful on attempt ${attempt}`);
+			return result.user as AuthenticatedUser;
+			
+		} catch (error) {
+			lastError = error;
+			if (attempt < 3) {
+				console.log(`[Server Auth] Attempt ${attempt} error, retrying:`, error);
+				await new Promise(resolve => setTimeout(resolve, 200 * attempt));
+				continue;
+			}
 		}
-
-		const result = await response.json();
-		
-		if (!result.user || !result.user.admin_role) {
-			event.cookies.delete('session_id', { path: '/' });
-			const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
-			throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
-		}
-
-		return result.user as AuthenticatedUser;
-	} catch (error) {
-		console.error('Admin auth check failed:', error);
-		event.cookies.delete('session_id', { path: '/' });
-		const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
-		throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
 	}
+	
+	console.error('[Server Auth] All admin auth attempts failed:', lastError);
+	event.cookies.delete('session_id', { path: '/' });
+	const redirectTo = encodeURIComponent(event.url.pathname + event.url.search);
+	throw redirect(303, `/admin/login?redirectTo=${redirectTo}`);
 }
 
 /**

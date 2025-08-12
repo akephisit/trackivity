@@ -66,6 +66,9 @@ function createAuthStore() {
           // Connect to SSE for real-time updates
           sseClient.connect(user);
 
+          // Add a small delay to ensure cookie is properly set before any subsequent requests
+          await new Promise(resolve => setTimeout(resolve, 200));
+
           return { success: true, user };
         }
       } catch (error) {
@@ -162,9 +165,11 @@ function createAuthStore() {
       } catch (error) {
         console.log('[Auth] Refresh user failed:', error);
         
-        // Handle specific auth errors
+        // Handle specific auth errors - but don't redirect on initial page load
         if (error instanceof Error) {
           const errorMessage = error.message;
+          console.log('[Auth] Error details:', { errorMessage, error });
+          
           if (errorMessage.includes('SESSION_EXPIRED') || 
               errorMessage.includes('SESSION_REVOKED') || 
               errorMessage.includes('SESSION_INVALID') || 
@@ -350,6 +355,7 @@ if (browser) {
   // Auto-refresh user on page load only if we have a session
   if (hasSession()) {
     console.log('[Auth] Session found, attempting to refresh user...');
+    console.log('[Auth] Current session ID:', hasSession());
     auth.refreshUser().then(user => {
       // Only attempt SSE connection if user authentication was successful
       if (user && !sseClient.isConnected()) {
