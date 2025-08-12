@@ -160,7 +160,7 @@ function createAuthStore() {
           return user;
         }
       } catch (error) {
-        console.error('Failed to refresh user:', error);
+        console.log('[Auth] Refresh user failed:', error);
         
         // Handle specific auth errors
         if (error instanceof Error) {
@@ -168,8 +168,10 @@ function createAuthStore() {
           if (errorMessage.includes('SESSION_EXPIRED') || 
               errorMessage.includes('SESSION_REVOKED') || 
               errorMessage.includes('SESSION_INVALID') || 
-              errorMessage.includes('NO_SESSION')) {
+              errorMessage.includes('NO_SESSION') ||
+              errorMessage.includes('Authentication failed')) {
             // Clear auth state for session issues but don't redirect (already handled in API client)
+            console.log('[Auth] Clearing auth state due to session error');
             update(state => ({
               ...state,
               user: null,
@@ -177,6 +179,9 @@ function createAuthStore() {
               error: null
             }));
             sseClient.disconnect();
+          } else {
+            // Log unexpected errors but don't clear auth state
+            console.error('[Auth] Unexpected error during refresh:', error);
           }
         }
       }
@@ -336,8 +341,19 @@ export const facultyId = derived(
 
 // ===== INITIALIZATION =====
 if (browser) {
-  // Auto-refresh user on page load
-  auth.refreshUser();
+  // Check if we have a session before attempting to refresh
+  const hasSession = () => {
+    const cookieMatch = document.cookie.match(/session_id=([^;]+)/);
+    return cookieMatch || localStorage.getItem('session_id');
+  };
+
+  // Auto-refresh user on page load only if we have a session
+  if (hasSession()) {
+    console.log('[Auth] Session found, attempting to refresh user...');
+    auth.refreshUser();
+  } else {
+    console.log('[Auth] No session found, skipping auto-refresh');
+  }
 
   // Listen for SSE session events
   sseClient.on('session_updated', (event) => {
@@ -360,7 +376,7 @@ if (browser) {
     const currentState = { isAuthenticated: false };
     auth.subscribe(state => Object.assign(currentState, state))();
     
-    if (currentState.isAuthenticated) {
+    if (currentState.isAuthenticated && hasSession()) {
       auth.refreshUser();
     }
   }, 15 * 60 * 1000);

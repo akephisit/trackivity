@@ -7,7 +7,6 @@ import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import type {
   ApiResponse,
-  ApiError,
   PaginatedResponse,
   SessionUser,
   LoginRequest,
@@ -17,7 +16,6 @@ import type {
   Faculty,
   Department,
   Activity,
-  ActivityParticipation,
   QRCode,
   QRScanResult,
   UserSession,
@@ -242,7 +240,10 @@ export class ApiClient {
           // Clear invalid session
           document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
           localStorage.removeItem('session_id');
-          goto('/login');
+          // Only redirect if not already on login page
+          if (!window.location.pathname.includes('/login')) {
+            goto('/login');
+          }
         }
         throw new AuthenticationError(data.error?.message || 'Authentication failed');
       }
@@ -262,11 +263,16 @@ export class ApiClient {
     // Handle both old format (direct data) and new format (with success flag)
     if (data.success === false) {
       // New format with explicit error handling
-      if (browser && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(data.error?.code)) {
+      const errorCode = data.error?.code;
+      if (browser && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(errorCode)) {
+        console.log(`[Client] Session error detected: ${errorCode}`);
         // Clear invalid session
         document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
         localStorage.removeItem('session_id');
-        goto('/login');
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          goto('/login');
+        }
       }
       
       throw new ApiClientError(

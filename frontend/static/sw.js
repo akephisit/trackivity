@@ -26,6 +26,7 @@ const CACHEABLE_APIS = [
 const EXCLUDE_PATTERNS = [
   '/api/auth/login',
   '/api/auth/logout',
+  '/api/auth/me',
   '/api/sse',
   '/api/qr/generate',
   '/api/qr/scan'

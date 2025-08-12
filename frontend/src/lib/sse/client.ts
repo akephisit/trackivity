@@ -65,6 +65,7 @@ export class SSEClient {
 
     try {
       const url = this.buildSSEUrl();
+      console.log('[SSE] Attempting to connect to:', url);
       
       this.eventSource = new EventSource(url, {
         withCredentials: true
@@ -74,7 +75,7 @@ export class SSEClient {
       this.startHeartbeat();
 
     } catch (error) {
-      console.error('Failed to create EventSource:', error);
+      console.error('[SSE] Failed to create EventSource:', error);
       this.handleError('Failed to establish connection');
     }
   }
@@ -157,6 +158,7 @@ export class SSEClient {
     
     const sessionId = this.getSessionId();
     if (!sessionId) {
+      console.log('[SSE] No session ID found - cannot establish SSE connection');
       throw new Error('No session ID available for SSE connection');
     }
 
@@ -192,14 +194,14 @@ export class SSEClient {
     if (!this.eventSource) return;
 
     this.eventSource.onopen = () => {
-      console.log('SSE connection established');
+      console.log('[SSE] Connection established');
       this.connectionStatus.set('connected');
       this.reconnectAttempts = 0;
       this.errorMessage.set(null);
     };
 
     this.eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
+      console.error('[SSE] Connection error:', error);
       this.handleConnectionError();
     };
 
