@@ -22,108 +22,16 @@
 		IconSchool
 	} from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
-	import { auth } from '$lib/stores/auth';
-	import { goto } from '$app/navigation';
 
 	let { data } = $props();
 
 	const form = superForm(data.form, {
 		validators: zodClient(loginSchema),
-		onResult: async ({ result }) => {
+		onResult: ({ result }) => {
 			if (result.type === 'failure') {
 				toast.error('เข้าสู่ระบบไม่สำเร็จ');
-			} else if (result.type === 'success' && result.data?.loginSuccess) {
+			} else if (result.type === 'redirect') {
 				toast.success('เข้าสู่ระบบสำเร็จ');
-				
-				// Sync with client-side auth store after successful server-side login
-				console.log('[User Login] Server login successful, refreshing client auth...');
-				try {
-					// Wait a bit for cookie to be properly set
-					await new Promise(resolve => setTimeout(resolve, 100));
-					
-					// Try direct API call first like admin login does
-					console.log('[User Login] Starting user auth check...');
-					let user;
-					try {
-						console.log('[User Login] Calling me() endpoint...');
-						const userResponse = await import('$lib/api/client').then(m => m.apiClient.me());
-						console.log('[User Login] User response received:', userResponse);
-						
-						if (userResponse && userResponse.data) {
-							user = userResponse.data;
-							console.log('[User Login] Extracted user data:', user);
-							
-							// Update auth store manually
-							auth.setUser(user);
-							console.log('[User Login] User auth successful via /api/auth/me');
-						} else {
-							console.log('[User Login] User response format not recognized, trying fallback...');
-						}
-					} catch (error) {
-						console.log('[User Login] Direct API call failed, trying auth.refreshUser:', error);
-						user = await auth.refreshUser();
-					}
-					
-					if (user) {
-						console.log('[User Login] Client auth synced successfully');
-						
-						// Verify cookie is properly set
-						const cookieCheck = document.cookie.match(/session_id=([^;]+)/);
-						console.log('[User Login] Current session cookie:', cookieCheck ? cookieCheck[1] : 'NOT FOUND');
-						
-						// Add extended delay and testing like admin login
-						setTimeout(async () => {
-							console.log('[User Login] Navigating to home after delay...');
-							// Double-check cookie before navigation
-							const finalCookieCheck = document.cookie.match(/session_id=([^;]+)/);
-							console.log('[User Login] Session cookie at navigation:', finalCookieCheck ? finalCookieCheck[1] : 'NOT FOUND');
-							
-							// Test server-side user endpoint manually before navigation
-							console.log('[User Login] Testing server-side user auth before navigation...');
-							try {
-								const testResponse = await fetch('/api/auth/me', {
-									credentials: 'include',
-									headers: {
-										'Cookie': document.cookie
-									}
-								});
-								console.log('[User Login] Manual server test status:', testResponse.status);
-								console.log('[User Login] Manual server test headers:', Object.fromEntries(testResponse.headers.entries()));
-								
-								if (testResponse.ok) {
-									const testData = await testResponse.json();
-									console.log('[User Login] Manual server test data:', testData);
-								} else {
-									const testError = await testResponse.text();
-									console.log('[User Login] Manual server test error:', testError);
-								}
-							} catch (error) {
-								console.error('[User Login] Manual server test failed:', error);
-							}
-							
-							// Navigate to redirect target
-							const redirectTo = result.data.redirectTo || '/';
-							console.log('[User Login] Navigating to:', redirectTo);
-							setTimeout(() => {
-								console.log('[User Login] Final navigation to:', redirectTo);
-								goto(redirectTo);
-							}, 500);
-						}, 2000);
-					} else {
-						console.log('[User Login] Client auth sync failed');
-						// Fallback navigation
-						const redirectTo = result.data.redirectTo || '/';
-						setTimeout(() => {
-							console.log('[User Login] Fallback navigation to:', redirectTo);
-							goto(redirectTo);
-						}, 500);
-					}
-				} catch (error) {
-					console.error('[User Login] Auth sync error:', error);
-					// Fallback navigation
-					const redirectTo = result.data.redirectTo || '/';
-					goto(redirectTo);
-				}
 			}
 		}
 	});

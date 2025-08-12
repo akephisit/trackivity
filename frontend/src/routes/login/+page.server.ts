@@ -69,17 +69,18 @@ export const actions: Actions = {
 			}
 
 			if (result.success && result.session) {
-				// Login สำเร็จ - เก็บ session (not httpOnly so client can access it)
+				// Login สำเร็จ - เก็บ session
 				cookies.set('session_id', result.session.session_id, {
 					path: '/',
-					httpOnly: false, // Allow client-side access for SSE and auth checks
+					httpOnly: true,
 					secure: process.env.NODE_ENV === 'production',
 					sameSite: 'lax',
 					maxAge: form.data.remember_me ? 30 * 24 * 60 * 60 : 24 * 60 * 60 // 30 days or 1 day
 				});
 
-				// Don't redirect immediately - let client handle it
-				return { form, loginSuccess: true, redirectTo: url.searchParams.get('redirectTo') || '/' };
+				// Redirect ไปยังหน้าที่ต้องการ
+				const redirectTo = url.searchParams.get('redirectTo') || '/';
+				throw redirect(303, redirectTo);
 			} else {
 				form.errors.student_id = [result.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ'];
 				return fail(400, { form });
