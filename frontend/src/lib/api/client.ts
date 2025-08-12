@@ -259,6 +259,24 @@ export class ApiClient {
       );
     }
 
+    // Handle both old format (direct data) and new format (with success flag)
+    if (data.success === false) {
+      // New format with explicit error handling
+      if (browser && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(data.error?.code)) {
+        // Clear invalid session
+        document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        localStorage.removeItem('session_id');
+        goto('/login');
+      }
+      
+      throw new ApiClientError(
+        data.error?.code || 'API_ERROR',
+        data.error?.message || 'Request failed',
+        response.status,
+        data.error?.details
+      );
+    }
+
     return data;
   }
 
@@ -355,7 +373,16 @@ export class ApiClient {
   }
 
   async me(): Promise<ApiResponse<SessionUser>> {
-    return this.get<SessionUser>('/api/auth/me');
+    try {
+      const response = await this.get<SessionUser>('/api/auth/me');
+      return response;
+    } catch (error) {
+      // Handle specific auth errors more gracefully
+      if (error instanceof ApiClientError) {
+        throw error;
+      }
+      throw new AuthenticationError('Failed to get current user');
+    }
   }
 
   async refreshSession(): Promise<ApiResponse<LoginResponse>> {

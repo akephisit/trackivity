@@ -145,7 +145,7 @@ pub fn require_faculty_scope(
 }
 
 // Helper functions
-fn extract_session_id(cookies: &Cookies, headers: &HeaderMap) -> Option<String> {
+pub fn extract_session_id(cookies: &Cookies, headers: &HeaderMap) -> Option<String> {
     // Try cookie first (web clients)
     if let Some(cookie) = cookies.get("session_id") {
         return Some(cookie.value().to_string());
@@ -170,7 +170,7 @@ fn extract_session_id(cookies: &Cookies, headers: &HeaderMap) -> Option<String> 
     None
 }
 
-async fn validate_and_get_session_user(
+pub async fn validate_and_get_session_user(
     session_state: &SessionState,
     session_id: &str,
 ) -> Result<SessionValidation, anyhow::Error> {

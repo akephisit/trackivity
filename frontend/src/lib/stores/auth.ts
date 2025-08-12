@@ -161,7 +161,24 @@ function createAuthStore() {
         }
       } catch (error) {
         console.error('Failed to refresh user:', error);
-        // Don't update state on refresh failure to avoid logout loops
+        
+        // Handle specific auth errors
+        if (error instanceof Error) {
+          const errorMessage = error.message;
+          if (errorMessage.includes('SESSION_EXPIRED') || 
+              errorMessage.includes('SESSION_REVOKED') || 
+              errorMessage.includes('SESSION_INVALID') || 
+              errorMessage.includes('NO_SESSION')) {
+            // Clear auth state for session issues but don't redirect (already handled in API client)
+            update(state => ({
+              ...state,
+              user: null,
+              isAuthenticated: false,
+              error: null
+            }));
+            sseClient.disconnect();
+          }
+        }
       }
       return null;
     },
@@ -266,6 +283,7 @@ function createAuthStore() {
 
 // ===== STORE INSTANCE =====
 export const auth = createAuthStore();
+export const authStore = auth; // Legacy alias for backward compatibility
 
 // ===== DERIVED STORES =====
 export const currentUser = derived(auth, $auth => $auth.user);

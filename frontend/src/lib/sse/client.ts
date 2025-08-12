@@ -156,20 +156,13 @@ export class SSEClient {
       : 'http://localhost:3000';
     
     const sessionId = this.getSessionId();
-    const params = new URLSearchParams();
-    
-    if (sessionId) {
-      params.append('session_id', sessionId);
+    if (!sessionId) {
+      throw new Error('No session ID available for SSE connection');
     }
 
-    // Add device info for mobile apps
-    const deviceInfo = this.getDeviceInfo();
-    if (deviceInfo.device_type !== 'web') {
-      params.append('device_type', deviceInfo.device_type);
-    }
-
-    const queryString = params.toString();
-    return `${baseUrl}/api/sse${queryString ? `?${queryString}` : ''}`;
+    // Backend expects session_id as path parameter, not query parameter
+    // Route: /api/sse/{session_id}
+    return `${baseUrl}/api/sse/${sessionId}`;
   }
 
   private getSessionId(): string | null {

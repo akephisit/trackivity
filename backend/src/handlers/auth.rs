@@ -12,7 +12,7 @@ use tower_cookies::Cookies;
 use uuid::Uuid;
 
 use crate::middleware::session::{
-    create_session_cookie, delete_session_cookie, AdminUser, SessionState, SuperAdminUser,
+    delete_session_cookie, extract_session_id, validate_and_get_session_user, AdminUser, SessionState, SuperAdminUser,
 };
 use crate::models::{
     admin_role::{AdminLevel, AdminRole},
@@ -512,9 +512,72 @@ pub async fn logout(
 }
 
 // Get current user session info
-pub async fn me(session_user: SessionUser) -> Result<Json<serde_json::Value>, StatusCode> {
+pub async fn me(
+    State(session_state): State<SessionState>,
+    cookies: Cookies,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Extract session ID from cookie or header
+    let session_id = extract_session_id(&cookies, &headers);
+
+    if let Some(session_id) = session_id {
+        // Validate session and get user data
+        match validate_and_get_session_user(&session_state, &session_id).await {
+            Ok(crate::models::session::SessionValidation::Valid(session_user)) => {
+                return Ok(Json(serde_json::json!({
+                    "success": true,
+                    "data": session_user
+                })));
+            }
+            Ok(crate::models::session::SessionValidation::Expired) => {
+                // Clear expired session cookie
+                let cookie = delete_session_cookie();
+                cookies.add(cookie);
+                
+                return Ok(Json(serde_json::json!({
+                    "success": false,
+                    "error": {
+                        "code": "SESSION_EXPIRED",
+                        "message": "Session has expired"
+                    }
+                })));
+            }
+            Ok(crate::models::session::SessionValidation::Revoked) => {
+                // Session was revoked by admin
+                let cookie = delete_session_cookie();
+                cookies.add(cookie);
+                
+                return Ok(Json(serde_json::json!({
+                    "success": false,
+                    "error": {
+                        "code": "SESSION_REVOKED",
+                        "message": "Session was revoked"
+                    }
+                })));
+            }
+            Ok(crate::models::session::SessionValidation::Invalid) | Err(_) => {
+                // Invalid session or database error
+                let cookie = delete_session_cookie();
+                cookies.add(cookie);
+                
+                return Ok(Json(serde_json::json!({
+                    "success": false,
+                    "error": {
+                        "code": "SESSION_INVALID",
+                        "message": "Invalid session"
+                    }
+                })));
+            }
+        }
+    }
+
+    // No session found
     Ok(Json(serde_json::json!({
-        "user": session_user
+        "success": false,
+        "error": {
+            "code": "NO_SESSION",
+            "message": "No active session found"
+        }
     })))
 }
 
