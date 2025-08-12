@@ -236,13 +236,7 @@ export class ApiClient {
     if (!response.ok) {
       // Handle authentication errors
       if (response.status === 401) {
-        // Only clear session and redirect for non-auth endpoints
-        const isAuthEndpoint = response.url?.includes('/api/auth/login') || 
-                              response.url?.includes('/api/auth/register') ||
-                              response.url?.includes('/api/auth/me') ||
-                              response.url?.includes('/api/admin/auth');
-        
-        if (browser && !isAuthEndpoint) {
+        if (browser) {
           // Clear invalid session
           document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
           localStorage.removeItem('session_id');
@@ -270,17 +264,8 @@ export class ApiClient {
     if (data.success === false) {
       // New format with explicit error handling
       const errorCode = data.error?.code;
-      
-      // Only handle session errors for specific endpoints, not for login/register/me
-      const isAuthEndpoint = response.url?.includes('/api/auth/login') || 
-                            response.url?.includes('/api/auth/register') ||
-                            response.url?.includes('/api/auth/me') ||
-                            response.url?.includes('/api/admin/auth');
-      
-      console.log(`[Client] Response error - URL: ${response.url}, Code: ${errorCode}, isAuthEndpoint: ${isAuthEndpoint}`);
-      
-      if (browser && !isAuthEndpoint && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(errorCode)) {
-        console.log(`[Client] Session error detected: ${errorCode} - clearing session`);
+      if (browser && ['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION'].includes(errorCode)) {
+        console.log(`[Client] Session error detected: ${errorCode}`);
         // Clear invalid session
         document.cookie = 'session_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
         localStorage.removeItem('session_id');
@@ -362,27 +347,10 @@ export class ApiClient {
 
   // ===== AUTHENTICATION ENDPOINTS =====
   async login(credentials: LoginRequest): Promise<ApiResponse<LoginResponse>> {
-    console.log('[Client] Attempting login...');
-    const response = await this.post<LoginResponse>('/api/auth/login', {
+    return this.post<LoginResponse>('/api/auth/login', {
       ...credentials,
       device_info: this.getDeviceInfo()
     }, { skipAuth: true });
-    
-    console.log('[Client] Login response:', response);
-    
-    // Set session cookie after successful login
-    if (response.success && response.data?.session_id && browser) {
-      console.log('[Client] Setting session cookie:', response.data.session_id);
-      document.cookie = `session_id=${response.data.session_id}; path=/; SameSite=Lax`;
-      
-      // Verify cookie was set
-      setTimeout(() => {
-        const cookieCheck = document.cookie.match(/session_id=([^;]+)/);
-        console.log('[Client] Cookie verification:', cookieCheck ? cookieCheck[1] : 'NOT FOUND');
-      }, 100);
-    }
-    
-    return response;
   }
 
   async register(userData: RegisterRequest): Promise<ApiResponse<User>> {
@@ -412,33 +380,14 @@ export class ApiClient {
 
   async me(): Promise<ApiResponse<SessionUser>> {
     try {
-      console.log('[Client] Calling /api/auth/me with session:', this.getSessionId());
       const response = await this.get<SessionUser>('/api/auth/me');
-      console.log('[Client] /api/auth/me response:', response);
       return response;
     } catch (error) {
-      console.log('[Client] /api/auth/me error:', error);
       // Handle specific auth errors more gracefully
       if (error instanceof ApiClientError) {
         throw error;
       }
       throw new AuthenticationError('Failed to get current user');
-    }
-  }
-
-  async adminMe(): Promise<ApiResponse<SessionUser>> {
-    try {
-      console.log('[Client] Calling /api/admin/auth/me with session:', this.getSessionId());
-      const response = await this.get<SessionUser>('/api/admin/auth/me');
-      console.log('[Client] /api/admin/auth/me response:', response);
-      return response;
-    } catch (error) {
-      console.log('[Client] /api/admin/auth/me error:', error);
-      // Handle specific auth errors more gracefully
-      if (error instanceof ApiClientError) {
-        throw error;
-      }
-      throw new AuthenticationError('Failed to get current admin user');
     }
   }
 

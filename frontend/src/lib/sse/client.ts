@@ -209,12 +209,6 @@ export class SSEClient {
 
     this.eventSource.onerror = (error) => {
       console.error('[SSE] Connection error:', error);
-      console.log('[SSE] EventSource readyState:', this.eventSource?.readyState);
-      console.log('[SSE] EventSource state constants:', {
-        CONNECTING: EventSource.CONNECTING,
-        OPEN: EventSource.OPEN,
-        CLOSED: EventSource.CLOSED
-      });
       this.handleConnectionError();
     };
 

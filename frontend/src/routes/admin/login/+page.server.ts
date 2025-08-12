@@ -71,17 +71,16 @@ export const actions: Actions = {
 			}
 
 			if (result.success && result.session) {
-				// Set session cookie (not httpOnly so client can access it)
+				// Set session cookie
 				cookies.set('session_id', result.session.session_id, {
 					path: '/',
-					httpOnly: false, // Allow client-side access
+					httpOnly: true,
 					secure: process.env.NODE_ENV === 'production',
 					sameSite: 'lax',
 					maxAge: form.data.remember_me ? 30 * 24 * 60 * 60 : 24 * 60 * 60 // 30 days or 1 day
 				});
 
-				// Don't redirect immediately - let client handle it
-				return { form, loginSuccess: true };
+				throw redirect(303, '/admin');
 			} else {
 				form.errors._errors = [result.message || 'การเข้าสู่ระบบไม่สำเร็จ'];
 				return fail(400, { form });

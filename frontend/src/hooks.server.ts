@@ -8,24 +8,6 @@ const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 // Session validation function
 async function validateSession(sessionId: string): Promise<SessionUser | null> {
     try {
-        console.log(`[Hooks] Validating session: ${sessionId.substring(0, 8)}...`);
-        
-        // Try admin endpoint first for admin sessions
-        const adminResponse = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-            headers: {
-                'Cookie': `session_id=${sessionId}`,
-                'X-Session-ID': sessionId
-            }
-        });
-
-        if (adminResponse.ok) {
-            const adminData = await adminResponse.json();
-            console.log('[Hooks] Admin session validation successful');
-            return adminData.user as SessionUser;
-        }
-        
-        // Fallback to regular user endpoint
-        console.log('[Hooks] Admin validation failed, trying regular user endpoint');
         const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
             headers: {
                 'Cookie': `session_id=${sessionId}`,
@@ -35,13 +17,10 @@ async function validateSession(sessionId: string): Promise<SessionUser | null> {
 
         if (response.ok) {
             const data = await response.json();
-            console.log('[Hooks] Regular session validation successful');
             return (data as any)?.user as SessionUser;
         }
-        
-        console.log('[Hooks] Both session validations failed');
     } catch (error) {
-        console.error('[Hooks] Session validation failed:', error);
+        console.error('Session validation failed:', error);
     }
 
     return null;
