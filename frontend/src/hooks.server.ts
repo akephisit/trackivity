@@ -17,7 +17,10 @@ async function validateSession(sessionId: string): Promise<SessionUser | null> {
 
         if (response.ok) {
             const data = await response.json();
-            return (data as any)?.user as SessionUser;
+            // Backend returns { success, data: SessionUser } for student endpoint
+            // and { user: SessionUser, ... } for admin endpoint.
+            const user = (data as any)?.user ?? (data as any)?.data ?? (data as any)?.session?.user;
+            return (user || null) as SessionUser | null;
         }
     } catch (error) {
         console.error('Session validation failed:', error);

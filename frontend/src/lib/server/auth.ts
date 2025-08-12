@@ -35,7 +35,7 @@ export async function requireAuth(event: RequestEvent): Promise<AuthenticatedUse
         }
 
         const data = await response.json();
-        const user = (data as any)?.user;
+        const user = (data as any)?.user ?? (data as any)?.data ?? (data as any)?.session?.user;
 
         if (!user) {
             event.cookies.delete('session_id', { path: '/' });
@@ -208,7 +208,7 @@ export async function getAuthUser(event: RequestEvent): Promise<AuthenticatedUse
         }
 
         const data = await response.json();
-        const user = (data as any)?.user;
+        const user = (data as any)?.user ?? (data as any)?.data ?? (data as any)?.session?.user;
 
         if (!user) {
             event.cookies.delete('session_id', { path: '/' });

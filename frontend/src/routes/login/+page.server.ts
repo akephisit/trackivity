@@ -20,9 +20,13 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 			});
 			
 			if (response.ok) {
-				// มี session ที่ใช้งานได้ ให้ redirect ไป dashboard
-				const redirectTo = url.searchParams.get('redirectTo') || '/';
-				throw redirect(303, redirectTo);
+				const payload = await response.json();
+				const hasUser = Boolean((payload as any)?.user ?? (payload as any)?.data);
+				if (hasUser) {
+					// มี session ที่ใช้งานได้ ให้ redirect ไปหน้าเป้าหมาย
+					const redirectTo = url.searchParams.get('redirectTo') || '/';
+					throw redirect(303, redirectTo);
+				}
 			}
 		} catch (error) {
 			// ถ้าเกิดข้อผิดพลาด ให้ล้าง session
