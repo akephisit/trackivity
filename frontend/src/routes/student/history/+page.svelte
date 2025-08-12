@@ -7,7 +7,6 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import { Input } from '$lib/components/ui/input';
-	import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
 	import {
 		IconHistory,
 		IconCalendarEvent,
@@ -248,33 +247,18 @@
 
 		<!-- Sort and Filter Controls -->
 		<div class="flex flex-col sm:flex-row gap-3">
-			<Select value={sortBy} onValueChange={(v: string | undefined) => sortBy = v || 'recent'}>
-				<SelectTrigger class="w-full sm:w-[180px]">
-					{sortBy === 'recent' ? 'ล่าสุดก่อน' : 
-					 sortBy === 'oldest' ? 'เก่าก่อน' : 
-					 sortBy === 'activity_name' ? 'ชื่อกิจกรรม' : 'เรียงตาม'}
-				</SelectTrigger>
-				<SelectContent>
-					<SelectItem value="recent">ล่าสุดก่อน</SelectItem>
-					<SelectItem value="oldest">เก่าก่อน</SelectItem>
-					<SelectItem value="activity_name">ชื่อกิจกรรม</SelectItem>
-				</SelectContent>
-			</Select>
+			<select bind:value={sortBy} class="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:w-[180px]">
+				<option value="recent">ล่าสุดก่อน</option>
+				<option value="oldest">เก่าก่อน</option>
+				<option value="activity_name">ชื่อกิจกรรม</option>
+			</select>
 
-			<Select value={filterBy} onValueChange={(v: string | undefined) => filterBy = v || 'all'}>
-				<SelectTrigger class="w-full sm:w-[180px]">
-					{filterBy === 'all' ? 'ทั้งหมด' : 
-					 filterBy === 'this_month' ? 'เดือนนี้' : 
-					 filterBy === 'last_month' ? 'เดือนที่แล้ว' : 
-					 filterBy === 'this_year' ? 'ปีนี้' : 'ช่วงเวลา'}
-				</SelectTrigger>
-				<SelectContent>
-					<SelectItem value="all">ทั้งหมด</SelectItem>
-					<SelectItem value="this_month">เดือนนี้</SelectItem>
-					<SelectItem value="last_month">เดือนที่แล้ว</SelectItem>
-					<SelectItem value="this_year">ปีนี้</SelectItem>
-				</SelectContent>
-			</Select>
+			<select bind:value={filterBy} class="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:w-[180px]">
+				<option value="all">ทั้งหมด</option>
+				<option value="this_month">เดือนนี้</option>
+				<option value="last_month">เดือนที่แล้ว</option>
+				<option value="this_year">ปีนี้</option>
+			</select>
 		</div>
 	</div>
 

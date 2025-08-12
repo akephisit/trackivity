@@ -165,6 +165,9 @@
 		{#if mobileMenuOpen}
 			<div 
 				class="lg:hidden fixed inset-0 bg-black/20 z-50"
+				role="button"
+				tabindex="0"
+				aria-label="Close mobile menu"
 				onclick={closeMobileMenu}
 				onkeydown={(e) => e.key === 'Escape' && closeMobileMenu()}
 			></div>
@@ -270,6 +273,7 @@
 	.line-clamp-2 {
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
+		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
 	}

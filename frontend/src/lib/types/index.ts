@@ -67,13 +67,19 @@ export interface SessionUser {
   email: string;
   first_name: string;
   last_name: string;
+  phone?: string;
+  address?: string;
   avatar_url?: string;
   department_id?: UUID;
   faculty_id?: UUID;
+  faculty_name?: string;
+  department_name?: string;
   admin_role?: AdminRole;
   session_id: string;
   permissions: Permission[];
   expires_at: Timestamp;
+  created_at?: Timestamp;
+  updated_at?: Timestamp;
 }
 
 export interface UserSession {
@@ -127,6 +133,7 @@ export interface Activity {
   name: string;
   description?: string;
   activity_type: ActivityType;
+  location?: string;
   faculty_id?: UUID;
   department_id?: UUID;
   start_date: Timestamp;
