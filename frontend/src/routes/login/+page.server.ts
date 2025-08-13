@@ -3,21 +3,15 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { loginSchema } from '$lib/schemas/auth';
 import type { Actions, PageServerLoad } from './$types';
-import { PUBLIC_API_URL } from '$env/static/public';
+ 
 
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
-
-export const load: PageServerLoad = async ({ cookies, url }) => {
+export const load: PageServerLoad = async ({ cookies, url, fetch }) => {
 	// ตรวจสอบว่ามี session อยู่แล้วหรือไม่
 	const sessionId = cookies.get('session_id');
 	if (sessionId) {
 		// ตรวจสอบ session กับ backend
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			const response = await fetch(`/api/auth/me`);
 			
 			if (response.ok) {
 				const payload = await response.json();
@@ -43,7 +37,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url }) => {
+	default: async ({ request, cookies, url, fetch }) => {
 		const form = await superValidate(request, zod(loginSchema));
 
 		if (!form.valid) {
@@ -52,7 +46,7 @@ export const actions: Actions = {
 
 		try {
 			// ส่งข้อมูล login ไป backend
-			const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+			const response = await fetch(`/api/auth/login`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

@@ -4,7 +4,6 @@ import { zod } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
 import type { Department, Faculty } from '$lib/types/admin';
-import { PUBLIC_API_URL } from '$env/static/public';
 import { requireAdmin } from '$lib/server/auth';
 
 // Department schemas
@@ -26,8 +25,6 @@ const departmentUpdateSchema = z.object({
 	status: z.boolean().optional()
 });
 
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
-
 export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) => {
 	depends('app:page-data');
 	
@@ -40,18 +37,14 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 	const { admin_role } = await parent();
 
 	// For SuperAdmin, show all departments; for FacultyAdmin, show only their faculty's departments
-	let apiEndpoint = `${API_BASE_URL}/api/departments`;
+	let apiEndpoint = `/api/departments`;
 	if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
-		apiEndpoint = `${API_BASE_URL}/api/faculties/${admin_role.faculty_id}/departments`;
+		apiEndpoint = `/api/faculties/${admin_role.faculty_id}/departments`;
 	}
 
 	try {
 		// Fetch departments
-		const departmentsResponse = await fetch(apiEndpoint, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const departmentsResponse = await fetch(apiEndpoint);
 
 		let departments: Department[] = [];
 		if (departmentsResponse.ok) {
@@ -64,11 +57,7 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 		// For FacultyAdmin, get their faculty info
 		let currentFaculty: Faculty | null = null;
 		if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
-			const facultyResponse = await fetch(`${API_BASE_URL}/api/faculties/${admin_role.faculty_id}`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			const facultyResponse = await fetch(`/api/faculties/${admin_role.faculty_id}`);
 
 			if (facultyResponse.ok) {
 				const facultyData = await facultyResponse.json();
@@ -102,12 +91,8 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 };
 
 export const actions: Actions = {
-	create: async (event) => {
-		const { request, cookies } = event;
-		const sessionId = cookies.get('session_id');
-		if (!sessionId) {
-			throw redirect(302, '/admin/login');
-		}
+    create: async (event) => {
+        const { request } = event;
 
 		const user = await requireAdmin(event);
 		const admin_role = user.admin_role;
@@ -126,20 +111,17 @@ export const actions: Actions = {
 		}
 
 		// Determine the API endpoint based on user role
-		let apiEndpoint = `${API_BASE_URL}/api/departments`;
+        let apiEndpoint = `/api/departments`;
 		if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
-			apiEndpoint = `${API_BASE_URL}/api/faculties/${admin_role.faculty_id}/departments`;
+			apiEndpoint = `/api/faculties/${admin_role.faculty_id}/departments`;
 		}
 
 		try {
-			const response = await fetch(apiEndpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
-				body: JSON.stringify(form.data)
-			});
+            const response = await event.fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form.data)
+            });
 
 			const result = await response.json();
 
@@ -160,12 +142,8 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async (event) => {
-		const { request, cookies } = event;
-		const sessionId = cookies.get('session_id');
-		if (!sessionId) {
-			throw redirect(302, '/admin/login');
-		}
+    update: async (event) => {
+        const { request } = event;
 
 		const user = await requireAdmin(event);
 		const admin_role = user.admin_role;
@@ -188,14 +166,11 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/departments/${departmentId}`, {
-				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
-				body: JSON.stringify(form.data)
-			});
+            const response = await event.fetch(`/api/departments/${departmentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form.data)
+            });
 
 			const result = await response.json();
 
@@ -236,13 +211,10 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const departmentId = formData.get('departmentId') as string;
 
-		try {
-			const response = await fetch(`${API_BASE_URL}/api/departments/${departmentId}`, {
-				method: 'DELETE',
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+        try {
+            const response = await event.fetch(`/api/departments/${departmentId}`, {
+                method: 'DELETE'
+            });
 
 			const result = await response.json();
 
@@ -281,13 +253,10 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const departmentId = formData.get('departmentId') as string;
 
-		try {
-			const response = await fetch(`${API_BASE_URL}/api/departments/${departmentId}/toggle-status`, {
-				method: 'PUT',
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+        try {
+            const response = await event.fetch(`/api/departments/${departmentId}/toggle-status`, {
+                method: 'PUT'
+            });
 
 			const result = await response.json();
 

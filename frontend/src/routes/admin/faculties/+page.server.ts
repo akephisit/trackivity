@@ -3,7 +3,6 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
-import { PUBLIC_API_URL } from '$env/static/public';
 
 // Faculty schemas
 const facultyCreateSchema = z.object({
@@ -20,8 +19,6 @@ const facultyUpdateSchema = z.object({
 	status: z.boolean().optional()
 });
 
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
-
 export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 	depends('app:page-data');
 	
@@ -32,11 +29,7 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 
 	try {
 		// Fetch all faculties for admin (including inactive ones)
-		const facultiesResponse = await fetch(`${API_BASE_URL}/api/admin/faculties`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const facultiesResponse = await fetch(`/api/admin/faculties`);
 
 		let faculties = [];
 		if (facultiesResponse.ok) {
@@ -79,12 +72,9 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/faculties`, {
+			const response = await fetch(`/api/faculties`, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(form.data)
 			});
 
@@ -124,12 +114,9 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/faculties/${facultyId}`, {
+			const response = await fetch(`/api/faculties/${facultyId}`, {
 				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(form.data)
 			});
 
@@ -162,11 +149,8 @@ export const actions: Actions = {
 		const facultyId = formData.get('facultyId') as string;
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/faculties/${facultyId}`, {
+			const response = await fetch(`/api/faculties/${facultyId}`, {
 				method: 'DELETE',
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
 			});
 
 			const result = await response.json();
@@ -196,11 +180,8 @@ export const actions: Actions = {
 		const facultyId = formData.get('facultyId') as string;
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/faculties/${facultyId}/toggle-status`, {
+			const response = await fetch(`/api/faculties/${facultyId}/toggle-status`, {
 				method: 'PUT',
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
 			});
 
 			const result = await response.json();

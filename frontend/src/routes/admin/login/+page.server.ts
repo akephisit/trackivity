@@ -2,22 +2,15 @@ import { fail, redirect } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { adminLoginSchema } from '$lib/schemas/auth';
-import { PUBLIC_API_URL } from '$env/static/public';
 import type { Actions, PageServerLoad } from './$types';
 
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
-
-export const load: PageServerLoad = async ({ cookies }) => {
+export const load: PageServerLoad = async ({ cookies, fetch }) => {
 	// Check if admin already logged in
 	const sessionId = cookies.get('session_id');
 	
 	if (sessionId) {
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			const response = await fetch(`/api/admin/auth/me`);
 			
 			if (response.ok) {
 				throw redirect(303, '/admin');
@@ -42,7 +35,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, fetch }) => {
 		const form = await superValidate(request, zod(adminLoginSchema));
 
 		if (!form.valid) {
@@ -50,7 +43,7 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/api/admin/auth/login`, {
+			const response = await fetch(`/api/admin/auth/login`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

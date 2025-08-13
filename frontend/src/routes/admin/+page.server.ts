@@ -1,13 +1,9 @@
 import { requireAdmin } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 import type { AdminDashboardStats } from '$lib/types/admin';
-import { PUBLIC_API_URL } from '$env/static/public';
-
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async (event) => {
 	const user = await requireAdmin(event);
-	const sessionId = event.cookies.get('session_id');
 
 	// โหลดสถิติแดชบอร์ด
 	let stats: AdminDashboardStats = {
@@ -21,11 +17,7 @@ export const load: PageServerLoad = async (event) => {
 	};
 
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/dashboard`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const response = await event.fetch(`/api/admin/dashboard`);
 
 		if (response.ok) {
 			const result = await response.json();
@@ -40,11 +32,7 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดกิจกรรมล่าสุด (optional)
 	let recentActivities: any[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/activities?limit=10&recent=true`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const response = await event.fetch(`/api/admin/activities?limit=10&recent=true`);
 
 		if (response.ok) {
 			const result = await response.json();

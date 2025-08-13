@@ -6,18 +6,14 @@ import { adminCreateSchema } from '$lib/schemas/auth';
 import type { PageServerLoad, Actions } from './$types';
 import type { AdminRole, Faculty } from '$lib/types/admin';
 import { AdminLevel } from '$lib/types/admin';
-import { PUBLIC_API_URL } from '$env/static/public';
-
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async (event) => {
 	const user = await requireSuperAdmin(event);
-	const sessionId = event.cookies.get('session_id');
 
 	// โหลดรายการคณะก่อน
 	let faculties: Faculty[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/faculties`);
+		const response = await event.fetch(`/api/faculties`);
 		if (response.ok) {
 			const result = await response.json();
 			faculties = result.data?.faculties || result.data || [];
@@ -29,11 +25,7 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดรายการแอดมิน - ใช้ system-admins endpoint เพื่อให้ได้ข้อมูล is_active
 	let admins: AdminRole[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/admin/system-admins`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const response = await event.fetch(`/api/admin/system-admins`);
 
 		if (response.ok) {
 			const result = await response.json();
@@ -140,7 +132,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, cookies }) => {
+	create: async ({ request, fetch }) => {
 		const form = await superValidate(request, zod(adminCreateSchema));
 
 		if (!form.valid) {
@@ -148,8 +140,6 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
 			// Define default permissions based on admin level
 			const getDefaultPermissions = (adminLevel: string, facultyId?: string) => {
 				switch (adminLevel) {
@@ -199,12 +189,9 @@ export const actions: Actions = {
 			});
 
 			
-			const response = await fetch(`${API_BASE_URL}/api/admin/create`, {
+			const response = await fetch(`/api/admin/create`, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(transformedData)
 			});
 
@@ -236,7 +223,7 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, cookies }) => {
+	delete: async ({ request, fetch }) => {
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 
@@ -245,14 +232,8 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
-			// ใช้ user_id จากข้อมูล admin ที่ส่งมาจาก frontend
-			const response = await fetch(`${API_BASE_URL}/api/users/${adminId}`, {
+			const response = await fetch(`/api/users/${adminId}`, {
 				method: 'DELETE',
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
 			});
 
 			// ตรวจสอบว่า response มี content หรือไม่
@@ -304,7 +285,7 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, cookies }) => {
+	toggleStatus: async ({ request, fetch }) => {
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string; // admin role id
 		const isActive = formData.get('isActive') === 'true';
@@ -314,15 +295,9 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
-			// ใช้ admin toggle status endpoint ที่เพิ่งสร้างขึ้น
-			const response = await fetch(`${API_BASE_URL}/api/admin/roles/${adminId}/toggle-status`, {
+			const response = await fetch(`/api/admin/roles/${adminId}/toggle-status`, {
 				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					is_enabled: isActive  // Send is_enabled instead of is_active
 				})
@@ -385,7 +360,7 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, cookies }) => {
+	update: async ({ request, fetch }) => {
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 		const userId = formData.get('userId') as string; // รับ user_id แทน admin_id
@@ -411,8 +386,6 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
 			// ตรวจสอบว่ามีข้อมูลที่จำเป็นครบถ้วน
 			const requiredFields = ['first_name', 'last_name', 'email'];
 			const missingFields = requiredFields.filter(field => !updateData[field]);
@@ -436,12 +409,9 @@ export const actions: Actions = {
 			};
 
 			// ใช้ user endpoint ตาม backend routes
-			const response = await fetch(`${API_BASE_URL}/api/users/${targetUserId}`, {
+			const response = await fetch(`/api/users/${targetUserId}`, {
 				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(preparedData)
 			});
 

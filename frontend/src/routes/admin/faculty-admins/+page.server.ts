@@ -10,29 +10,17 @@ import type {
 	ExtendedAdminRole
 } from '$lib/types/admin';
 import { AdminLevel, ADMIN_PERMISSIONS } from '$lib/types/admin';
-import { PUBLIC_API_URL } from '$env/static/public';
-
-const API_BASE_URL = PUBLIC_API_URL || 'http://localhost:3000';
 
 export const load: PageServerLoad = async (event) => {
 	// Role-based access: Both SuperAdmin and FacultyAdmin can access this page
 	const user = await requireFacultyAdmin(event);
-	const sessionId = event.cookies.get('session_id');
 	const isSuperAdmin = user.admin_role?.admin_level === AdminLevel.SuperAdmin;
 	const userFacultyId = user.admin_role?.faculty_id;
-
-	if (!sessionId) {
-		throw redirect(302, '/admin/login');
-	}
 
 	// Load faculties list
 	let faculties: Faculty[] = [];
 	try {
-		const response = await fetch(`${API_BASE_URL}/api/faculties`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const response = await event.fetch(`/api/faculties`);
 		
 		if (response.ok) {
 			const result = await response.json();
@@ -50,18 +38,12 @@ export const load: PageServerLoad = async (event) => {
 		let apiUrl: string;
 		
 		if (isSuperAdmin) {
-			// SuperAdmin: Load system-wide admins
-			apiUrl = `${API_BASE_URL}/api/admin/system-admins`;
+			apiUrl = `/api/admin/system-admins`;
 		} else {
-			// FacultyAdmin: Load only their faculty's admins
-			apiUrl = `${API_BASE_URL}/api/faculties/${userFacultyId}/admins`;
+			apiUrl = `/api/faculties/${userFacultyId}/admins`;
 		}
 
-		const response = await fetch(apiUrl, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`
-			}
-		});
+		const response = await event.fetch(apiUrl);
 
 		if (response.ok) {
 			const result = await response.json();
@@ -111,6 +93,7 @@ export const load: PageServerLoad = async (event) => {
 							admin_level: mapAdminLevel(admin.admin_role.admin_level),
 							faculty_id: admin.admin_role.faculty_id,
 							permissions: admin.admin_role.permissions || [],
+							is_enabled: admin.admin_role.is_enabled ?? true,
 							created_at: admin.admin_role.created_at,
 							updated_at: admin.admin_role.updated_at,
 							user: {
@@ -199,7 +182,7 @@ function formatDateTime(date: Date): string {
 
 
 export const actions: Actions = {
-	create: async ({ request, cookies }) => {
+	create: async ({ request, fetch }) => {
 		const form = await superValidate(request, zod(adminCreateSchema));
 
 		if (!form.valid) {
@@ -207,14 +190,8 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
-			// Authorization check - SuperAdmin can create FacultyAdmin, FacultyAdmin can create RegularAdmin
-			const authResponse = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			// Authorization check - use proxy
+			const authResponse = await fetch(`/api/admin/auth/me`);
 
 			if (!authResponse.ok) {
 				form.errors._errors = ['ไม่สามารถยืนยันตัวตนได้'];
@@ -287,15 +264,12 @@ export const actions: Actions = {
 
 			// Use faculty-specific admin creation endpoint
 			const endpoint = transformedData.faculty_id 
-				? `${API_BASE_URL}/api/faculties/${transformedData.faculty_id}/admins`
-				: `${API_BASE_URL}/api/admin/create`;
+				? `/api/faculties/${transformedData.faculty_id}/admins`
+				: `/api/admin/create`;
 
 			const response = await fetch(endpoint, {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(transformedData)
 			});
 
@@ -340,7 +314,7 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, cookies }) => {
+	toggleStatus: async ({ request, fetch }) => {
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 		const isActive = formData.get('isActive') === 'true';
@@ -350,14 +324,8 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
 			// Verify authorization
-			const authResponse = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			const authResponse = await fetch(`/api/admin/auth/me`);
 
 			if (!authResponse.ok) {
 				return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
@@ -373,12 +341,9 @@ export const actions: Actions = {
 				return fail(403, { error: 'ไม่มีสิทธิ์ในการเปลี่ยนสถานะแอดมินนี้' });
 			}
 
-			const response = await fetch(`${API_BASE_URL}/api/admin/roles/${adminId}/toggle-status`, {
+			const response = await fetch(`/api/admin/roles/${adminId}/toggle-status`, {
 				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					is_active: isActive
 				})
@@ -428,7 +393,7 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, cookies }) => {
+	update: async ({ request, fetch }) => {
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 		const userId = formData.get('userId') as string;
@@ -451,15 +416,10 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
 			const targetUserId = userId || adminId;
 
 			// Verify authorization
-			const authResponse = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			const authResponse = await fetch(`/api/admin/auth/me`);
 
 			if (!authResponse.ok) {
 				return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
@@ -489,12 +449,9 @@ export const actions: Actions = {
 				...(updateData.department_id !== undefined && { department_id: updateData.department_id || null })
 			};
 
-			const response = await fetch(`${API_BASE_URL}/api/users/${targetUserId}`, {
+			const response = await fetch(`/api/users/${targetUserId}`, {
 				method: 'PUT',
-				headers: {
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(preparedData)
 			});
 
@@ -551,7 +508,7 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, cookies }) => {
+	delete: async ({ request, fetch }) => {
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 
@@ -560,14 +517,8 @@ export const actions: Actions = {
 		}
 
 		try {
-			const sessionId = cookies.get('session_id');
-			
 			// Verify authorization - only SuperAdmin can delete faculty admins
-			const authResponse = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
-			});
+			const authResponse = await fetch(`/api/admin/auth/me`);
 
 			if (!authResponse.ok) {
 				return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
@@ -578,11 +529,8 @@ export const actions: Actions = {
 				return fail(403, { error: 'เฉพาะซุปเปอร์แอดมินเท่านั้นที่สามารถลบแอดมินคณะได้' });
 			}
 			
-			const response = await fetch(`${API_BASE_URL}/api/users/${adminId}`, {
+			const response = await fetch(`/api/users/${adminId}`, {
 				method: 'DELETE',
-				headers: {
-					'Cookie': `session_id=${sessionId}`
-				}
 			});
 
 			const contentType = response.headers.get('content-type');
