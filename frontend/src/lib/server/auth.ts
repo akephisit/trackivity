@@ -6,6 +6,9 @@ export interface AuthenticatedUser extends User {
 	admin_role?: AdminRole;
 }
 
+// Backend API base URL (server-side only)
+const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:3000';
+
 /**
  * ตรวจสอบการ authentication ของผู้ใช้
  */
@@ -18,7 +21,12 @@ export async function requireAuth(event: RequestEvent): Promise<AuthenticatedUse
 	}
 
 	try {
-    const response = await event.fetch(`/api/auth/me`);
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+                'Cookie': `session_id=${sessionId}`,
+                'X-Session-ID': sessionId
+            }
+        });
 
         if (!response.ok) {
             // Session หมดอายุหรือไม่ถูกต้อง
@@ -57,8 +65,13 @@ export async function requireAdmin(event: RequestEvent): Promise<AuthenticatedUs
 	}
 
 	try {
-		// Use admin-specific endpoint
-    const response = await event.fetch(`/api/admin/auth/me`);
+		// Use admin-specific endpoint, call backend directly
+        const response = await fetch(`${API_BASE_URL}/api/admin/auth/me`, {
+            headers: {
+                'Cookie': `session_id=${sessionId}`,
+                'X-Session-ID': sessionId
+            }
+        });
 
 		if (!response.ok) {
 			// Session หมดอายุหรือไม่ถูกต้อง
@@ -185,7 +198,12 @@ export async function getAuthUser(event: RequestEvent): Promise<AuthenticatedUse
 	}
 
 	try {
-    const response = await event.fetch(`/api/auth/me`);
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+                'Cookie': `session_id=${sessionId}`,
+                'X-Session-ID': sessionId
+            }
+        });
 
         if (!response.ok) {
             event.cookies.delete('session_id', { path: '/' });
@@ -216,7 +234,14 @@ export async function logout(event: RequestEvent): Promise<void> {
 	
 	if (sessionId) {
 		try {
-			await event.fetch(`/api/auth/logout`, { method: 'POST' });
+			// Call backend directly to avoid recursive call into this same SvelteKit route
+			await fetch(`${API_BASE_URL}/api/auth/logout`, {
+				method: 'POST',
+				headers: {
+					'Cookie': `session_id=${sessionId}`,
+					'X-Session-ID': sessionId
+				}
+			});
 		} catch (error) {
 			console.error('Logout request failed:', error);
 		}

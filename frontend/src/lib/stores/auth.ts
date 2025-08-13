@@ -34,6 +34,10 @@ const initialState: AuthState = {
 function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>(initialState);
 
+  // Deduplicate concurrent refreshUser() calls and avoid rapid repeats
+  let inflightMe: Promise<SessionUser | null> | null = null;
+  let lastProbeAt = 0;
+
   return {
     subscribe,
     set,
@@ -130,49 +134,61 @@ function createAuthStore() {
     },
 
     async refreshUser() {
-      try {
-        const response = await apiClient.me();
-        
-        if (isApiSuccess(response)) {
-          const user = response.data;
-          
-          update(state => ({
-            ...state,
-            user,
-            isAuthenticated: true,
-            error: null
-          }));
+      const now = Date.now();
+      if (inflightMe && now - lastProbeAt < 300) {
+        // Return the in-flight probe to avoid request storms
+        return inflightMe;
+      }
 
-          // Connect SSE if not already connected and user is authenticated
-          if (!sseClient.isConnected()) {
-            console.log('[Auth] Connecting SSE for existing session...');
-            sseClient.connect(user);
-          }
-
-          return user;
-        }
-      } catch (error) {
-        // Normalize known session/auth issues without noisy errors in console
-        if (isApiError(error)) {
-          const code = error.code;
-          if (['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION', 'AUTH_ERROR'].includes(code)) {
-            // Clear auth state for session issues but don't redirect (handled elsewhere)
-            console.debug('[Auth] Session not active or invalid; clearing auth state');
+      lastProbeAt = now;
+      inflightMe = (async () => {
+        try {
+          const response = await apiClient.me();
+          if (isApiSuccess(response)) {
+            const user = response.data;
             update(state => ({
               ...state,
-              user: null,
-              isAuthenticated: false,
+              user,
+              isAuthenticated: true,
               error: null
             }));
-            sseClient.disconnect();
-          } else {
-            console.error('[Auth] Unexpected API error during refresh:', error);
+
+            // Connect SSE if not already connected and user is authenticated
+            if (!sseClient.isConnected()) {
+              console.log('[Auth] Connecting SSE for existing session...');
+              sseClient.connect(user);
+            }
+            return user;
           }
-        } else {
-          console.error('[Auth] Unexpected error during refresh:', error);
+        } catch (error) {
+          // Normalize known session/auth issues
+          if (isApiError(error)) {
+            const code = error.code;
+            if (['SESSION_EXPIRED', 'SESSION_REVOKED', 'SESSION_INVALID', 'NO_SESSION', 'AUTH_ERROR'].includes(code)) {
+              console.debug('[Auth] Session not active or invalid; clearing auth state');
+              update(state => ({
+                ...state,
+                user: null,
+                isAuthenticated: false,
+                error: null
+              }));
+              sseClient.disconnect();
+            } else {
+              console.error('[Auth] Unexpected API error during refresh:', error);
+            }
+          } else {
+            console.error('[Auth] Unexpected error during refresh:', error);
+          }
         }
+        return null;
+      })();
+
+      try {
+        return await inflightMe;
+      } finally {
+        // Allow a new probe on next tick
+        setTimeout(() => { inflightMe = null; }, 0);
       }
-      return null;
     },
 
     async refreshSession() {

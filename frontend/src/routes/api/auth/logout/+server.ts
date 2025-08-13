@@ -19,5 +19,6 @@ export const POST: RequestHandler = async (event) => {
         console.error('Logout error (POST):', error);
         event.cookies.delete('session_id', { path: '/' });
     }
-    throw redirect(303, '/?logout=1');
+    // For programmatic fetch-based logout, return JSON success
+    return json({ success: true });
 };

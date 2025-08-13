@@ -92,31 +92,15 @@ function isSuperAdmin(user: SessionUser): boolean {
 // Main handle function
 export const handle: Handle = async ({ event, resolve }) => {
     const { url, cookies } = event;
-    
-    // Get session ID from cookie
+    const pathname = url.pathname;
+
+    // Initialize locals early
     const sessionId = cookies.get('session_id');
-    
-    // Initialize locals
     event.locals.user = null;
     event.locals.session_id = sessionId || null;
 
-    // Validate session if present
-    if (sessionId) {
-        const user = await validateSession(sessionId);
-        
-        if (user) {
-            event.locals.user = user;
-        } else {
-            // Invalid session, clear cookie
-            cookies.delete('session_id', { path: '/' });
-            event.locals.session_id = null;
-        }
-    }
-
-    // Route protection logic
-    const pathname = url.pathname;
-
-    // Skip protection for API routes, static files, and auth pages
+    // Fast-path: skip validation entirely for API/static/auth pages
+    // This prevents redundant calls (e.g., /api/auth/me causing another /api/auth/me).
     if (
         pathname.startsWith('/api') ||
         pathname.startsWith('/_app') ||
@@ -128,6 +112,18 @@ export const handle: Handle = async ({ event, resolve }) => {
         pathname === '/unauthorized'
     ) {
         return resolve(event);
+    }
+
+    // Validate session if present (only for non-exempt pages)
+    if (sessionId) {
+        const user = await validateSession(sessionId);
+        if (user) {
+            event.locals.user = user;
+        } else {
+            // Invalid session, clear cookie
+            cookies.delete('session_id', { path: '/' });
+            event.locals.session_id = null;
+        }
     }
 
     // Check if route requires authentication
