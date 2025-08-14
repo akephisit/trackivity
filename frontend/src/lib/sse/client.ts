@@ -41,13 +41,6 @@ export class SSEClient {
     this.config = { ...DEFAULT_CONFIG, ...config };
 
     if (browser) {
-      // Auto-connect on page visibility change
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && this.getConnectionStatus() === 'disconnected') {
-          this.connect();
-        }
-      });
-
       // Cleanup on page unload
       window.addEventListener('beforeunload', () => {
         this.disconnect();
