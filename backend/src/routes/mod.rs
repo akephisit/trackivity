@@ -4,7 +4,7 @@ use axum::{
 };
 
 use crate::handlers::{
-    activity, admin, admin_session, admin_session_mgmt, auth, department, faculty, qr_activity, sse_enhanced, sse_api, user, user_management,
+    activity, admin, admin_session, admin_session_mgmt, auth, department, faculty, qr_activity, user, user_management,
 };
 use crate::middleware::session::SessionState;
 
@@ -140,31 +140,7 @@ pub fn create_routes() -> Router<SessionState> {
             "/api/admin/session-management/faculty/{faculty_id}/logout",
             post(admin_session_mgmt::force_logout_faculty_sessions),
         )
-        // Enhanced SSE routes - session-based connections
-        .route("/api/sse/{session_id}", get(sse_enhanced::sse_handler))
-        .route("/api/sse/student/{session_id}", get(sse_enhanced::sse_student_handler))
-        .route("/api/sse/admin/{session_id}", get(sse_enhanced::sse_admin_handler))
-        // Cookie-based SSE routes (session_id derived from cookie/header)
-        .route("/api/sse", get(sse_enhanced::sse_handler_cookie))
-        .route("/api/sse/student", get(sse_enhanced::sse_student_handler_cookie))
-        .route("/api/sse/admin", get(sse_enhanced::sse_admin_handler_cookie))
-        
-        // SSE API endpoints
-        .route("/api/sse/notification", post(sse_api::send_notification))
-        .route("/api/sse/activity/checked-in", post(sse_api::send_activity_checked_in))
-        .route("/api/sse/activity/new", post(sse_api::send_new_activity_created))
-        .route("/api/sse/subscription/expiry", post(sse_api::send_subscription_expiry_warning))
-        .route("/api/sse/announcement", post(sse_api::send_system_announcement))
-        
-        // Enhanced admin SSE endpoints
-        .route("/api/sse/admin/notify/{permission}", post(sse_api::admin_send_notification_by_permission))
-        .route("/api/sse/admin/force-logout/{session_id}", post(sse_api::admin_send_force_logout))
-        .route("/api/sse/admin/permission-update", post(sse_api::admin_send_permission_updated))
-        .route("/api/sse/admin/promotion", post(sse_api::admin_send_promotion_notification))
-        .route("/api/sse/admin/stats", get(sse_api::admin_get_sse_stats))
-        .route("/api/sse/admin/cleanup", post(sse_api::admin_cleanup_connections))
-        .route("/api/sse/admin/heartbeat", post(sse_api::admin_send_heartbeat))
-        .route("/api/sse/admin/test-notification", post(sse_api::admin_send_test_notification))
+        // SSE removed
         // Health check
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))

@@ -10,12 +10,12 @@ A comprehensive university activity tracking system built with Rust (Axum) backe
 - **Redis Sessions**: Secure session-based authentication (7-30 days expiry)
 - **Multi-level Admin System**: Super Admin, Faculty Admin, Regular Admin
 - **QR Code Integration**: Unique QR codes for each user
-- **Real-time Updates**: Server-Sent Events (SSE) support
+- Real-time Updates: (temporarily disabled)
 
 ### Frontend (SvelteKit + TypeScript)
 - **Modern UI**: Built with shadcn-svelte components
 - **Responsive Design**: Works on desktop and mobile
-- **Real-time Updates**: SSE client for live data
+- Real-time Updates: (temporarily disabled)
 - **Role-based Navigation**: Different interfaces for different user types
 - **Thai Language Support**: Fully localized interface
 

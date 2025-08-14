@@ -494,10 +494,6 @@ pub async fn logout(
     session_user: SessionUser,
     cookies: Cookies,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Proactively remove SSE connection for this session (if any)
-    if let Some(sse_manager) = session_state.sse_manager.as_ref() {
-        let _ = sse_manager.remove_connection(&session_user.session_id).await;
-    }
     // Delete session from Redis
     session_state
         .redis_store
@@ -592,10 +588,6 @@ pub async fn admin_logout(
     admin_user: AdminUser,
     cookies: Cookies,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    // Proactively remove SSE connection for this session (if any)
-    if let Some(sse_manager) = session_state.sse_manager.as_ref() {
-        let _ = sse_manager.remove_connection(&admin_user.session_user.session_id).await;
-    }
     // Delete session from Redis
     session_state
         .redis_store

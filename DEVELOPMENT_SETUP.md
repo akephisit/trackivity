@@ -8,14 +8,14 @@ Trackivity เป็นระบบติดตามกิจกรรมมห
 - **Framework**: Axum web framework
 - **Database**: PostgreSQL with SQLx migrations
 - **Session Store**: Redis with session-based authentication
-- **Real-time**: Server-Sent Events (SSE)
+- Real-time: (temporarily disabled)
 - **Security**: Multi-level admin system (Super Admin, Faculty Admin, Regular Admin)
 
 ### Frontend (SvelteKit + TypeScript)
 - **Framework**: SvelteKit 2.0
 - **UI Components**: ShadcnUI-svelte
 - **Authentication**: Session-based with auto-redirect
-- **Real-time**: SSE client for live updates
+- Real-time: (temporarily disabled)
 - **State Management**: Svelte stores
 
 ## การติดตั้งและเริ่มต้น
@@ -194,17 +194,7 @@ curl -X GET http://localhost:3000/api/admin/sessions \
   -H "Cookie: session_id=ADMIN_SESSION_ID"
 ```
 
-### 5. การทดสอบ SSE (Real-time Updates)
-
-```bash
-# Connect to SSE endpoint
-curl -N -H "Cookie: session_id=YOUR_SESSION_ID" \
-  http://localhost:3000/api/sse/events
-
-# Test admin SSE
-curl -N -H "Cookie: session_id=ADMIN_SESSION_ID" \
-  http://localhost:3000/api/sse/admin
-```
+<!-- SSE testing temporarily disabled -->
 
 ## URLs และ Endpoints
 
@@ -244,9 +234,7 @@ curl -N -H "Cookie: session_id=ADMIN_SESSION_ID" \
 - `POST /api/activities/:id/participate` - Join activity
 - `POST /api/activities/:id/scan` - QR scan attendance
 
-#### SSE (Real-time)
-- `GET /api/sse/events` - User SSE connection
-- `GET /api/sse/admin` - Admin SSE connection
+<!-- SSE endpoints temporarily disabled -->
 
 ## Admin System
 
@@ -300,20 +288,7 @@ ScanQrCodes, ViewAssignedActivities
 - Redis: Primary session storage
 - PostgreSQL: Session metadata และ audit log
 
-## Real-time Features
-
-### SSE Events
-- `notification` - การแจ้งเตือนแบบ Real-time
-- `session_update` - อัพเดท Session (force logout, permission change)
-- `activity_update` - อัพเดทกิจกรรม
-- `admin_message` - ข้อความจาก Admin
-
-### Frontend Integration
-- Auto-reconnection SSE
-- Browser notifications
-- Sound alerts
-- Session management
-- Permission-based UI updates
+<!-- Real-time features temporarily disabled -->
 
 ## Troubleshooting
 
@@ -380,7 +355,7 @@ VITE_API_URL=https://api.trackivity.com
 - Session count และ cleanup
 - Database performance
 - Redis memory usage
-- SSE connection count
+<!-- SSE connection metrics temporarily removed -->
 - API response times
 
 ### Regular Tasks

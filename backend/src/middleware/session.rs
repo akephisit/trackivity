@@ -23,7 +23,6 @@ pub struct SessionState {
     pub redis_store: Arc<RedisSessionStore>,
     pub db_pool: PgPool,
     pub config: SessionConfig,
-    pub sse_manager: Option<Arc<crate::handlers::sse_enhanced::SseConnectionManager>>,
 }
 
 // Session middleware for validating and extracting session info

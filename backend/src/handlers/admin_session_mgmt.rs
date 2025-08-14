@@ -296,35 +296,6 @@ pub async fn force_logout_session(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if success {
-        // Send SSE notification to the affected user if connected
-        if let Some(sse_manager) = &session_state.sse_manager {
-            let notification = crate::handlers::sse_enhanced::SessionRevokedMessage {
-                session_id: session_id.clone(),
-                user_id: session_user_id,
-                reason: crate::handlers::sse_enhanced::SessionRevocationReason::AdminAction,
-                message: reason.to_string(),
-                revoked_by: Some(admin_user.session_user.user_id),
-                force_logout_all_devices: false,
-            };
-
-            let sse_message = crate::handlers::sse_enhanced::SseMessage {
-                event_type: crate::handlers::sse_enhanced::SseEventType::SessionRevoked,
-                data: serde_json::to_value(notification).unwrap(),
-                timestamp: Utc::now(),
-                message_id: format!("force_logout_{}", uuid::Uuid::new_v4()),
-                target_permissions: None,
-                target_user_id: Some(session_user_id),
-                target_faculty_id: None,
-                target_sessions: Some(vec![session_id.clone()]),
-                priority: crate::handlers::sse_enhanced::MessagePriority::Critical,
-                ttl_seconds: None,
-                retry_count: 0,
-                broadcast_id: None,
-            };
-
-            let _ = sse_manager.send_to_session(&session_id, sse_message).await;
-        }
-
         Ok(Json(serde_json::json!({
             "success": true,
             "message": "Session revoked successfully"

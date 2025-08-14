@@ -2,7 +2,6 @@ import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { apiClient, isApiSuccess, handleApiError, isApiError } from '$lib/api/client';
-import { sseClient } from '$lib/sse/client';
 import type { 
   SessionUser, 
   LoginRequest, 
@@ -63,8 +62,7 @@ function createAuthStore() {
             error: null
           }));
 
-          // Connect to SSE for real-time updates
-          sseClient.connect(user);
+          // SSE disabled
 
           return { success: true, user };
         }
@@ -115,8 +113,7 @@ function createAuthStore() {
       update(state => ({ ...state, isLoading: true }));
 
       try {
-        // Proactively disconnect SSE to avoid interference during logout
-        sseClient.disconnect();
+        // SSE disabled
         // Use short-timeout logout; do not block UI if it fails
         isLoggingOut = true;
         await apiClient.logout().catch((err) => {
@@ -129,8 +126,7 @@ function createAuthStore() {
       // Clear local state
       update(() => ({ ...initialState }));
       
-      // Ensure SSE remains disconnected
-      sseClient.disconnect();
+      // SSE disabled
 
       // No client-side session storage to clear
 
@@ -160,11 +156,7 @@ function createAuthStore() {
               error: null
             }));
 
-            // Connect SSE if not already connected and user is authenticated
-            if (!isLoggingOut && !sseClient.isConnected()) {
-              console.log('[Auth] Connecting SSE for existing session...');
-              sseClient.connect(user);
-            }
+            // SSE disabled
             return user;
           }
         } catch (error) {
@@ -179,7 +171,7 @@ function createAuthStore() {
                 isAuthenticated: false,
                 error: null
               }));
-              sseClient.disconnect();
+              // SSE disabled
             } else {
               console.error('[Auth] Unexpected API error during refresh:', error);
             }
@@ -355,22 +347,6 @@ if (browser) {
     } else if (!user) {
       console.log('[Auth] No active session on server');
     }
-  });
-
-  // Listen for SSE session events
-  sseClient.on('session_updated', (event) => {
-    if (event.data?.user) {
-      auth.setUser(event.data.user);
-    }
-  });
-
-  sseClient.on('session_expired', () => {
-    auth.logout('/login?expired=true');
-  });
-
-  sseClient.on('permission_changed', () => {
-    // Refresh user data to get updated permissions
-    auth.refreshUser();
   });
 
   // Session heartbeat - refresh every 15 minutes

@@ -283,7 +283,7 @@ pub async fn qr_checkin(
                             "checked_in_at": checked_in_at
                         });
 
-                        use crate::handlers::sse_enhanced::*;
+                        // SSE disabled
                         let sse_message = SseMessageBuilder::new(
                             SseEventType::ActivityCheckedIn,
                             notification_data,
@@ -355,7 +355,7 @@ pub async fn qr_checkin(
                             "checked_in_at": checked_in_at
                         });
 
-                        use crate::handlers::sse_enhanced::*;
+                        // SSE disabled
                         let sse_message = SseMessageBuilder::new(
                             SseEventType::ActivityCheckedIn,
                             notification_data,

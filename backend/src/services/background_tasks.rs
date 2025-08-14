@@ -4,27 +4,19 @@ use std::time::Duration;
 use tokio::time::interval;
 use uuid::Uuid;
 
-use crate::handlers::sse_enhanced::SseConnectionManager;
 use crate::middleware::session::SessionState;
 
 // Background task manager
 pub struct BackgroundTaskManager {
     session_state: SessionState,
-    sse_manager: Arc<SseConnectionManager>,
 }
 
 impl BackgroundTaskManager {
-    pub fn new(session_state: SessionState, sse_manager: Arc<SseConnectionManager>) -> Self {
-        Self {
-            session_state,
-            sse_manager,
-        }
-    }
+    pub fn new(session_state: SessionState) -> Self { Self { session_state } }
 
     // Start all background tasks
     pub async fn start_all_tasks(&self) {
         let session_state = self.session_state.clone();
-        let sse_manager = self.sse_manager.clone();
 
         // Session cleanup task
         let cleanup_session_state = session_state.clone();
@@ -38,20 +30,7 @@ impl BackgroundTaskManager {
             database_session_sync_task(sync_session_state).await;
         });
 
-        // SSE connection cleanup task
-        let sse_cleanup_session_state = session_state.clone();
-        let sse_cleanup_manager = sse_manager.clone();
-        tokio::spawn(async move {
-            sse_connection_cleanup_task(sse_cleanup_session_state, sse_cleanup_manager).await;
-        });
-
-        // Session expiry notification task
-        let notification_session_state = session_state.clone();
-        let notification_sse_manager = sse_manager.clone();
-        tokio::spawn(async move {
-            session_expiry_notification_task(notification_session_state, notification_sse_manager)
-                .await;
-        });
+        // SSE-related tasks removed
 
         // Session activity monitoring task
         let monitoring_session_state = session_state.clone();
@@ -113,51 +92,7 @@ async fn database_session_sync_task(session_state: SessionState) {
     }
 }
 
-// Task 3: Clean up inactive SSE connections
-async fn sse_connection_cleanup_task(
-    session_state: SessionState,
-    sse_manager: Arc<SseConnectionManager>,
-) {
-    let mut interval = interval(Duration::from_secs(300)); // Every 5 minutes
-
-    tracing::info!("Started SSE connection cleanup task");
-
-    loop {
-        interval.tick().await;
-
-        sse_manager
-            .cleanup_inactive_connections(&session_state)
-            .await;
-
-        let connection_count = sse_manager.connection_count().await;
-        tracing::debug!("Active SSE connections: {}", connection_count);
-    }
-}
-
-// Task 4: Send notifications for expiring sessions
-async fn session_expiry_notification_task(
-    session_state: SessionState,
-    sse_manager: Arc<SseConnectionManager>,
-) {
-    let mut interval = interval(Duration::from_secs(1800)); // Every 30 minutes
-
-    tracing::info!("Started session expiry notification task");
-
-    loop {
-        interval.tick().await;
-
-        match notify_expiring_sessions(&session_state, &sse_manager).await {
-            Ok(notified_count) => {
-                if notified_count > 0 {
-                    tracing::info!("Sent expiry notifications to {} sessions", notified_count);
-                }
-            }
-            Err(e) => {
-                tracing::error!("Failed to send session expiry notifications: {}", e);
-            }
-        }
-    }
-}
+// SSE-related helper tasks removed
 
 // Task 5: Monitor session activity patterns
 async fn session_activity_monitoring_task(session_state: SessionState) {
@@ -254,57 +189,7 @@ async fn sync_database_sessions(session_state: &SessionState) -> Result<usize, a
     Ok(synced_count)
 }
 
-async fn notify_expiring_sessions(
-    session_state: &SessionState,
-    sse_manager: &SseConnectionManager,
-) -> Result<usize, anyhow::Error> {
-    let session_ids = session_state.redis_store.get_active_sessions(None).await?;
-    let mut notified_count = 0;
-
-    for session_id in session_ids {
-        if let Some(session) = session_state.redis_store.get_session(&session_id).await? {
-            let time_to_expiry = session.expires_at.timestamp() - Utc::now().timestamp();
-
-            // Notify if session expires within 1 hour
-            if time_to_expiry > 0 && time_to_expiry <= 3600 {
-                let notification_data = serde_json::json!({
-                    "title": "Session Expiring Soon",
-                    "message": format!("Your session will expire in {} minutes", time_to_expiry / 60),
-                    "notification_type": "warning",
-                    "expires_at": session.expires_at,
-                    "can_extend": true
-                });
-
-                use crate::handlers::sse_enhanced::*;
-                let notification = SseMessageBuilder::new(
-                    SseEventType::Custom("session_warning".to_string()),
-                    notification_data,
-                )
-                .to_user(session.user_id)
-                .with_priority(MessagePriority::High)
-                .with_ttl(300) // 5 minutes
-                .build();
-
-                match sse_manager
-                    .send_to_user(session.user_id, notification)
-                    .await
-                {
-                    Ok(sent_count) if sent_count > 0 => {
-                        notified_count += 1;
-                    }
-                    Ok(_) => {
-                        tracing::debug!("No active connections for user {}", session.user_id);
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to send session warning to user {}: {}", session.user_id, e);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(notified_count)
-}
+// notify_expiring_sessions removed (SSE disabled)
 
 #[derive(Debug)]
 struct SessionActivityStats {

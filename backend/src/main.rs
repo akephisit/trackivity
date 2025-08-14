@@ -20,8 +20,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
 use crate::database::Database;
-use crate::handlers::sse_enhanced::{SseConnectionManager, SseConfig};
-use crate::handlers::sse_tasks;
 use crate::routes::create_routes;
 use crate::services::background_tasks::BackgroundTaskManager;
 
@@ -52,43 +50,16 @@ async fn main() -> anyhow::Result<()> {
     // Build Redis session store
     let redis_store = Arc::new(crate::services::RedisSessionStore::new(&config.redis_url)?);
 
-    // Initialize enhanced SSE connection manager
-    let redis_client_for_sse = redis::Client::open(config.redis_url.clone())?;
-    let sse_config = SseConfig {
-        max_connections_per_user: 5,
-        heartbeat_interval: std::time::Duration::from_secs(30),
-        connection_timeout: std::time::Duration::from_secs(300),
-        rate_limit_per_minute: 100,
-        channel_buffer_size: 1000,
-        redis_pubsub_channel: "trackivity_sse".to_string(),
-        enable_compression: false,
-    };
-    let sse_manager = Arc::new(SseConnectionManager::with_config(redis_client_for_sse, sse_config.clone()));
-
-    // Build session state with SSE manager
+    // Build session state (SSE disabled)
     let session_state = crate::middleware::session::SessionState {
         redis_store: redis_store.clone(),
         db_pool: database.pool.clone(),
         config: crate::services::SessionConfig::default(),
-        sse_manager: Some(sse_manager.clone()),
     };
-
-    // Start background tasks including SSE tasks
+    // Start background tasks (without SSE tasks)
     let background_task_manager =
-        BackgroundTaskManager::new(session_state.clone(), sse_manager.clone());
+        BackgroundTaskManager::new(session_state.clone(), /* no sse manager */);
     background_task_manager.start_all_tasks().await;
-
-    // Start SSE-specific background tasks
-    let sse_tasks = sse_tasks::spawn_sse_background_tasks(
-        session_state.clone(),
-        (*sse_manager).clone(),
-        sse_config,
-        redis::Client::open(config.redis_url.clone())?,
-    );
-    
-    tracing::info!("Started {} SSE background tasks", sse_tasks.len());
-
-    tracing::info!("Background tasks started successfully");
 
     // Build the application with session middleware
     let app = Router::new()
@@ -134,8 +105,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting Trackivity server on {}", addr);
     tracing::info!("Session-based authentication enabled");
     tracing::info!("Redis session store configured");
-    tracing::info!("SSE connections enabled");
-    tracing::info!("Background cleanup tasks running");
+    tracing::info!("SSE disabled in this build");
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
