@@ -73,7 +73,10 @@ pub fn create_routes() -> Router<SessionState> {
         )
         .route("/api/activities/{id}/scan", post(activity::scan_qr))
         // Enhanced QR Code routes
-        .route("/api/qr/generate", get(qr_activity::generate_user_qr))
+        .route(
+            "/api/qr/generate",
+            get(qr_activity::generate_user_qr).post(qr_activity::generate_user_qr),
+        )
         .route("/api/qr/refresh", post(qr_activity::refresh_qr_secret))
         .route("/api/activities/{id}/checkin", post(qr_activity::qr_checkin))
         .route("/api/admin/activities/assigned", get(qr_activity::get_assigned_activities))

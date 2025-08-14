@@ -213,6 +213,13 @@ export class ApiClient {
     const contentType = response.headers.get('content-type');
     
     if (!contentType?.includes('application/json')) {
+      // Some backend rejections (e.g., auth middleware) may send empty bodies
+      if (response.status === 401) {
+        throw new AuthenticationError('Authentication failed');
+      }
+      if (response.status === 403) {
+        throw new AuthorizationError('Access denied');
+      }
       throw new ApiClientError(
         'INVALID_RESPONSE',
         'Expected JSON response',

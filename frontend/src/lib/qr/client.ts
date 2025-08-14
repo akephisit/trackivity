@@ -200,6 +200,8 @@ export class QRClient {
   private generator: QRGenerator;
   private refreshTimer: NodeJS.Timeout | null = null;
   private config: QRConfig;
+  private isGenerating = false;
+  private lastGeneratedAt = 0;
 
   // Svelte stores
   public qrCode: Writable<QRCode | null> = writable(null);
@@ -229,7 +231,13 @@ export class QRClient {
   // ===== QR CODE GENERATION =====
   async generateQRCode(user?: SessionUser): Promise<void> {
     if (!browser) return;
+    const now = Date.now();
+    // Short-circuit if a generation is in-flight or fired too recently
+    if (this.isGenerating || now - this.lastGeneratedAt < 300) {
+      return;
+    }
 
+    this.isGenerating = true;
     this.status.set('generating');
     this.error.set(null);
 
@@ -238,7 +246,30 @@ export class QRClient {
       let qrCode: QRCode;
       try {
         const response = await apiClient.generateQRCode();
-        qrCode = response.data!;
+        // The backend may return either a wrapped shape { status, data } or raw QR payload
+        const payload: any = (response as any)?.data ?? (response as any);
+        if (!payload || !payload.qr_data) {
+          throw new Error('Invalid QR response');
+        }
+
+        // Normalize expires_at into ISO string
+        let expiresAt: string = payload.expires_at;
+        if (typeof payload.expires_at === 'number') {
+          expiresAt = new Date(payload.expires_at * 1000).toISOString();
+        }
+
+        // Build QRCode object matching app expectations
+        qrCode = {
+          id: (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)),
+          user_id: user?.user_id || '',
+          qr_data: payload.qr_data,
+          signature: payload.signature || '',
+          created_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          is_active: true,
+          usage_count: 0,
+          device_fingerprint: generateDeviceFingerprint()
+        };
       } catch (apiError) {
         // Fallback to offline generation
         console.warn('API generation failed, using offline mode:', apiError);
@@ -261,6 +292,9 @@ export class QRClient {
       console.error('QR generation failed:', error);
       this.error.set(error instanceof Error ? error.message : 'QR generation failed');
       this.status.set('error');
+    } finally {
+      this.isGenerating = false;
+      this.lastGeneratedAt = Date.now();
     }
   }
 
