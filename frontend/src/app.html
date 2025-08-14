@@ -19,13 +19,14 @@
 	<body data-sveltekit-preload-data="hover" class="antialiased">
 		<div style="display: contents">%sveltekit.body%</div>
 		
-		<!-- PWA Service Worker Registration -->
-		<script>
-			if ('serviceWorker' in navigator) {
-				window.addEventListener('load', () => {
-					navigator.serviceWorker.register('/sw.js')
-						.then((registration) => {
-							console.log('SW registered: ', registration);
+        <!-- PWA Service Worker Registration (disabled on localhost for dev stability) -->
+        <script>
+            const isLocalDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            if ('serviceWorker' in navigator && !isLocalDev) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then((registration) => {
+                            console.log('SW registered: ', registration);
 							
 							// Handle service worker updates
 							registration.addEventListener('updatefound', () => {
@@ -36,7 +37,7 @@
 											// New content is available, show refresh prompt
 											if (confirm('แอปมีการอัปเดตใหม่ คุณต้องการรีเฟรชหน้าเพื่ออัปเดตหรือไม่?')) {
 												window.location.reload();
-											}
+            }
 										}
 									});
 								}
@@ -56,12 +57,12 @@
 				});
 			}
 			
-			// Prevent zooming on iOS
-			document.addEventListener('touchmove', function (event) {
-				if (event.scale !== 1) { 
-					event.preventDefault(); 
-				}
-			}, { passive: false });
+            // Prevent zooming on iOS
+            document.addEventListener('touchmove', function (event) {
+                if (event.scale !== 1) { 
+                    event.preventDefault(); 
+                }
+            }, { passive: false });
 			
 			// Handle safe area insets for iOS
 			if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {

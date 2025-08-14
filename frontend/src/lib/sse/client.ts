@@ -26,6 +26,8 @@ export class SSEClient {
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private isManualClose = false;
+  private hasAuthContext = false; // set true when a valid user initiated the connection
+  private readyStatePoll: NodeJS.Timeout | null = null;
 
   // Svelte stores for reactive updates
   public connectionStatus: Writable<ConnectionStatus> = writable('disconnected');
@@ -52,11 +54,14 @@ export class SSEClient {
   public connect(user?: SessionUser): void {
     if (!browser) return;
 
-    // Try to read a session for diagnostics, but allow cookie-based connection even if not readable
-    const sessionId = this.getSessionId();
-    if (!sessionId) {
-      console.log('[SSE] No readable session ID; attempting cookie-based SSE connection');
+    // Require an authenticated context to start SSE. Avoid anonymous 401 loops.
+    if (!user && !this.hasAuthContext) {
+      // No user context provided and we haven't connected with auth before
+      this.connectionStatus.set('disconnected');
+      return;
     }
+    // Mark that we have an auth context once a user connects
+    if (user) this.hasAuthContext = true;
 
     this.isManualClose = false;
     this.connectionStatus.set('connecting');
@@ -72,6 +77,7 @@ export class SSEClient {
 
       this.setupEventListeners();
       this.startHeartbeat();
+      this.startReadyStatePoll();
 
     } catch (error) {
       console.error('[SSE] Failed to create EventSource:', error);
@@ -359,12 +365,40 @@ export class SSEClient {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+
+    if (this.readyStatePoll) {
+      clearInterval(this.readyStatePoll);
+      this.readyStatePoll = null;
+    }
   }
 
   private handleError(message: string): void {
     console.error('SSE Error:', message);
     this.errorMessage.set(message);
     this.connectionStatus.set('error');
+  }
+
+  private startReadyStatePoll(): void {
+    if (!browser) return;
+    if (this.readyStatePoll) {
+      clearInterval(this.readyStatePoll);
+      this.readyStatePoll = null;
+    }
+
+    this.readyStatePoll = setInterval(() => {
+      if (!this.eventSource) return;
+      // 0=CONNECTING, 1=OPEN, 2=CLOSED
+      const state = (this.eventSource as any).readyState;
+      if (state === 1 && this.getConnectionStatus() !== 'connected') {
+        console.log('[SSE] ReadyState OPEN detected; marking connected');
+        this.connectionStatus.set('connected');
+        this.errorMessage.set(null);
+        if (this.readyStatePoll) {
+          clearInterval(this.readyStatePoll);
+          this.readyStatePoll = null;
+        }
+      }
+    }, 500);
   }
 }
 
