@@ -50,15 +50,14 @@ async fn main() -> anyhow::Result<()> {
     // Build Redis session store
     let redis_store = Arc::new(crate::services::RedisSessionStore::new(&config.redis_url)?);
 
-    // Build session state (SSE disabled)
+    // Build session state
     let session_state = crate::middleware::session::SessionState {
         redis_store: redis_store.clone(),
         db_pool: database.pool.clone(),
         config: crate::services::SessionConfig::default(),
     };
-    // Start background tasks (without SSE tasks)
-    let background_task_manager =
-        BackgroundTaskManager::new(session_state.clone(), /* no sse manager */);
+    // Start background tasks
+    let background_task_manager = BackgroundTaskManager::new(session_state.clone());
     background_task_manager.start_all_tasks().await;
 
     // Build the application with session middleware
@@ -105,7 +104,6 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting Trackivity server on {}", addr);
     tracing::info!("Session-based authentication enabled");
     tracing::info!("Redis session store configured");
-    tracing::info!("SSE disabled in this build");
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;

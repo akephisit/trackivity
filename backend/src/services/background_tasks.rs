@@ -30,7 +30,6 @@ impl BackgroundTaskManager {
             database_session_sync_task(sync_session_state).await;
         });
 
-        // SSE-related tasks removed
 
         // Session activity monitoring task
         let monitoring_session_state = session_state.clone();
@@ -92,7 +91,6 @@ async fn database_session_sync_task(session_state: SessionState) {
     }
 }
 
-// SSE-related helper tasks removed
 
 // Task 5: Monitor session activity patterns
 async fn session_activity_monitoring_task(session_state: SessionState) {
@@ -189,7 +187,6 @@ async fn sync_database_sessions(session_state: &SessionState) -> Result<usize, a
     Ok(synced_count)
 }
 
-// notify_expiring_sessions removed (SSE disabled)
 
 #[derive(Debug)]
 struct SessionActivityStats {

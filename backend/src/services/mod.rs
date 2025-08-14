@@ -5,7 +5,6 @@ pub mod background_tasks;
 pub mod email_service;
 pub mod redis_session;
 pub mod session;
-pub mod subscription_tracker;
 pub mod user;
 
 pub use auth::*;

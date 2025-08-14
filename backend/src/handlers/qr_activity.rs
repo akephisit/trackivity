@@ -272,33 +272,6 @@ pub async fn qr_checkin(
                         "message": "User checked in successfully"
                     });
 
-                    // Send SSE notification for activity check-in
-                    if let Some(sse_manager) = &session_state.sse_manager {
-                        let notification_data = serde_json::json!({
-                            "activity_id": activity_id,
-                            "activity_title": activity.title,
-                            "user_name": format!("{} {}", user_data.first_name, user_data.last_name),
-                            "student_id": user_data.student_id,
-                            "action": "checked_in",
-                            "checked_in_at": checked_in_at
-                        });
-
-                        // SSE disabled
-                        let sse_message = SseMessageBuilder::new(
-                            SseEventType::ActivityCheckedIn,
-                            notification_data,
-                        )
-                        .with_permissions(vec!["ManageActivities".to_string(), "ViewParticipations".to_string()])
-                        .with_priority(MessagePriority::Normal);
-
-                        let final_message = if let Some(faculty_id) = activity.faculty_id {
-                            sse_message.to_faculty(faculty_id).build()
-                        } else {
-                            sse_message.build()
-                        };
-
-                        let _ = sse_manager.send_message(final_message).await;
-                    }
                     
                     Ok(Json(response))
                 }
@@ -344,33 +317,6 @@ pub async fn qr_checkin(
                         "message": "User registered and checked in successfully"
                     });
 
-                    // Send SSE notification for new registration and check-in
-                    if let Some(sse_manager) = &session_state.sse_manager {
-                        let notification_data = serde_json::json!({
-                            "activity_id": activity_id,
-                            "activity_title": activity.title,
-                            "user_name": format!("{} {}", user_data.first_name, user_data.last_name),
-                            "student_id": user_data.student_id,
-                            "action": "registered_and_checked_in",
-                            "checked_in_at": checked_in_at
-                        });
-
-                        // SSE disabled
-                        let sse_message = SseMessageBuilder::new(
-                            SseEventType::ActivityCheckedIn,
-                            notification_data,
-                        )
-                        .with_permissions(vec!["ManageActivities".to_string(), "ViewParticipations".to_string()])
-                        .with_priority(MessagePriority::Normal);
-
-                        let final_message = if let Some(faculty_id) = activity.faculty_id {
-                            sse_message.to_faculty(faculty_id).build()
-                        } else {
-                            sse_message.build()
-                        };
-
-                        let _ = sse_manager.send_message(final_message).await;
-                    }
 
                     Ok(Json(response))
                 }

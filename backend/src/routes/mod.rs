@@ -140,7 +140,6 @@ pub fn create_routes() -> Router<SessionState> {
             "/api/admin/session-management/faculty/{faculty_id}/logout",
             post(admin_session_mgmt::force_logout_faculty_sessions),
         )
-        // SSE removed
         // Health check
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
