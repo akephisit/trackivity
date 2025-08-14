@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow};
 // chrono imports removed as DateTime and Utc are unused in this module
 use hmac::{Hmac, Mac};
 use qrcode::QrCode;
+use qrcode::render::svg as qrs_svg;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -131,6 +132,18 @@ pub fn generate_qr_code(data: &str) -> Result<String> {
         .build();
 
     Ok(image)
+}
+
+/// Render QR code as SVG string for client display
+pub fn render_qr_svg(data: &str, size: u32) -> Result<String> {
+    let code = QrCode::new(data.as_bytes())?;
+    let svg = code
+        .render::<qrs_svg::Color>()
+        .min_dimensions(size, size)
+        .dark_color(qrs_svg::Color("#000"))
+        .light_color(qrs_svg::Color("#fff"))
+        .build();
+    Ok(svg)
 }
 
 /// สร้าง unique identifier สำหรับ QR Code (UUID)

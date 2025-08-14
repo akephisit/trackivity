@@ -63,11 +63,17 @@ pub async fn generate_user_qr(
                 &user_data.qr_secret
             ) {
                 Ok(qr_response) => {
+                    // Render SVG for client to display proper QR without client-side lib
+                    let qr_svg = match crate::utils::qr::render_qr_svg(&qr_response.qr_data, 256) {
+                        Ok(svg) => Some(svg),
+                        Err(_) => None,
+                    };
                     let response = json!({
                         "status": "success",
                         "data": {
                             "qr_data": qr_response.qr_data,
                             "expires_at": qr_response.expires_at,
+                            "qr_svg": qr_svg,
                             "user_info": {
                                 "student_id": user_data.student_id,
                                 "name": format!("{} {}", user_data.first_name, user_data.last_name)

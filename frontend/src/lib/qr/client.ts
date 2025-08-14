@@ -270,6 +270,16 @@ export class QRClient {
           usage_count: 0,
           device_fingerprint: generateDeviceFingerprint()
         };
+
+        // If backend supplies SVG, prefer it over placeholder canvas
+        if (payload.qr_svg && typeof payload.qr_svg === 'string') {
+          const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(payload.qr_svg)}`;
+          this.qrCode.set(qrCode);
+          this.qrDataURL.set(svgDataUrl);
+          this.status.set('ready');
+          this.scheduleRefresh();
+          return;
+        }
       } catch (apiError) {
         // Fallback to offline generation
         console.warn('API generation failed, using offline mode:', apiError);
