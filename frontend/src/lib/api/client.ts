@@ -338,16 +338,21 @@ export class ApiClient {
   }
 
   async logout(): Promise<ApiResponse<void>> {
+    // Use a lightweight, resilient call to avoid UI blocking
     try {
-      const response = await this.post<void>('/api/auth/logout');
-      
-      // No client-side session storage to clear
-      
-      return response;
-    } catch (error) {
-      // No client-side session storage to clear
-      throw error;
-    }
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 5000);
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+        keepalive: true,
+        signal: controller.signal
+      }).catch(() => {});
+      clearTimeout(t);
+    } catch (_) {}
+    // Always return success to the caller; server cleanup is idempotent
+    return { success: true } as ApiResponse<void>;
   }
 
   async me(): Promise<ApiResponse<SessionUser>> {

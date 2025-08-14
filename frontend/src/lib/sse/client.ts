@@ -89,6 +89,7 @@ export class SSEClient {
     this.isManualClose = true;
     this.cleanup();
     this.connectionStatus.set('disconnected');
+    this.hasAuthContext = false;
   }
 
   public reconnect(): void {

@@ -37,6 +37,7 @@ function createAuthStore() {
   // Deduplicate concurrent refreshUser() calls and avoid rapid repeats
   let inflightMe: Promise<SessionUser | null> | null = null;
   let lastProbeAt = 0;
+  let isLoggingOut = false;
 
   return {
     subscribe,
@@ -114,7 +115,13 @@ function createAuthStore() {
       update(state => ({ ...state, isLoading: true }));
 
       try {
-        await apiClient.logout();
+        // Proactively disconnect SSE to avoid interference during logout
+        sseClient.disconnect();
+        // Use short-timeout logout; do not block UI if it fails
+        isLoggingOut = true;
+        await apiClient.logout().catch((err) => {
+          console.error('Logout request failed (ignored):', err);
+        });
       } catch (error) {
         console.error('Logout error:', error);
       }
@@ -122,7 +129,7 @@ function createAuthStore() {
       // Clear local state
       update(() => ({ ...initialState }));
       
-      // Disconnect SSE
+      // Ensure SSE remains disconnected
       sseClient.disconnect();
 
       // No client-side session storage to clear
@@ -154,7 +161,7 @@ function createAuthStore() {
             }));
 
             // Connect SSE if not already connected and user is authenticated
-            if (!sseClient.isConnected()) {
+            if (!isLoggingOut && !sseClient.isConnected()) {
               console.log('[Auth] Connecting SSE for existing session...');
               sseClient.connect(user);
             }
@@ -344,8 +351,7 @@ if (browser) {
   console.log('[Auth] Probing server session...');
   auth.refreshUser().then(user => {
     if (user && !sseClient.isConnected()) {
-      console.log('[Auth] User authenticated, connecting SSE...');
-      sseClient.connect(user);
+      console.log('[Auth] User authenticated');
     } else if (!user) {
       console.log('[Auth] No active session on server');
     }
