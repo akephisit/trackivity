@@ -36,7 +36,6 @@ function createAuthStore() {
   // Deduplicate concurrent refreshUser() calls and avoid rapid repeats
   let inflightMe: Promise<SessionUser | null> | null = null;
   let lastProbeAt = 0;
-  let isLoggingOut = false;
 
   return {
     subscribe,
@@ -113,9 +112,7 @@ function createAuthStore() {
       update(state => ({ ...state, isLoading: true }));
 
       try {
-        // SSE disabled
         // Use short-timeout logout; do not block UI if it fails
-        isLoggingOut = true;
         await apiClient.logout().catch((err) => {
           console.error('Logout request failed (ignored):', err);
         });
@@ -342,9 +339,9 @@ if (browser) {
   // Always probe server for an existing httpOnly session
   console.log('[Auth] Probing server session...');
   auth.refreshUser().then(user => {
-    if (user && !sseClient.isConnected()) {
+    if (user) {
       console.log('[Auth] User authenticated');
-    } else if (!user) {
+    } else {
       console.log('[Auth] No active session on server');
     }
   });
