@@ -814,10 +814,10 @@ pub struct SessionConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
-            default_expiry_hours: 24,     // 24 hours default
+            default_expiry_hours: 2,      // 2 hours default for inactivity timeout
             max_sessions_per_user: 5,     // Max 5 concurrent sessions
             remember_me_expiry_days: 30,  // 30 days for remember me
-            cleanup_interval_minutes: 15, // Cleanup every 15 minutes
+            cleanup_interval_minutes: 5,  // Cleanup every 5 minutes for faster cleanup
         }
     }
 }

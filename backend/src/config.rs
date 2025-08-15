@@ -27,7 +27,7 @@ impl Config {
             session_secret: std::env::var("SESSION_SECRET")
                 .unwrap_or_else(|_| "your-secret-key-change-in-production".to_string()),
             session_max_age: std::env::var("SESSION_MAX_AGE")
-                .unwrap_or_else(|_| "2592000".to_string()) // 30 days
+                .unwrap_or_else(|_| "7200".to_string()) // 2 hours (7200 seconds)
                 .parse()?,
             bcrypt_cost: std::env::var("BCRYPT_COST")
                 .unwrap_or_else(|_| "12".to_string())

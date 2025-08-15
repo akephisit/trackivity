@@ -51,7 +51,7 @@ impl BackgroundTaskManager {
 async fn session_cleanup_task(session_state: SessionState) {
     let mut interval = interval(Duration::from_secs(300)); // Every 5 minutes
 
-    tracing::info!("Started session cleanup task");
+    tracing::info!("Started session cleanup task (every 5 minutes for 2-hour inactivity timeout)");
 
     loop {
         interval.tick().await;
