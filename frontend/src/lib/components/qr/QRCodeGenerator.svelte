@@ -35,11 +35,11 @@
   let timeUntilExpiry = 0;
   let expiryTimer: NodeJS.Timeout | null = null;
   
-  // Size configurations
+  // Size configurations - responsive classes
   const sizeConfig = {
-    small: { width: '200px', height: '200px' },
-    medium: { width: '256px', height: '256px' },
-    large: { width: '320px', height: '320px' }
+    small: 'w-48 h-48 max-w-[85vw] max-h-[85vw]',
+    medium: 'w-56 h-56 max-w-[80vw] max-h-[80vw]',
+    large: 'w-64 h-64 max-w-[75vw] max-h-[75vw] sm:w-80 sm:h-80 md:w-96 md:h-96'
   };
 
   // Status configurations
@@ -151,7 +151,7 @@
   $: isExpiringSoon = timeUntilExpiry > 0 && timeUntilExpiry <= 60; // Less than 1 minute
 </script>
 
-<Card class="w-fit mx-auto">
+<Card class="w-full max-w-sm mx-auto md:max-w-md">
   <CardHeader class="text-center">
     <CardTitle class="flex items-center justify-center gap-2">
       <IconQrcode class="size-5" />
@@ -173,10 +173,8 @@
 
   <CardContent class="space-y-4">
     <!-- QR Code Display -->
-    <div 
-      class="flex items-center justify-center p-4 bg-white rounded-lg border-2 border-dashed border-muted transition-all duration-300"
-      style="width: {sizeConfig[size].width}; height: {sizeConfig[size].height};"
-    >
+    <div class="flex items-center justify-center p-2 bg-white rounded-lg border-2 border-dashed border-muted transition-all duration-300">
+      <div class="flex items-center justify-center {sizeConfig[size]}">
       {#if $status === 'generating'}
         <div class="space-y-4">
           <Skeleton class="w-full h-32 rounded" />
@@ -204,6 +202,7 @@
           <p class="text-sm">กดปุ่มเพื่อสร้าง QR Code</p>
         </div>
       {/if}
+      </div>
     </div>
 
     <!-- Error Alert -->

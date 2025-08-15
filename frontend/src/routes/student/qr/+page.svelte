@@ -112,7 +112,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-6 p-4 sm:p-6">
 	<!-- Header -->
 	<div class="text-center space-y-2">
 		<h1 class="text-2xl lg:text-3xl font-bold">QR Code ของฉัน</h1>
@@ -244,22 +244,15 @@
 
 	<!-- QR Code Display -->
 	{#if $qrCode && $qrStatus === 'ready'}
-		<Card class="max-w-md mx-auto">
-			<CardHeader>
-				<CardTitle class="text-center">QR Code ของคุณ</CardTitle>
-			</CardHeader>
-			<CardContent class="space-y-4">
-				<div class="flex justify-center p-4 bg-white rounded-lg">
-					<QRCodeGenerator size="large" />
-				</div>
-				<div class="text-center text-xs text-muted-foreground space-y-1">
-					<p>ID: <span class="font-mono">{$qrCode.id}</span></p>
-					<p class="text-muted-foreground/70">
-						แสดง QR Code นี้ให้เจ้าหน้าที่สแกนเพื่อเข้าร่วมกิจกรรม
-					</p>
-				</div>
-			</CardContent>
-		</Card>
+		<div class="flex justify-center">
+			<QRCodeGenerator size="large" showStatus={false} />
+		</div>
+		<div class="text-center text-xs text-muted-foreground space-y-1">
+			<p>ID: <span class="font-mono">{$qrCode.id}</span></p>
+			<p class="text-muted-foreground/70">
+				แสดง QR Code นี้ให้เจ้าหน้าที่สแกนเพื่อเข้าร่วมกิจกรรม
+			</p>
+		</div>
 	{/if}
 
 	<!-- Instructions -->
