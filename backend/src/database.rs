@@ -65,10 +65,13 @@ impl Database {
             sqlx::migrate!("./migrations").run(&self.pool).await?;
             tracing::info!("Database migrations completed successfully");
         } else {
-            tracing::info!("Database already initialized. Skipping migrations.");
+            tracing::info!("Database already initialized. Running any pending migrations...");
+            sqlx::migrate!("./migrations").run(&self.pool).await?;
+            tracing::info!("Migration check completed successfully");
         }
         Ok(())
     }
+
 
     /// Force run migrations (for manual migration)
     pub async fn migrate(&self) -> Result<()> {

@@ -2349,3 +2349,191 @@ pub async fn bulk_admin_operations(
 
     Ok(Json(response))
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateAdminActivityRequest {
+    pub activity_name: String,
+    pub description: Option<String>,
+    pub start_date: String,
+    pub end_date: String,
+    pub start_time: String,
+    pub end_time: String,
+    pub activity_type: String,
+    pub location: String,
+    pub max_participants: Option<i32>,
+    pub organizer: String,
+    pub eligible_faculties: Vec<Uuid>,
+    pub academic_year: String,
+}
+
+/// Create new activity via admin interface with enhanced fields
+pub async fn create_admin_activity(
+    State(session_state): State<SessionState>,
+    admin: FacultyAdminUser,
+    Json(request): Json<CreateAdminActivityRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Validate activity type
+    let valid_activity_types = vec!["Academic", "Sports", "Cultural", "Social", "Other"];
+    if !valid_activity_types.contains(&request.activity_type.as_str()) {
+        let error_response = json!({
+            "status": "error",
+            "message": "ประเภทกิจกรรมไม่ถูกต้อง"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    // Parse and validate dates
+    let start_date = match chrono::NaiveDate::parse_from_str(&request.start_date, "%Y-%m-%d") {
+        Ok(date) => date,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "รูปแบบวันที่เริ่มต้นไม่ถูกต้อง"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    let end_date = match chrono::NaiveDate::parse_from_str(&request.end_date, "%Y-%m-%d") {
+        Ok(date) => date,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "รูปแบบวันที่สิ้นสุดไม่ถูกต้อง"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    // Parse and validate times
+    let start_time = match chrono::NaiveTime::parse_from_str(&request.start_time, "%H:%M") {
+        Ok(time) => time,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "รูปแบบเวลาเริ่มต้นไม่ถูกต้อง"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    let end_time = match chrono::NaiveTime::parse_from_str(&request.end_time, "%H:%M") {
+        Ok(time) => time,
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "รูปแบบเวลาสิ้นสุดไม่ถูกต้อง"
+            });
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    };
+
+    // Combine date and time for start_time and end_time
+    let start_datetime = start_date.and_time(start_time).and_utc();
+    let end_datetime = end_date.and_time(end_time).and_utc();
+
+    // Validate time range
+    if start_datetime >= end_datetime {
+        let error_response = json!({
+            "status": "error",
+            "message": "เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    // For faculty admins, set faculty_id to their own faculty
+    // For super admins, we'll need to determine faculty based on eligible_faculties
+    let faculty_id = match admin.admin_role.admin_level {
+        crate::models::admin_role::AdminLevel::SuperAdmin => {
+            // For super admin, use the first eligible faculty if any
+            request.eligible_faculties.first().copied()
+        }
+        _ => admin.admin_role.faculty_id
+    };
+
+    // Convert eligible_faculties to JSONB format
+    let eligible_faculties_json = serde_json::to_value(&request.eligible_faculties)
+        .map_err(|_| {
+            let error_response = json!({
+                "status": "error",
+                "message": "รูปแบบคณะที่มีสิทธิ์ไม่ถูกต้อง"
+            });
+            (StatusCode::BAD_REQUEST, Json(error_response))
+        })?;
+
+    // Get user_id from admin
+    let user_id = admin.session_user.user_id;
+
+    // Create the activity with enhanced fields
+    let create_result = sqlx::query(
+        r#"
+        INSERT INTO activities (
+            title, description, location, start_time, end_time, max_participants, 
+            faculty_id, department_id, created_by, academic_year, organizer, 
+            eligible_faculties, activity_type, start_date, end_date, 
+            start_time_only, end_time_only
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        RETURNING id, title, description, location, start_time, end_time, max_participants, 
+                  status, faculty_id, department_id, created_by, created_at, updated_at,
+                  academic_year, organizer, eligible_faculties, activity_type
+        "#
+    )
+    .bind(&request.activity_name)  // title
+    .bind(request.description.unwrap_or_default())  // description
+    .bind(&request.location)  // location
+    .bind(start_datetime)  // start_time
+    .bind(end_datetime)  // end_time
+    .bind(request.max_participants)  // max_participants
+    .bind(faculty_id)  // faculty_id
+    .bind(user_id)  // created_by
+    .bind(&request.academic_year)  // academic_year
+    .bind(&request.organizer)  // organizer
+    .bind(&eligible_faculties_json)  // eligible_faculties
+    .bind(&request.activity_type)  // activity_type
+    .bind(start_date)  // start_date
+    .bind(end_date)  // end_date
+    .bind(start_time)  // start_time_only
+    .bind(end_time)  // end_time_only
+    .fetch_one(&session_state.db_pool)
+    .await;
+
+    match create_result {
+        Ok(row) => {
+            let activity = json!({
+                "id": row.get::<Uuid, _>("id"),
+                "title": row.get::<String, _>("title"),
+                "description": row.get::<String, _>("description"),
+                "location": row.get::<String, _>("location"),
+                "start_time": row.get::<DateTime<Utc>, _>("start_time"),
+                "end_time": row.get::<DateTime<Utc>, _>("end_time"),
+                "max_participants": row.get::<Option<i32>, _>("max_participants"),
+                "status": row.get::<String, _>("status"),
+                "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
+                "department_id": row.get::<Option<Uuid>, _>("department_id"),
+                "created_by": row.get::<Uuid, _>("created_by"),
+                "created_at": row.get::<DateTime<Utc>, _>("created_at"),
+                "updated_at": row.get::<DateTime<Utc>, _>("updated_at"),
+                "academic_year": row.get::<Option<String>, _>("academic_year"),
+                "organizer": row.get::<Option<String>, _>("organizer"),
+                "eligible_faculties": row.get::<Option<serde_json::Value>, _>("eligible_faculties"),
+                "activity_type": row.get::<Option<String>, _>("activity_type")
+            });
+
+            let response = json!({
+                "status": "success",
+                "data": activity,
+                "message": "สร้างกิจกรรมสำเร็จ"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "เกิดข้อผิดพลาดในการสร้างกิจกรรม"
+            });
+            eprintln!("Database error creating activity: {}", e);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
