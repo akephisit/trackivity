@@ -257,6 +257,7 @@
 							<Form.Control>
 								{#snippet children({ props })}
 									<Label for={props.id} class="text-base font-medium">ปีการศึกษา *</Label>
+									<input type="hidden" name="academic_year" bind:value={$formData.academic_year} />
 									<Select.Root 
 										type="single" 
 										bind:value={selectedAcademicYear} 
