@@ -13,7 +13,9 @@ const departmentCreateSchema = z.object({
 	description: z.string().optional(),
 	head_name: z.string().optional(),
 	head_email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง').optional().or(z.literal('')),
-	status: z.boolean().default(true)
+	status: z.boolean().default(true),
+	// สำหรับ SuperAdmin ต้องเลือกคณะ
+	faculty_id: z.string().uuid('รหัสคณะไม่ถูกต้อง').optional()
 });
 
 const departmentUpdateSchema = z.object({
@@ -67,6 +69,18 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 			}
 		}
 
+		// If SuperAdmin, load faculties list for selection
+		let faculties: Faculty[] | null = null;
+		if (admin_role?.admin_level === 'SuperAdmin') {
+			const facRes = await fetch(`/api/admin/faculties`);
+			if (facRes.ok) {
+				const facData = await facRes.json();
+				if (facData.status === 'success') {
+					faculties = facData.data.faculties || [];
+				}
+			}
+		}
+
 		// Create forms
 		const createForm = await superValidate(zod(departmentCreateSchema));
 		const updateForm = await superValidate(zod(departmentUpdateSchema));
@@ -76,7 +90,8 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 			currentFaculty,
 			createForm,
 			updateForm,
-			userRole: admin_role?.admin_level || 'RegularAdmin'
+			userRole: admin_role?.admin_level || 'RegularAdmin',
+			faculties
 		};
 	} catch (error) {
 		console.error('Failed to load departments data:', error);
@@ -85,7 +100,8 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 			currentFaculty: null,
 			createForm: await superValidate(zod(departmentCreateSchema)),
 			updateForm: await superValidate(zod(departmentUpdateSchema)),
-			userRole: admin_role?.admin_level || 'RegularAdmin'
+			userRole: admin_role?.admin_level || 'RegularAdmin',
+			faculties: null
 		};
 	}
 };
@@ -111,10 +127,20 @@ export const actions: Actions = {
 		}
 
 		// Determine the API endpoint based on user role
-        let apiEndpoint = `/api/departments`;
-		if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
-			apiEndpoint = `/api/faculties/${admin_role.faculty_id}/departments`;
-		}
+        // Determine target faculty
+        let targetFacultyId: string | null = null;
+        if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
+            targetFacultyId = admin_role.faculty_id;
+        } else {
+            // SuperAdmin must select a faculty in the form
+            const selected = (form.data as any).faculty_id as string | undefined;
+            if (!selected) {
+                return fail(400, { form, error: 'กรุณาเลือกคณะ' });
+            }
+            targetFacultyId = selected;
+        }
+
+        const apiEndpoint = `/api/faculties/${targetFacultyId}/departments`;
 
 		try {
             const response = await event.fetch(apiEndpoint, {
@@ -123,16 +149,23 @@ export const actions: Actions = {
                 body: JSON.stringify(form.data)
             });
 
-			const result = await response.json();
+            const contentType = response.headers.get('content-type') || '';
+            if (!response.ok) {
+                if (contentType.includes('application/json')) {
+                    const result = await response.json();
+                    return fail(response.status, { 
+                        form,
+                        error: result.message || result.error || 'เกิดข้อผิดพลาดในการสร้างภาควิชา'
+                    });
+                } else {
+                    const text = await response.text().catch(() => '');
+                    return fail(response.status, { form, error: text || 'เกิดข้อผิดพลาดในการสร้างภาควิชา' });
+                }
+            }
 
-			if (!response.ok) {
-				return fail(response.status, { 
-					form,
-					error: result.message || result.error || 'เกิดข้อผิดพลาดในการสร้างภาควิชา'
-				});
-			}
-
-			return { form, success: true };
+            // If OK, try to parse JSON but tolerate empty
+            try { await response.json(); } catch {}
+            return { form, success: true };
 		} catch (error) {
 			console.error('Failed to create department:', error);
 			return fail(500, { 

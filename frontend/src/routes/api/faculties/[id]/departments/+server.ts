@@ -94,3 +94,61 @@ export const GET: RequestHandler = async (event) => {
         throw error(500, 'Failed to fetch departments');
     }
 };
+
+export const POST: RequestHandler = async (event) => {
+    const { params } = event;
+    const facultyId = params.id;
+
+    try {
+        const user = await requireAdmin(event);
+
+        // FacultyAdmin can only create in their own faculty
+        if (user.admin_role?.admin_level === AdminLevel.FacultyAdmin && user.admin_role?.faculty_id !== facultyId) {
+            throw error(403, 'Access denied: You can only create departments in your faculty');
+        }
+
+        if (!PUBLIC_API_URL) {
+            console.error('PUBLIC_API_URL is not configured');
+            throw error(500, 'API configuration error');
+        }
+
+        const backendUrl = `${PUBLIC_API_URL}/api/faculties/${facultyId}/departments`;
+
+        // Pass-through body as-is (validated upstream via superforms)
+        const body = await event.request.text();
+
+        const response = await event.fetch(backendUrl, {
+            method: 'POST',
+            headers: {
+                'Cookie': `session_id=${event.cookies.get('session_id')}`,
+                'Content-Type': 'application/json'
+            },
+            body
+        });
+
+        const ct = response.headers.get('content-type') || '';
+        if (!response.ok) {
+            if (ct.includes('application/json')) {
+                const data = await response.json();
+                return json(data, { status: response.status });
+            } else {
+                const text = await response.text().catch(() => '');
+                return new Response(text || 'Department creation failed', { status: response.status });
+            }
+        }
+
+        if (ct.includes('application/json')) {
+            const data = await response.json();
+            return json(data, { status: response.status });
+        }
+
+        // No/invalid JSON: return empty success
+        return json({ success: true }, { status: response.status });
+    } catch (err: any) {
+        if (err.status) throw err;
+        if (err.name === 'TypeError' && err.message.includes('fetch')) {
+            throw error(503, 'Unable to connect to backend');
+        }
+        throw error(500, 'Failed to create department');
+    }
+};

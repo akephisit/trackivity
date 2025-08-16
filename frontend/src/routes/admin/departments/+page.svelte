@@ -50,7 +50,8 @@
 		description: z.string().optional(),
 		head_name: z.string().optional(),
 		head_email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง').optional().or(z.literal('')),
-		status: z.boolean().default(true)
+		status: z.boolean().default(true),
+		faculty_id: z.string().uuid('กรุณาเลือกคณะที่ถูกต้อง').optional()
 	});
 
 	// Forms
@@ -156,7 +157,8 @@
 			description: '',
 			head_name: '',
 			head_email: '',
-			status: true
+			status: true,
+			faculty_id: undefined
 		};
 		createDialogOpen = true;
 	}
@@ -744,7 +746,7 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
-			<Form.Field form={createForm} name="head_email">
+				<Form.Field form={createForm} name="head_email">
 				<Form.Control>
 					{#snippet children({ props })}
 						<Label for={props.id}>อีเมลหัวหน้าภาค (ไม่บังคับ)</Label>
@@ -759,6 +761,32 @@
 				</Form.Control>
 				<Form.FieldErrors />
 			</Form.Field>
+
+			{#if data.userRole !== 'FacultyAdmin'}
+				<Form.Field form={createForm} name="faculty_id">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Label for={props.id}>คณะ</Label>
+							<select
+								{...props}
+								bind:value={$createFormData.faculty_id}
+								class="w-full border rounded-md p-2 bg-background"
+								disabled={$createSubmitting}
+							>
+								<option value="" disabled selected>กรุณาเลือกคณะ</option>
+								{#if data.faculties}
+									{#each data.faculties as fac}
+										<option value={fac.id}>{fac.name}</option>
+									{/each}
+								{:else}
+									<option disabled>ไม่พบรายการคณะ</option>
+								{/if}
+							</select>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+			{/if}
 
 			<div class="flex items-center space-x-2">
 				<Switch bind:checked={$createFormData.status} disabled={$createSubmitting} />
