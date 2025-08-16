@@ -51,6 +51,10 @@
 		onResult: async ({ result }) => {
 			if (result.type === 'success') {
 				toast.success('สร้างกิจกรรมสำเร็จ');
+				// นำทางไปหน้ารายการโดยไม่ต้องพึ่ง query param
+				setTimeout(() => {
+					goto('/admin/activities');
+				}, 50);
 			} else if (result.type === 'failure') {
 				toast.error(result.data?.error || 'เกิดข้อผิดพลาดในการสร้างกิจกรรม');
 			}
@@ -68,11 +72,6 @@
 		{ value: 'Other', label: 'อื่นๆ', description: 'กิจกรรมประเภทอื่นๆ' }
 	];
 
-	// Faculty options from server data
-	console.log('Faculties data from server:', data.faculties);
-	console.log('Type of data.faculties:', typeof data.faculties);
-	console.log('Is array?', Array.isArray(data.faculties));
-	
 	// แก้ไขการ parse ข้อมูลคณะ
 	let actualFaculties = [];
 	if (data.faculties) {
@@ -82,13 +81,11 @@
 			actualFaculties = (data.faculties as any).faculties;
 		}
 	}
-	console.log('Actual faculties array:', actualFaculties);
-	
+
 	const facultyOptions = actualFaculties.map((faculty: any) => ({
 		value: faculty.id || faculty.faculty_id,
 		label: faculty.name || faculty.faculty_name
 	}));
-	console.log('Faculty options:', facultyOptions);
 
 	// Academic year options - generate +/- 2 years from current Buddhist year
 	function generateAcademicYearOptions() {

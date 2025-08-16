@@ -163,11 +163,11 @@ export const actions: Actions = {
 				});
 			}
 
-			// อ่าน response data
-			const result = await response.json();
+			// อ่าน response data (ignore content if not JSON)
+			try { await response.json(); } catch {}
 
-			// หากสำเร็จให้ redirect ไปหน้า activities list โดยตรง
-			throw redirect(303, '/admin/activities');
+			// ส่ง success ให้ client จัดการ toast และนำทางเอง (ไม่ใช้ query param)
+			return { form, success: true } as const;
 
 		} catch (error) {
 			// ส่งต่อ redirect object ของ SvelteKit โดยไม่ log เป็น error

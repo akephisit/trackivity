@@ -15,6 +15,7 @@
 		IconAward
 	} from '@tabler/icons-svelte/icons';
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import type { Activity } from '$lib/types/activity';
 
 	let { data } = $props();
@@ -93,8 +94,9 @@
 
 	function deleteActivity(activityId: string) {
 		// TODO: Implement delete functionality
-		console.log('Delete activity:', activityId);
+		toast.info('ฟังก์ชันลบยังไม่พร้อมใช้งาน');
 	}
+
 </script>
 
 <svelte:head>
@@ -272,7 +274,9 @@
 												<IconUsers class="h-3 w-3" />
 												<span>{activity.max_participants ? `0/${activity.max_participants}` : 'ไม่จำกัด'}</span>
 												{#if activity.require_score}
-													<IconAward class="h-3 w-3 text-yellow-500 ml-1" title="มีคะแนน" />
+														<span title="มีคะแนน">
+															<IconAward class="h-3 w-3 text-yellow-500 ml-1" />
+														</span>
 												{/if}
 											</div>
 										</Table.Cell>
