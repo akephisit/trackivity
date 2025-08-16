@@ -80,12 +80,8 @@ export const load: PageServerLoad = async (event) => {
 	let faculties: any[] = [];
 	try {
 		const response = await event.fetch('/api/faculties');
-		console.log('Faculties API response status:', response.status);
 		if (response.ok) {
 			const apiData = await response.json();
-			console.log('Faculties API response data:', apiData);
-			console.log('apiData.data:', apiData.data);
-			console.log('apiData itself:', apiData);
 			
 			// แก้ไขการ parse ให้ถูกต้อง - ตาม log structure: { data: { faculties: [...] } }
 			if (apiData.data && apiData.data.faculties && Array.isArray(apiData.data.faculties)) {
@@ -99,7 +95,6 @@ export const load: PageServerLoad = async (event) => {
 			} else {
 				faculties = [];
 			}
-			console.log('Final parsed faculties:', faculties);
 		} else {
 			console.error('Faculties API error:', response.status, response.statusText);
 		}
@@ -175,18 +170,13 @@ export const actions: Actions = {
 			throw redirect(303, '/admin/activities');
 
 		} catch (error) {
-			// ถ้าเป็น redirect ให้ส่งต่อไป
-			if (error instanceof Response && error.status === 303) {
-				throw error;
+			// ส่งต่อ redirect object ของ SvelteKit โดยไม่ log เป็น error
+			if (error && typeof error === 'object' && 'status' in error && 'location' in error) {
+				throw error as any;
 			}
-			
+
 			console.error('Error creating activity:', error);
-			
-			// สำหรับ error อื่นๆ
-			return fail(500, {
-				form,
-				error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์'
-			});
+			return fail(500, { form, error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
 		}
 	}
 };
