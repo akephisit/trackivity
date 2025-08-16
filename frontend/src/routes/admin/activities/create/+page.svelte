@@ -36,7 +36,7 @@
 		end_time: z.string().min(1, 'กรุณากรอกเวลาสิ้นสุด').regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'รูปแบบเวลาไม่ถูกต้อง'),
 		activity_type: z.enum(['Academic', 'Sports', 'Cultural', 'Social', 'Other']),
 		location: z.string().min(1, 'กรุณากรอกสถานที่').max(500, 'สถานที่ต้องไม่เกิน 500 ตัวอักษร'),
-		max_participants: z.coerce.number().int().min(1, 'จำนวนผู้เข้าร่วมต้องมากกว่า 0').optional().or(z.literal('')),
+		max_participants: z.string().optional(),
 		organizer: z.string().min(1, 'กรุณากรอกหน่วยงานที่จัดกิจกรรม').max(255, 'ชื่อหน่วยงานต้องไม่เกิน 255 ตัวอักษร'),
 		eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
 			const faculties = value.split(',').filter(f => f.trim() !== '');
@@ -282,6 +282,7 @@
 									<Form.Control>
 										{#snippet children({ props })}
 											<Label for={props.id} class="text-base font-medium">คณะที่สามารถเข้าร่วมได้ *</Label>
+											<input type="hidden" name="eligible_faculties" bind:value={$formData.eligible_faculties} />
 											<Select.Root 
 												type="multiple" 
 												bind:value={selectedFaculties} 
@@ -293,6 +294,7 @@
 															return option ? { value: option.value, label: option.label } : { value, label: value };
 														});
 														$formData.eligible_faculties = values.join(',');
+														console.log('Updated eligible_faculties:', $formData.eligible_faculties);
 													}
 												}}
 											>

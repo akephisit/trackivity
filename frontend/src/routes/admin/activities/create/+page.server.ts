@@ -24,7 +24,7 @@ const activityCreateSchema = z.object({
 		errorMap: () => ({ message: 'กรุณาเลือกประเภทกิจกรรม' })
 	}),
 	location: z.string().min(1, 'กรุณากรอกสถานที่').max(500, 'สถานที่ต้องไม่เกิน 500 ตัวอักษร'),
-	max_participants: z.coerce.number().int().min(1, 'จำนวนผู้เข้าร่วมต้องมากกว่า 0').optional().or(z.literal('')),
+	max_participants: z.string().optional(),
 	organizer: z.string().min(1, 'กรุณากรอกหน่วยงานที่จัดกิจกรรม').max(255, 'ชื่อหน่วยงานต้องไม่เกิน 255 ตัวอักษร'),
 	eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
 		const faculties = value.split(',').filter(f => f.trim() !== '');
@@ -69,7 +69,7 @@ export const load: PageServerLoad = async (event) => {
 		end_time: '17:00',
 		activity_type: 'Academic',
 		location: '',
-		max_participants: undefined,
+		max_participants: '',
 		organizer: '',
 		eligible_faculties: ''
 	};
@@ -141,7 +141,7 @@ export const actions: Actions = {
 				end_time: form.data.end_time,
 				activity_type: form.data.activity_type,
 				location: form.data.location,
-				max_participants: form.data.max_participants || undefined,
+				max_participants: form.data.max_participants ? parseInt(form.data.max_participants) : undefined,
 				organizer: form.data.organizer,
 				eligible_faculties: form.data.eligible_faculties
 			};
