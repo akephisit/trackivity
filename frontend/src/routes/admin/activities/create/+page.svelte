@@ -83,66 +83,16 @@
 	}
 	console.log('Actual faculties array:', actualFaculties);
 	
-	const facultyOptions = [
-		{ value: 'all', label: 'ทุกคณะ' },
-		...actualFaculties.map((faculty: any) => ({
-			value: faculty.id || faculty.faculty_id,
-			label: faculty.name || faculty.faculty_name
-		}))
-	];
+	const facultyOptions = actualFaculties.map((faculty: any) => ({
+		value: faculty.id || faculty.faculty_id,
+		label: faculty.name || faculty.faculty_name
+	}));
 	console.log('Faculty options:', facultyOptions);
 
 	// Selected values for selects
 	let selectedActivityType = $state<{ value: ActivityType; label: string } | undefined>(undefined);
 	let selectedFaculties = $state<{ value: string; label: string }[]>([]);
 
-	// Helper function สำหรับจัดการการเลือก "ทุกคณะ"
-	function handleFacultySelection(value: string) {
-		if (value === 'all') {
-			// ถ้าเลือก "ทุกคณะ"
-			const isAllSelected = selectedFaculties.some(f => f.value === 'all');
-			if (isAllSelected) {
-				// ถ้าเลือกอยู่แล้ว ให้ลบทั้งหมด
-				selectedFaculties = [];
-			} else {
-				// ถ้ายังไม่เลือก ให้เลือกทุกคณะ
-				selectedFaculties = facultyOptions.map(option => ({
-					value: option.value,
-					label: option.label
-				}));
-			}
-		} else {
-			// เลือกคณะอื่น
-			const isSelected = selectedFaculties.some(f => f.value === value);
-			if (isSelected) {
-				// ลบคณะที่เลือก และลบ "ทุกคณะ" ด้วย (ถ้ามี)
-				selectedFaculties = selectedFaculties.filter(f => f.value !== value && f.value !== 'all');
-			} else {
-				// เพิ่มคณะที่เลือก
-				const option = facultyOptions.find(opt => opt.value === value);
-				if (option) {
-					const newSelection = [...selectedFaculties, { value: option.value, label: option.label }];
-					
-					// ตรวจสอบว่าเลือกครบทุกคณะหรือไม่ (ยกเว้น "ทุกคณะ")
-					const nonAllOptions = facultyOptions.filter(opt => opt.value !== 'all');
-					const selectedNonAll = newSelection.filter(f => f.value !== 'all');
-					
-					if (selectedNonAll.length === nonAllOptions.length) {
-						// ถ้าเลือกครบแล้ว ให้เพิ่ม "ทุกคณะ" ด้วย
-						const allOption = facultyOptions.find(opt => opt.value === 'all');
-						if (allOption) {
-							newSelection.unshift({ value: allOption.value, label: allOption.label });
-						}
-					}
-					
-					selectedFaculties = newSelection;
-				}
-			}
-		}
-		
-		// อัปเดตค่าในฟอร์ม
-		$formData.eligible_faculties = selectedFaculties.map(f => f.value).join(',');
-	}
 
 
 	// Helper functions
@@ -337,25 +287,18 @@
 												bind:value={selectedFaculties} 
 												disabled={$submitting}
 												onValueChange={(values) => {
-													// หา value ที่เพิ่งถูกเลือกหรือยกเลิก
 													if (values && Array.isArray(values)) {
-														const currentValues = selectedFaculties.map(f => f.value);
-														const newValue = values.find(v => !currentValues.includes(v));
-														const removedValue = currentValues.find(v => !values.includes(v));
-														
-														if (newValue) {
-															handleFacultySelection(newValue);
-														} else if (removedValue) {
-															handleFacultySelection(removedValue);
-														}
+														selectedFaculties = values.map(value => {
+															const option = facultyOptions.find(opt => opt.value === value);
+															return option ? { value: option.value, label: option.label } : { value, label: value };
+														});
+														$formData.eligible_faculties = values.join(',');
 													}
 												}}
 											>
 												<Select.Trigger>
 													{#if selectedFaculties.length === 0}
 														เลือกคณะที่สามารถเข้าร่วมได้
-													{:else if selectedFaculties.some(f => f.value === 'all')}
-														ทุกคณะ
 													{:else if selectedFaculties.length === 1}
 														{selectedFaculties[0].label}
 													{:else}
