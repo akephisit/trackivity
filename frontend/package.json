@@ -61,6 +61,7 @@
 	},
 	"dependencies": {
 		"@types/node": "^24.2.0",
-		"date-fns": "^4.1.0"
+		"date-fns": "^4.1.0",
+		"jsqr": "^1.4.0"
 	}
 }

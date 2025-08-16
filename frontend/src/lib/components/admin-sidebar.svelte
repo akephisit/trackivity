@@ -15,7 +15,8 @@
 		IconSun,
 		IconMoon,
 		IconChevronDown,
-		IconChevronUp
+		IconChevronUp,
+		IconQrcode
 	} from '@tabler/icons-svelte/icons';
 	import { AdminLevel } from '$lib/types/admin';
 	import { mode, setMode } from 'mode-watcher';
@@ -54,6 +55,13 @@
 				href: '/admin',
 				icon: IconLayoutDashboard,
 				active: page.url.pathname === '/admin'
+			},
+			{
+				title: 'สแกน QR Code',
+				href: '/admin/qr-scanner',
+				icon: IconQrcode,
+				active: page.url.pathname.startsWith('/admin/qr-scanner'),
+				description: 'สแกน QR Code เพื่อบันทึกการเข้าร่วมกิจกรรม'
 			}
 		];
 

@@ -3,7 +3,7 @@ import { redirect } from '@sveltejs/kit';
 import type { SessionUser, Permission, AdminLevel } from '$lib/types';
 
 // Backend API base URL
-const API_BASE_URL = process.env.BACKEND_URL || 'http://localhost:3000';
+const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 // Session validation function
 async function validateSession(sessionId: string): Promise<SessionUser | null> {

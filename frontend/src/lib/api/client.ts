@@ -28,7 +28,7 @@ import type {
 // Use same-origin for browser; SvelteKit proxies /api/* to backend.
 const API_BASE_URL = browser 
   ? ''
-  : (process.env.BACKEND_URL || 'http://localhost:3000');
+  : (process.env.PUBLIC_API_URL || 'http://localhost:3000');
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
