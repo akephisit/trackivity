@@ -168,16 +168,23 @@ export const actions: Actions = {
 				});
 			}
 
-			// หากสำเร็จให้ redirect ไปหน้า activities list
-			throw redirect(303, '/admin/activities');
+			// อ่าน response data
+			const result = await response.json();
+
+			// ส่งกลับ success response พร้อม redirect flag
+			return {
+				form,
+				success: true,
+				redirect: '/admin/activities'
+			};
 
 		} catch (error) {
-			console.error('Error creating activity:', error);
-			
 			// ถ้าเป็น redirect ให้ส่งต่อไป
 			if (error instanceof Response && error.status === 303) {
 				throw error;
 			}
+			
+			console.error('Error creating activity:', error);
 			
 			// สำหรับ error อื่นๆ
 			return fail(500, {

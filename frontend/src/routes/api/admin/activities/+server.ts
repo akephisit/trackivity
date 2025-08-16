@@ -1,7 +1,7 @@
 import { requireFacultyAdmin } from '$lib/server/auth';
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { ActivityCreateData, ActivityApiResponse } from '$lib/types/activity';
+import type { ActivityApiResponse } from '$lib/types/activity';
 import { PUBLIC_API_URL } from '$env/static/public';
 
 /**
@@ -11,7 +11,7 @@ import { PUBLIC_API_URL } from '$env/static/public';
 export const POST: RequestHandler = async (event) => {
 	try {
 		// ตรวจสอบการ authentication - เฉพาะ FacultyAdmin หรือ SuperAdmin
-		const user = await requireFacultyAdmin(event);
+		await requireFacultyAdmin(event);
 		const sessionId = event.cookies.get('session_id');
 
 		if (!sessionId) {
@@ -74,24 +74,23 @@ export const POST: RequestHandler = async (event) => {
 			body.max_participants = maxParticipants;
 		}
 
-		// สร้างข้อมูลที่จะส่งไปยัง backend API
+		// แปลงข้อมูลให้ตรงกับ backend CreateActivityRequest
+		const startDateTime = new Date(`${body.start_date}T${body.start_time}:00`);
+		const endDateTime = new Date(`${body.end_date}T${body.end_time}:00`);
+		
 		const activityData: any = {
-			activity_name: body.activity_name.trim(),
-			description: body.description ? body.description.trim() : null,
-			start_date: body.start_date,
-			end_date: body.end_date,
-			start_time: body.start_time,
-			end_time: body.end_time,
-			activity_type: body.activity_type,
+			title: body.activity_name.trim(),
+			description: body.description ? body.description.trim() : "",
 			location: body.location.trim(),
+			start_time: startDateTime.toISOString(),
+			end_time: endDateTime.toISOString(),
 			max_participants: body.max_participants || null,
-			organizer: body.organizer.trim(),
-			eligible_faculties: body.eligible_faculties,
-			academic_year: body.academic_year
+			faculty_id: null, // จะต้องใส่ faculty_id ที่ถูกต้อง
+			department_id: null
 		};
 
 		// เรียก backend API เพื่อสร้างกิจกรรม
-		const response = await fetch(`${PUBLIC_API_URL}/api/admin/activities`, {
+		const response = await fetch(`${PUBLIC_API_URL}/api/activities`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -103,7 +102,7 @@ export const POST: RequestHandler = async (event) => {
 
 		if (!response.ok) {
 			const errorData = await response.json().catch(() => ({}));
-			const errorMessage = errorData.error || errorData.message || 'เกิดข้อผิดพลาดในการสร้างกิจกรรม';
+			const errorMessage = (errorData as any).error || (errorData as any).message || 'เกิดข้อผิดพลาดในการสร้างกิจกรรม';
 			
 			if (response.status === 401) {
 				throw error(401, 'ไม่มีสิทธิ์ในการสร้างกิจกรรม');

@@ -51,8 +51,26 @@
 		onResult: async ({ result }) => {
 			if (result.type === 'success') {
 				toast.success('สร้างกิจกรรมสำเร็จ');
+				// ตรวจสอบว่าต้อง redirect หรือไม่
+				console.log('Success result:', result);
+				console.log('Result data:', result.data);
+				
+				// ใช้ setTimeout เพื่อให้ toast แสดงก่อนแล้วค่อย redirect
+				setTimeout(() => {
+					const redirectUrl = result.data?.redirect || '/admin/activities';
+					console.log('Redirecting to:', redirectUrl);
+					
+					// ลองใช้ window.location.href แทน goto
+					window.location.href = redirectUrl;
+				}, 500);
 			} else if (result.type === 'failure') {
 				toast.error(result.data?.error || 'เกิดข้อผิดพลาดในการสร้างกิจกรรม');
+			}
+		},
+		onUpdated: ({ form: updatedForm }) => {
+			console.log('Form updated:', updatedForm);
+			if (updatedForm.valid && updatedForm.message) {
+				console.log('Form message:', updatedForm.message);
 			}
 		}
 	});
