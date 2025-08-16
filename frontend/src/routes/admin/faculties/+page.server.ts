@@ -59,7 +59,7 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, cookies }) => {
+	create: async ({ request, cookies, fetch }) => {
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -74,7 +74,11 @@ export const actions: Actions = {
 		try {
 			const response = await fetch(`/api/faculties`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 
+					'Content-Type': 'application/json',
+					'Cookie': `session_id=${sessionId}`,
+					'X-Session-ID': sessionId
+				},
 				body: JSON.stringify(form.data)
 			});
 
@@ -97,7 +101,7 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, cookies }) => {
+	update: async ({ request, cookies, fetch }) => {
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -116,7 +120,11 @@ export const actions: Actions = {
 		try {
 			const response = await fetch(`/api/faculties/${facultyId}`, {
 				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 
+					'Content-Type': 'application/json',
+					'Cookie': `session_id=${sessionId}`,
+					'X-Session-ID': sessionId
+				},
 				body: JSON.stringify(form.data)
 			});
 
@@ -139,7 +147,7 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, cookies }) => {
+	delete: async ({ request, cookies, fetch }) => {
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -151,6 +159,10 @@ export const actions: Actions = {
 		try {
 			const response = await fetch(`/api/faculties/${facultyId}`, {
 				method: 'DELETE',
+				headers: {
+					'Cookie': `session_id=${sessionId}`,
+					'X-Session-ID': sessionId
+				}
 			});
 
 			const result = await response.json();
@@ -170,7 +182,7 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, cookies }) => {
+	toggleStatus: async ({ request, cookies, fetch }) => {
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -182,6 +194,10 @@ export const actions: Actions = {
 		try {
 			const response = await fetch(`/api/faculties/${facultyId}/toggle-status`, {
 				method: 'PUT',
+				headers: {
+					'Cookie': `session_id=${sessionId}`,
+					'X-Session-ID': sessionId
+				}
 			});
 
 			const result = await response.json();
