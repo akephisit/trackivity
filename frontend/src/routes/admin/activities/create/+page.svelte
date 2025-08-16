@@ -29,14 +29,14 @@
 	// Validation schema (same as server)
 	const activityCreateSchema = z.object({
 		activity_name: z.string().min(1, 'กรุณากรอกชื่อกิจกรรม').max(255, 'ชื่อกิจกรรมต้องไม่เกิน 255 ตัวอักษร'),
-		description: z.string().min(1, 'กรุณากรอกรายละเอียดกิจกรรม').max(2000, 'รายละเอียดต้องไม่เกิน 2000 ตัวอักษร'),
+		description: z.string().max(2000, 'รายละเอียดต้องไม่เกิน 2000 ตัวอักษร').optional().or(z.literal('')),
 		start_date: z.string().min(1, 'กรุณาเลือกวันที่เริ่ม'),
 		end_date: z.string().min(1, 'กรุณาเลือกวันที่สิ้นสุด'),
 		start_time: z.string().min(1, 'กรุณากรอกเวลาเริ่ม').regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'รูปแบบเวลาไม่ถูกต้อง'),
 		end_time: z.string().min(1, 'กรุณากรอกเวลาสิ้นสุด').regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, 'รูปแบบเวลาไม่ถูกต้อง'),
 		activity_type: z.enum(['Academic', 'Sports', 'Cultural', 'Social', 'Other']),
 		location: z.string().min(1, 'กรุณากรอกสถานที่').max(500, 'สถานที่ต้องไม่เกิน 500 ตัวอักษร'),
-		max_participants: z.number().int().min(1, 'จำนวนผู้เข้าร่วมต้องมากกว่า 0').optional().or(z.literal('')),
+		max_participants: z.coerce.number().int().min(1, 'จำนวนผู้เข้าร่วมต้องมากกว่า 0').optional().or(z.literal('')),
 		organizer: z.string().min(1, 'กรุณากรอกหน่วยงานที่จัดกิจกรรม').max(255, 'ชื่อหน่วยงานต้องไม่เกิน 255 ตัวอักษร'),
 		eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
 			const faculties = value.split(',').filter(f => f.trim() !== '');
@@ -353,11 +353,11 @@
 							<Form.Field {form} name="description">
 								<Form.Control>
 									{#snippet children({ props })}
-										<Label for={props.id} class="text-base font-medium">รายละเอียดกิจกรรม *</Label>
+										<Label for={props.id} class="text-base font-medium">รายละเอียดกิจกรรม</Label>
 										<Textarea
 											{...props}
 											bind:value={$formData.description}
-											placeholder="อธิบายรายละเอียดของกิจกรรม วัตถุประสงค์ และสิ่งที่ผู้เข้าร่วมจะได้รับ"
+											placeholder="อธิบายรายละเอียดของกิจกรรม วัตถุประสงค์ และสิ่งที่ผู้เข้าร่วมจะได้รับ (ไม่บังคับ)"
 											disabled={$submitting}
 											rows={4}
 											class="text-base"
