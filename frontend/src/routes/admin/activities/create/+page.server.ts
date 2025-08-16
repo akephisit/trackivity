@@ -134,9 +134,9 @@ export const actions: Actions = {
 
 		try {
 			// เตรียมข้อมูลสำหรับส่งไป API
-			const activityData: ActivityCreateData = {
+			const activityData: any = {
 				activity_name: form.data.activity_name,
-				description: form.data.description || '',
+				description: form.data.description && form.data.description.trim() !== '' ? form.data.description : null,
 				start_date: form.data.start_date,
 				end_date: form.data.end_date,
 				start_time: form.data.start_time,

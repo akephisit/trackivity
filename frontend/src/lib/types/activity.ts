@@ -29,7 +29,7 @@ export interface Activity {
 
 export interface ActivityCreateData {
 	activity_name: string;
-	description: string;
+	description: string | null;
 	start_date: string;
 	end_date: string;
 	start_time: string;

@@ -24,7 +24,6 @@ export const POST: RequestHandler = async (event) => {
 		// Validate required fields
 		const requiredFields = [
 			'activity_name',
-			'description', 
 			'start_date',
 			'end_date',
 			'start_time',
@@ -32,7 +31,8 @@ export const POST: RequestHandler = async (event) => {
 			'activity_type',
 			'location',
 			'organizer',
-			'eligible_faculties'
+			'eligible_faculties',
+			'academic_year'
 		];
 
 		for (const field of requiredFields) {
@@ -75,9 +75,9 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		// สร้างข้อมูลที่จะส่งไปยัง backend API
-		const activityData: ActivityCreateData = {
+		const activityData: any = {
 			activity_name: body.activity_name.trim(),
-			description: body.description.trim(),
+			description: body.description ? body.description.trim() : null,
 			start_date: body.start_date,
 			end_date: body.end_date,
 			start_time: body.start_time,
@@ -86,7 +86,8 @@ export const POST: RequestHandler = async (event) => {
 			location: body.location.trim(),
 			max_participants: body.max_participants || null,
 			organizer: body.organizer.trim(),
-			eligible_faculties: body.eligible_faculties
+			eligible_faculties: body.eligible_faculties,
+			academic_year: body.academic_year
 		};
 
 		// เรียก backend API เพื่อสร้างกิจกรรม
