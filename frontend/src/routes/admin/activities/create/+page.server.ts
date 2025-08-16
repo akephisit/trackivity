@@ -171,12 +171,8 @@ export const actions: Actions = {
 			// อ่าน response data
 			const result = await response.json();
 
-			// ส่งกลับ success response พร้อม redirect flag
-			return {
-				form,
-				success: true,
-				redirect: '/admin/activities'
-			};
+			// หากสำเร็จให้ redirect ไปหน้า activities list โดยตรง
+			throw redirect(303, '/admin/activities');
 
 		} catch (error) {
 			// ถ้าเป็น redirect ให้ส่งต่อไป

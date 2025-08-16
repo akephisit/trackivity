@@ -51,26 +51,8 @@
 		onResult: async ({ result }) => {
 			if (result.type === 'success') {
 				toast.success('สร้างกิจกรรมสำเร็จ');
-				// ตรวจสอบว่าต้อง redirect หรือไม่
-				console.log('Success result:', result);
-				console.log('Result data:', result.data);
-				
-				// ใช้ setTimeout เพื่อให้ toast แสดงก่อนแล้วค่อย redirect
-				setTimeout(() => {
-					const redirectUrl = result.data?.redirect || '/admin/activities';
-					console.log('Redirecting to:', redirectUrl);
-					
-					// ลองใช้ window.location.href แทน goto
-					window.location.href = redirectUrl;
-				}, 500);
 			} else if (result.type === 'failure') {
 				toast.error(result.data?.error || 'เกิดข้อผิดพลาดในการสร้างกิจกรรม');
-			}
-		},
-		onUpdated: ({ form: updatedForm }) => {
-			console.log('Form updated:', updatedForm);
-			if (updatedForm.valid && updatedForm.message) {
-				console.log('Form message:', updatedForm.message);
 			}
 		}
 	});
@@ -96,8 +78,8 @@
 	if (data.faculties) {
 		if (Array.isArray(data.faculties)) {
 			actualFaculties = data.faculties;
-		} else if (data.faculties.faculties && Array.isArray(data.faculties.faculties)) {
-			actualFaculties = data.faculties.faculties;
+		} else if ((data.faculties as any).faculties && Array.isArray((data.faculties as any).faculties)) {
+			actualFaculties = (data.faculties as any).faculties;
 		}
 	}
 	console.log('Actual faculties array:', actualFaculties);
@@ -238,7 +220,7 @@
 											<Label for={props.id} class="text-base font-medium">ประเภทกิจกรรม *</Label>
 											<Select.Root 
 												type="single" 
-												bind:value={selectedActivityType} 
+												bind:value={selectedActivityType as any} 
 												disabled={$submitting}
 												onValueChange={(value) => {
 													const newType = value as ActivityType;
@@ -278,7 +260,7 @@
 									<input type="hidden" name="academic_year" bind:value={$formData.academic_year} />
 									<Select.Root 
 										type="single" 
-										bind:value={selectedAcademicYear} 
+										bind:value={selectedAcademicYear as any} 
 										disabled={$submitting}
 										onValueChange={(value) => {
 											if (value) {
@@ -356,12 +338,12 @@
 											<input type="hidden" name="eligible_faculties" bind:value={$formData.eligible_faculties} />
 											<Select.Root 
 												type="multiple" 
-												bind:value={selectedFaculties} 
+												bind:value={selectedFaculties as any} 
 												disabled={$submitting}
 												onValueChange={(values) => {
 													if (values && Array.isArray(values)) {
 														selectedFaculties = values.map(value => {
-															const option = facultyOptions.find(opt => opt.value === value);
+															const option = facultyOptions.find((opt: any) => opt.value === value);
 															return option ? { value: option.value, label: option.label } : { value, label: value };
 														});
 														$formData.eligible_faculties = values.join(',');
