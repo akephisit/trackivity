@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { apiClient, isApiSuccess } from '$lib/api/client';
 	import type { Activity } from '$lib/types';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -20,35 +18,15 @@
 		IconChevronRight
 	} from '@tabler/icons-svelte';
 
-	let activities: Activity[] = $state([]);
-	let filteredActivities: Activity[] = $state([]);
-	let loading = $state(true);
+	const { data } = $props<{ data: { activities: Activity[] } }>();
+	let activities: Activity[] = $state(data?.activities ?? []);
+	let filteredActivities: Activity[] = $state(activities);
+	let loading = $state(false);
 	let error: string | null = $state(null);
 	let searchQuery = $state('');
 	let selectedTab = $state('all');
 	let showFilters = $state(false);
 
-	onMount(async () => {
-		await loadActivities();
-	});
-
-	async function loadActivities() {
-		try {
-			loading = true;
-			error = null;
-			const response = await apiClient.getActivities({ per_page: 50 });
-			
-			if (isApiSuccess(response)) {
-				activities = response.data;
-				filteredActivities = activities;
-			}
-		} catch (err) {
-			console.error('Failed to load activities:', err);
-			error = 'ไม่สามารถโหลดข้อมูลกิจกรรมได้';
-		} finally {
-			loading = false;
-		}
-	}
 
 	function filterActivities() {
 		let filtered = activities;

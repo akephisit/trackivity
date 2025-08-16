@@ -1,6 +1,12 @@
 <script lang="ts">
 	import StudentDashboard from '$lib/components/dashboard/StudentDashboard.svelte';
 	import { currentUser } from '$lib/stores/auth';
+	import type { Activity } from '$lib/types';
+	const { data } = $props<{
+		recentActivities: Activity[];
+		participationHistory: any[];
+		stats: { totalParticipations: number; thisMonthParticipations: number; upcomingActivities: number };
+	}>();
 </script>
 
 <svelte:head>
@@ -19,4 +25,10 @@
 	</p>
 </div>
 
-<StudentDashboard />
+<StudentDashboard 
+	{...{ 
+		recentActivities: data.recentActivities, 
+		participationHistory: data.participationHistory, 
+		stats: data.stats 
+	}}
+/>

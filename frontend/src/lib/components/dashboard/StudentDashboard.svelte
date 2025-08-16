@@ -1,9 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { currentUser } from '$lib/stores/auth';
   import { useQRCode } from '$lib/qr/client';
-  import { apiClient, isApiSuccess } from '$lib/api/client';
-  import type { Activity, ActivityParticipation, QRCode } from '$lib/types';
+  import type { Activity, ActivityParticipation } from '$lib/types';
   
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
   import { Button } from '$lib/components/ui/button';
@@ -25,81 +23,30 @@
   } from '@tabler/icons-svelte';
 
   // Component state
-  let recentActivities: Activity[] = [];
-  let participationHistory: ActivityParticipation[] = [];
-  let stats = {
-    totalParticipations: 0,
-    thisMonthParticipations: 0,
-    upcomingActivities: 0
-  };
+  const {
+    recentActivities = [] as Activity[],
+    participationHistory = [] as ActivityParticipation[],
+    stats = {
+      totalParticipations: 0,
+      thisMonthParticipations: 0,
+      upcomingActivities: 0
+    }
+  } = $props<{
+    recentActivities: Activity[];
+    participationHistory: ActivityParticipation[];
+    stats: { totalParticipations: number; thisMonthParticipations: number; upcomingActivities: number };
+  }>();
   let loading = {
-    activities: true,
-    history: true,
-    stats: true
+    activities: false,
+    history: false,
+    stats: false
   };
   let error: string | null = null;
 
   // QR Code integration
   const { qrCode, status: qrStatus } = useQRCode();
 
-  onMount(async () => {
-    await Promise.all([
-      loadRecentActivities(),
-      loadParticipationHistory(),
-      loadStats()
-    ]);
-  });
-
-  async function loadRecentActivities() {
-    try {
-      loading.activities = true;
-      const response = await apiClient.getActivities({
-        per_page: 5,
-        active_only: true
-      });
-      
-      if (isApiSuccess(response)) {
-        recentActivities = response.data;
-      }
-    } catch (err) {
-      console.error('Failed to load activities:', err);
-      error = 'ไม่สามารถโหลดข้อมูลกิจกรรมได้';
-    } finally {
-      loading.activities = false;
-    }
-  }
-
-  async function loadParticipationHistory() {
-    try {
-      loading.history = true;
-      // This would need to be implemented in API client
-      // const response = await apiClient.getUserParticipations({ per_page: 5 });
-      // For now, using mock data
-      participationHistory = [];
-    } catch (err) {
-      console.error('Failed to load participation history:', err);
-    } finally {
-      loading.history = false;
-    }
-  }
-
-  async function loadStats() {
-    try {
-      loading.stats = true;
-      // This would need to be implemented in API client
-      // const response = await apiClient.getUserStats();
-      // For now, using mock data
-      stats = {
-        totalParticipations: 12,
-        thisMonthParticipations: 3,
-        upcomingActivities: 2
-      };
-    } catch (err) {
-      console.error('Failed to load stats:', err);
-    } finally {
-      loading.stats = false;
-    }
-  }
+  // Data is passed from server; QR related UI stays client-side
 
   function formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('th-TH', {
