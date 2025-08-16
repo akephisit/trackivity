@@ -2,7 +2,6 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-	import { Button } from '$lib/components/ui/button';
 	import { 
 		IconLayoutDashboard, 
 		IconUsers, 
@@ -14,9 +13,8 @@
 		IconUserCog,
 		IconSun,
 		IconMoon,
-		IconChevronDown,
-		IconChevronUp,
-		IconQrcode
+		IconQrcode,
+		IconCalendarEvent
 	} from '@tabler/icons-svelte/icons';
 	import { AdminLevel } from '$lib/types/admin';
 	import { mode, setMode } from 'mode-watcher';
@@ -55,6 +53,13 @@
 				href: '/admin',
 				icon: IconLayoutDashboard,
 				active: page.url.pathname === '/admin'
+			},
+			{
+				title: 'จัดการกิจกรรม',
+				href: '/admin/activities',
+				icon: IconCalendarEvent,
+				active: page.url.pathname.startsWith('/admin/activities'),
+				description: 'จัดการกิจกรรมและการเข้าร่วม'
 			},
 			{
 				title: 'สแกน QR Code',
@@ -255,7 +260,7 @@
 							<Sidebar.MenuButton>
 								{#snippet child({ props })}
 									<a href="/admin/activities/create" {...props} class="flex items-center space-x-3">
-										<IconBuildingStore class="!w-4 !h-4 flex-shrink-0" />
+										<IconCalendarEvent class="!w-4 !h-4 flex-shrink-0" />
 										<span class="text-sm">สร้างกิจกรรมใหม่</span>
 									</a>
 								{/snippet}

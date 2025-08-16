@@ -24,6 +24,8 @@
 						<h1 class="text-lg font-semibold">
 							{#if page.url.pathname === '/admin'}
 								แดชบอร์ด
+							{:else if page.url.pathname.startsWith('/admin/activities')}
+								จัดการกิจกรรม
 							{:else if page.url.pathname.startsWith('/admin/faculties')}
 								จัดการคณะ
 							{:else if page.url.pathname.startsWith('/admin/admins')}
