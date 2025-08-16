@@ -10,7 +10,6 @@
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Form from '$lib/components/ui/form';
 	import * as Select from '$lib/components/ui/select';
-	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Separator } from '$lib/components/ui/separator';
 	import { 
 		IconArrowLeft,
@@ -19,7 +18,6 @@
 		IconClock,
 		IconMapPin,
 		IconUsers,
-		IconAward,
 		IconPlus
 	} from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
@@ -39,7 +37,11 @@
 		activity_type: z.enum(['Academic', 'Sports', 'Cultural', 'Social', 'Other']),
 		location: z.string().min(1, 'กรุณากรอกสถานที่').max(500, 'สถานที่ต้องไม่เกิน 500 ตัวอักษร'),
 		max_participants: z.number().int().min(1, 'จำนวนผู้เข้าร่วมต้องมากกว่า 0').optional().or(z.literal('')),
-		require_score: z.boolean().default(false)
+		organizer: z.string().min(1, 'กรุณากรอกหน่วยงานที่จัดกิจกรรม').max(255, 'ชื่อหน่วยงานต้องไม่เกิน 255 ตัวอักษร'),
+		eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
+			const faculties = value.split(',').filter(f => f.trim() !== '');
+			return faculties.length > 0;
+		}, 'กรุณาเลือกอย่างน้อย 1 คณะ')
 	});
 
 	// Form setup
@@ -65,7 +67,35 @@
 		{ value: 'Other', label: 'อื่นๆ', description: 'กิจกรรมประเภทอื่นๆ' }
 	];
 
-	let selectedActivityType = $state(activityTypeOptions.find(opt => opt.value === $formData.activity_type));
+	// Faculty options from server data
+	console.log('Faculties data from server:', data.faculties);
+	console.log('Type of data.faculties:', typeof data.faculties);
+	console.log('Is array?', Array.isArray(data.faculties));
+	
+	// แก้ไขการ parse ข้อมูลคณะ
+	let actualFaculties = [];
+	if (data.faculties) {
+		if (Array.isArray(data.faculties)) {
+			actualFaculties = data.faculties;
+		} else if (data.faculties.faculties && Array.isArray(data.faculties.faculties)) {
+			actualFaculties = data.faculties.faculties;
+		}
+	}
+	console.log('Actual faculties array:', actualFaculties);
+	
+	const facultyOptions = [
+		{ value: 'all', label: 'ทุกคณะ' },
+		...actualFaculties.map((faculty: any) => ({
+			value: faculty.id || faculty.faculty_id,
+			label: faculty.name || faculty.faculty_name
+		}))
+	];
+	console.log('Faculty options:', facultyOptions);
+
+	// Selected values for selects
+	let selectedActivityType = $state<{ value: ActivityType; label: string } | undefined>(undefined);
+	let selectedFaculties = $state<{ value: string; label: string }[]>([]);
+
 
 	// Helper functions
 	function goBack() {
@@ -173,21 +203,24 @@
 										{#snippet children({ props })}
 											<Label for={props.id} class="text-base font-medium">ประเภทกิจกรรม *</Label>
 											<Select.Root 
-												selected={selectedActivityType}
-												onSelectedChange={(v) => {
-													if (v) {
-														selectedActivityType = v;
-														$formData.activity_type = v.value;
+												type="single" 
+												bind:value={selectedActivityType} 
+												disabled={$submitting}
+												onValueChange={(value) => {
+													const newType = value as ActivityType;
+													const option = activityTypeOptions.find(opt => opt.value === newType);
+													if (option) {
+														selectedActivityType = { value: option.value, label: option.label };
+														$formData.activity_type = option.value;
 													}
 												}}
-												disabled={$submitting}
 											>
-												<Select.Trigger class="text-base">
-													<Select.Value placeholder="เลือกประเภทกิจกรรม" />
+												<Select.Trigger>
+													{selectedActivityType?.label ?? "เลือกประเภทกิจกรรม"}
 												</Select.Trigger>
 												<Select.Content>
 													{#each activityTypeOptions as option}
-														<Select.Item value={option.value} label={option.label}>
+														<Select.Item value={option.value}>
 															<div class="flex flex-col">
 																<span class="font-medium">{option.label}</span>
 																<span class="text-sm text-gray-500">{option.description}</span>
@@ -202,6 +235,27 @@
 								</Form.Field>
 							</div>
 
+							<!-- Organizer -->
+							<div>
+								<Form.Field {form} name="organizer">
+									<Form.Control>
+										{#snippet children({ props })}
+											<Label for={props.id} class="text-base font-medium">หน่วยงานที่จัดกิจกรรม *</Label>
+											<Input
+												{...props}
+												bind:value={$formData.organizer}
+												placeholder="เช่น คณะวิทยาศาสตร์"
+												disabled={$submitting}
+												class="text-base"
+											/>
+										{/snippet}
+									</Form.Control>
+									<Form.FieldErrors />
+								</Form.Field>
+							</div>
+						</div>
+
+						<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 							<!-- Location -->
 							<div>
 								<Form.Field {form} name="location">
@@ -218,6 +272,77 @@
 												disabled={$submitting}
 												class="text-base"
 											/>
+										{/snippet}
+									</Form.Control>
+									<Form.FieldErrors />
+								</Form.Field>
+							</div>
+
+							<!-- Eligible Faculties -->
+							<div>
+								<Form.Field {form} name="eligible_faculties">
+									<Form.Control>
+										{#snippet children({ props })}
+											<Label for={props.id} class="text-base font-medium">คณะที่สามารถเข้าร่วมได้ *</Label>
+											<Select.Root 
+												type="multiple" 
+												bind:value={selectedFaculties} 
+												disabled={$submitting}
+												onValueChange={(values) => {
+													if (values && Array.isArray(values)) {
+														selectedFaculties = values.map(value => {
+															const option = facultyOptions.find(opt => opt.value === value);
+															return option ? { value: option.value, label: option.label } : { value, label: value };
+														});
+														$formData.eligible_faculties = values.join(',');
+													}
+												}}
+											>
+												<Select.Trigger>
+													{#if selectedFaculties.length === 0}
+														เลือกคณะที่สามารถเข้าร่วมได้
+													{:else if selectedFaculties.length === 1}
+														{selectedFaculties[0].label}
+													{:else}
+														เลือกแล้ว {selectedFaculties.length} คณะ
+													{/if}
+												</Select.Trigger>
+												<Select.Content>
+													{#each facultyOptions as option}
+														<Select.Item value={option.value}>
+															<div class="flex items-center gap-2">
+																<div class="w-4 h-4 flex items-center justify-center">
+																	{#if selectedFaculties.some(f => f.value === option.value)}
+																		<div class="w-3 h-3 bg-blue-600 rounded-sm"></div>
+																	{:else}
+																		<div class="w-3 h-3 border border-gray-300 rounded-sm"></div>
+																	{/if}
+																</div>
+																{option.label}
+															</div>
+														</Select.Item>
+													{/each}
+												</Select.Content>
+											</Select.Root>
+											{#if selectedFaculties.length > 0}
+												<div class="flex flex-wrap gap-1 mt-2">
+													{#each selectedFaculties as faculty}
+														<span class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-md">
+															{faculty.label}
+															<button 
+																type="button"
+																onclick={() => {
+																	selectedFaculties = selectedFaculties.filter(f => f.value !== faculty.value);
+																	$formData.eligible_faculties = selectedFaculties.map(f => f.value).join(',');
+																}}
+																class="text-blue-600 hover:text-blue-800"
+															>
+																×
+															</button>
+														</span>
+													{/each}
+												</div>
+											{/if}
 										{/snippet}
 									</Form.Control>
 									<Form.FieldErrors />
@@ -383,33 +508,6 @@
 											<p class="text-sm text-gray-500 mt-1">
 												หากไม่กรอก จะถือว่าไม่จำกัดจำนวน
 											</p>
-										{/snippet}
-									</Form.Control>
-									<Form.FieldErrors />
-								</Form.Field>
-							</div>
-
-							<!-- Require Score -->
-							<div class="flex flex-col justify-center">
-								<Form.Field {form} name="require_score">
-									<Form.Control>
-										{#snippet children({ props })}
-											<div class="flex items-center space-x-3">
-												<Checkbox
-													{...props}
-													bind:checked={$formData.require_score}
-													disabled={$submitting}
-												/>
-												<div class="grid gap-1.5 leading-none">
-													<Label for={props.id} class="text-base font-medium flex items-center gap-2">
-														<IconAward class="h-4 w-4" />
-														ต้องการคะแนน
-													</Label>
-													<p class="text-sm text-gray-500">
-														กิจกรรมนี้จะให้คะแนนแก่ผู้เข้าร่วม
-													</p>
-												</div>
-											</div>
 										{/snippet}
 									</Form.Control>
 									<Form.FieldErrors />

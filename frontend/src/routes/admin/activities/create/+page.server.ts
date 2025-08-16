@@ -25,7 +25,11 @@ const activityCreateSchema = z.object({
 	}),
 	location: z.string().min(1, 'กรุณากรอกสถานที่').max(500, 'สถานที่ต้องไม่เกิน 500 ตัวอักษร'),
 	max_participants: z.number().int().min(1, 'จำนวนผู้เข้าร่วมต้องมากกว่า 0').optional().or(z.literal('')),
-	require_score: z.boolean().default(false)
+	organizer: z.string().min(1, 'กรุณากรอกหน่วยงานที่จัดกิจกรรม').max(255, 'ชื่อหน่วยงานต้องไม่เกิน 255 ตัวอักษร'),
+	eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
+		const faculties = value.split(',').filter(f => f.trim() !== '');
+		return faculties.length > 0;
+	}, 'กรุณาเลือกอย่างน้อย 1 คณะ')
 }).refine(data => {
 	const startDate = new Date(data.start_date);
 	const endDate = new Date(data.end_date);
@@ -66,13 +70,48 @@ export const load: PageServerLoad = async (event) => {
 		activity_type: 'Academic',
 		location: '',
 		max_participants: undefined,
-		require_score: false
+		organizer: '',
+		eligible_faculties: ''
 	};
+
+	// ดึงข้อมูลคณะจากฐานข้อมูล
+	let faculties: any[] = [];
+	try {
+		const response = await event.fetch('/api/faculties');
+		console.log('Faculties API response status:', response.status);
+		if (response.ok) {
+			const apiData = await response.json();
+			console.log('Faculties API response data:', apiData);
+			console.log('apiData.data:', apiData.data);
+			console.log('apiData itself:', apiData);
+			
+			// แก้ไขการ parse ให้ถูกต้อง - ตาม log structure: { data: { faculties: [...] } }
+			if (apiData.data && apiData.data.faculties && Array.isArray(apiData.data.faculties)) {
+				faculties = apiData.data.faculties;
+			} else if (apiData.data && Array.isArray(apiData.data)) {
+				faculties = apiData.data;
+			} else if (Array.isArray(apiData)) {
+				faculties = apiData;
+			} else if (apiData.faculties && Array.isArray(apiData.faculties)) {
+				faculties = apiData.faculties;
+			} else {
+				faculties = [];
+			}
+			console.log('Final parsed faculties:', faculties);
+		} else {
+			console.error('Faculties API error:', response.status, response.statusText);
+		}
+	} catch (error) {
+		console.error('Failed to fetch faculties:', error);
+		// ใช้ default faculties หากไม่สามารถดึงข้อมูลได้
+		faculties = [];
+	}
 
 	return {
 		form,
 		user,
-		admin_role: user.admin_role
+		admin_role: user.admin_role,
+		faculties
 	};
 };
 
@@ -103,7 +142,8 @@ export const actions: Actions = {
 				activity_type: form.data.activity_type,
 				location: form.data.location,
 				max_participants: form.data.max_participants || undefined,
-				require_score: form.data.require_score
+				organizer: form.data.organizer,
+				eligible_faculties: form.data.eligible_faculties
 			};
 
 			// เรียก API ผ่าน internal route

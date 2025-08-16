@@ -12,14 +12,14 @@ export interface Activity {
 	activity_type: ActivityType;
 	location: string;
 	max_participants?: number;
-	require_score: boolean;
+	organizer: string;
 	faculty_id?: string;
 	created_by: string; // admin user id
 	created_at: string;
 	updated_at: string;
 	// For display purposes
 	name?: string; // legacy field
-	organizer?: string; // legacy field
+	require_score?: boolean; // legacy field
 	organizerType?: 'คณะ' | 'มหาวิทยาลัย'; // legacy field
 	participantCount?: number; // legacy field
 	status?: ActivityStatus; // legacy field
@@ -37,7 +37,8 @@ export interface ActivityCreateData {
 	activity_type: ActivityType;
 	location: string;
 	max_participants?: number;
-	require_score: boolean;
+	organizer: string;
+	eligible_faculties: string;
 }
 
 export interface ActivityFormData extends ActivityCreateData {

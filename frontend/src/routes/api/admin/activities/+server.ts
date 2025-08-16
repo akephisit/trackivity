@@ -30,7 +30,9 @@ export const POST: RequestHandler = async (event) => {
 			'start_time',
 			'end_time',
 			'activity_type',
-			'location'
+			'location',
+			'organizer',
+			'eligible_faculties'
 		];
 
 		for (const field of requiredFields) {
@@ -83,7 +85,8 @@ export const POST: RequestHandler = async (event) => {
 			activity_type: body.activity_type,
 			location: body.location.trim(),
 			max_participants: body.max_participants || null,
-			require_score: Boolean(body.require_score)
+			organizer: body.organizer.trim(),
+			eligible_faculties: body.eligible_faculties
 		};
 
 		// เรียก backend API เพื่อสร้างกิจกรรม
