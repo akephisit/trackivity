@@ -41,7 +41,8 @@
 		eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
 			const faculties = value.split(',').filter(f => f.trim() !== '');
 			return faculties.length > 0;
-		}, 'กรุณาเลือกอย่างน้อย 1 คณะ')
+		}, 'กรุณาเลือกอย่างน้อย 1 คณะ'),
+		academic_year: z.string().min(1, 'กรุณาเลือกปีการศึกษา')
 	});
 
 	// Form setup
@@ -89,9 +90,26 @@
 	}));
 	console.log('Faculty options:', facultyOptions);
 
+	// Academic year options - generate +/- 2 years from current Buddhist year
+	function generateAcademicYearOptions() {
+		const currentYear = new Date().getFullYear();
+		const currentBuddhistYear = currentYear + 543; // Convert to Buddhist year
+		const options = [];
+		
+		for (let i = -2; i <= 2; i++) {
+			const year = (currentBuddhistYear + i).toString();
+			options.push({ value: year, label: year });
+		}
+		
+		return options;
+	}
+	
+	const academicYearOptions = generateAcademicYearOptions();
+
 	// Selected values for selects
 	let selectedActivityType = $state<{ value: ActivityType; label: string } | undefined>(undefined);
 	let selectedFaculties = $state<{ value: string; label: string }[]>([]);
+	let selectedAcademicYear = $state<{ value: string; label: string } | undefined>(undefined);
 
 
 
@@ -233,7 +251,41 @@
 								</Form.Field>
 							</div>
 
-							<!-- Organizer -->
+							<!-- Academic Year -->
+					<div>
+						<Form.Field {form} name="academic_year">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="text-base font-medium">ปีการศึกษา *</Label>
+									<Select.Root 
+										type="single" 
+										bind:value={selectedAcademicYear} 
+										disabled={$submitting}
+										onValueChange={(value) => {
+											if (value) {
+												selectedAcademicYear = { value, label: value };
+												$formData.academic_year = value;
+											}
+										}}
+									>
+										<Select.Trigger>
+											{selectedAcademicYear?.label ?? "เลือกปีการศึกษา"}
+										</Select.Trigger>
+										<Select.Content>
+											{#each academicYearOptions as option}
+												<Select.Item value={option.value}>
+													{option.label}
+												</Select.Item>
+											{/each}
+										</Select.Content>
+									</Select.Root>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
+
+					<!-- Organizer -->
 							<div>
 								<Form.Field {form} name="organizer">
 									<Form.Control>

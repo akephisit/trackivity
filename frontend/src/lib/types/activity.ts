@@ -39,6 +39,7 @@ export interface ActivityCreateData {
 	max_participants?: number;
 	organizer: string;
 	eligible_faculties: string;
+	academic_year: string;
 }
 
 export interface ActivityFormData extends ActivityCreateData {

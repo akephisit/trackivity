@@ -29,7 +29,8 @@ const activityCreateSchema = z.object({
 	eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
 		const faculties = value.split(',').filter(f => f.trim() !== '');
 		return faculties.length > 0;
-	}, 'กรุณาเลือกอย่างน้อย 1 คณะ')
+	}, 'กรุณาเลือกอย่างน้อย 1 คณะ'),
+	academic_year: z.string().min(1, 'กรุณาเลือกปีการศึกษา')
 }).refine(data => {
 	const startDate = new Date(data.start_date);
 	const endDate = new Date(data.end_date);
@@ -71,7 +72,8 @@ export const load: PageServerLoad = async (event) => {
 		location: '',
 		max_participants: '',
 		organizer: '',
-		eligible_faculties: ''
+		eligible_faculties: '',
+		academic_year: ''
 	};
 
 	// ดึงข้อมูลคณะจากฐานข้อมูล
@@ -143,7 +145,8 @@ export const actions: Actions = {
 				location: form.data.location,
 				max_participants: form.data.max_participants ? parseInt(form.data.max_participants) : undefined,
 				organizer: form.data.organizer,
-				eligible_faculties: form.data.eligible_faculties
+				eligible_faculties: form.data.eligible_faculties,
+				academic_year: form.data.academic_year
 			};
 
 			// เรียก API ผ่าน internal route
