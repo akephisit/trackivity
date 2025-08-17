@@ -58,6 +58,7 @@ export const load: PageServerLoad = async (event) => {
 				activity_type: activity.activity_type,
 				location: activity.location,
 				max_participants: activity.max_participants,
+				hours: activity.hours,
 				require_score: activity.require_score,
 				faculty_id: activity.faculty_id,
 				created_by: activity.created_by,

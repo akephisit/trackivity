@@ -2364,6 +2364,7 @@ pub struct CreateAdminActivityRequest {
     pub organizer: String,
     pub eligible_faculties: Vec<Uuid>,
     pub academic_year: String,
+    pub hours: Option<i32>,
 }
 
 /// Create new activity via admin interface with enhanced fields
@@ -2471,12 +2472,12 @@ pub async fn create_admin_activity(
             title, description, location, start_time, end_time, max_participants, 
             faculty_id, department_id, created_by, academic_year, organizer, 
             eligible_faculties, activity_type, start_date, end_date, 
-            start_time_only, end_time_only
+            start_time_only, end_time_only, hours
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
         RETURNING id, title, description, location, start_time, end_time, max_participants, 
                   status, faculty_id, department_id, created_by, created_at, updated_at,
-                  academic_year, organizer, eligible_faculties, activity_type
+                  academic_year, organizer, eligible_faculties, activity_type, hours
         "#
     )
     .bind(&request.activity_name)  // title
@@ -2495,6 +2496,7 @@ pub async fn create_admin_activity(
     .bind(end_date)  // end_date
     .bind(start_time)  // start_time_only
     .bind(end_time)  // end_time_only
+    .bind(request.hours) // hours
     .fetch_one(&session_state.db_pool)
     .await;
 
@@ -2517,7 +2519,8 @@ pub async fn create_admin_activity(
                 "academic_year": row.get::<Option<String>, _>("academic_year"),
                 "organizer": row.get::<Option<String>, _>("organizer"),
                 "eligible_faculties": row.get::<Option<serde_json::Value>, _>("eligible_faculties"),
-                "activity_type": row.get::<Option<String>, _>("activity_type")
+                "activity_type": row.get::<Option<String>, _>("activity_type"),
+                "hours": row.get::<Option<i32>, _>("hours")
             });
 
             let response = json!({

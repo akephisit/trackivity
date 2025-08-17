@@ -12,6 +12,7 @@ export interface Activity {
 	activity_type: ActivityType;
 	location: string;
 	max_participants?: number;
+	hours?: number; // total hours credited for activity
 	organizer: string;
 	faculty_id?: string;
 	created_by: string; // admin user id
@@ -37,6 +38,7 @@ export interface ActivityCreateData {
 	activity_type: ActivityType;
 	location: string;
 	max_participants?: number;
+	hours?: number;
 	organizer: string;
 	eligible_faculties: string;
 	academic_year: string;

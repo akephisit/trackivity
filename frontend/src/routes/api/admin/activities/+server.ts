@@ -32,7 +32,8 @@ export const POST: RequestHandler = async (event) => {
 			'location',
 			'organizer',
 			'eligible_faculties',
-			'academic_year'
+			'academic_year',
+			'hours'
 		];
 
 		for (const field of requiredFields) {
@@ -74,30 +75,41 @@ export const POST: RequestHandler = async (event) => {
 			body.max_participants = maxParticipants;
 		}
 
-		// แปลงข้อมูลให้ตรงกับ backend CreateActivityRequest
-		const startDateTime = new Date(`${body.start_date}T${body.start_time}:00`);
-		const endDateTime = new Date(`${body.end_date}T${body.end_time}:00`);
-		
-		const activityData: any = {
-			title: body.activity_name.trim(),
-			description: body.description ? body.description.trim() : "",
+		// Validate hours
+		const hours = parseInt(body.hours);
+		if (isNaN(hours) || hours <= 0) {
+			throw error(400, 'ชั่วโมงกิจกรรมต้องเป็นจำนวนเต็มมากกว่า 0');
+		}
+
+		// สร้าง payload ให้ตรงกับ backend /api/admin/activities
+		const payload = {
+			activity_name: body.activity_name.trim(),
+			description: body.description ? String(body.description).trim() : null,
+			start_date: body.start_date,
+			end_date: body.end_date,
+			start_time: body.start_time,
+			end_time: body.end_time,
+			activity_type: body.activity_type,
 			location: body.location.trim(),
-			start_time: startDateTime.toISOString(),
-			end_time: endDateTime.toISOString(),
-			max_participants: body.max_participants || null,
-			faculty_id: null, // จะต้องใส่ faculty_id ที่ถูกต้อง
-			department_id: null
+			max_participants: body.max_participants ?? null,
+			organizer: body.organizer.trim(),
+			eligible_faculties: String(body.eligible_faculties)
+				.split(',')
+				.map((s) => s.trim())
+				.filter((s) => s.length > 0),
+			academic_year: body.academic_year,
+			hours
 		};
 
-		// เรียก backend API เพื่อสร้างกิจกรรม
-		const response = await fetch(`${PUBLIC_API_URL}/api/activities`, {
+		// เรียก backend API เพื่อสร้างกิจกรรม (admin endpoint)
+		const response = await fetch(`${PUBLIC_API_URL}/api/admin/activities`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 				'Cookie': `session_id=${sessionId}`,
 				'X-Session-ID': sessionId
 			},
-			body: JSON.stringify(activityData)
+			body: JSON.stringify(payload)
 		});
 
 		if (!response.ok) {

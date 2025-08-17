@@ -37,6 +37,11 @@
 		activity_type: z.enum(['Academic', 'Sports', 'Cultural', 'Social', 'Other']),
 		location: z.string().min(1, 'กรุณากรอกสถานที่').max(500, 'สถานที่ต้องไม่เกิน 500 ตัวอักษร'),
 		max_participants: z.string().optional(),
+		hours: z
+			.string()
+			.min(1, 'กรุณากรอกจำนวนชั่วโมง')
+			.regex(/^\d+$/, 'ชั่วโมงต้องเป็นจำนวนเต็ม')
+			.refine((v) => parseInt(v) > 0, 'ชั่วโมงต้องมากกว่า 0'),
 		organizer: z.string().min(1, 'กรุณากรอกหน่วยงานที่จัดกิจกรรม').max(255, 'ชื่อหน่วยงานต้องไม่เกิน 255 ตัวอักษร'),
 		eligible_faculties: z.string().min(1, 'กรุณาเลือกคณะที่สามารถเข้าร่วมได้').refine(value => {
 			const faculties = value.split(',').filter(f => f.trim() !== '');
@@ -430,7 +435,7 @@
 							วันที่และเวลา
 						</h3>
 						
-						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 							<!-- Start Date -->
 							<div>
 								<Form.Field {form} name="start_date">
@@ -558,6 +563,31 @@
 											<p class="text-sm text-gray-500 mt-1">
 												หากไม่กรอก จะถือว่าไม่จำกัดจำนวน
 											</p>
+										{/snippet}
+									</Form.Control>
+									<Form.FieldErrors />
+								</Form.Field>
+							</div>
+
+							<!-- Activity Hours -->
+							<div>
+								<Form.Field {form} name="hours">
+									<Form.Control>
+										{#snippet children({ props })}
+											<Label for={props.id} class="text-base font-medium flex items-center gap-2">
+												<IconClock class="h-4 w-4" />
+												ชั่วโมงกิจกรรม (ชั่วโมง) *
+											</Label>
+											<Input
+												{...props}
+												type="number"
+												min="1"
+												step="1"
+												bind:value={$formData.hours}
+												placeholder="เช่น 2"
+												disabled={$submitting}
+												class="text-base"
+											/>
 										{/snippet}
 									</Form.Control>
 									<Form.FieldErrors />
