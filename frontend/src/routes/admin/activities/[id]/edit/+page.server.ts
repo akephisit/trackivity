@@ -234,8 +234,8 @@ export const actions: Actions = {
         };
       }
     } catch (e) {
-      if (e instanceof Error && 'status' in e && e.status === 302) {
-        throw e; // Re-throw redirect
+      if (typeof e === 'object' && e && 'status' in (e as any) && (e as any).status === 302) {
+        throw e as any; // Re-throw redirect for SvelteKit to handle
       }
       
       console.error('Error updating activity:', e);
