@@ -553,10 +553,11 @@
 											</Label>
 											<Input
 												{...props}
-												type="number"
+												type="text"
+												inputmode="numeric"
+												pattern="[0-9]*"
 												bind:value={$formData.max_participants}
 												placeholder="ไม่จำกัด"
-												min="1"
 												disabled={$submitting}
 												class="text-base"
 											/>
@@ -580,9 +581,9 @@
 											</Label>
 											<Input
 												{...props}
-												type="number"
-												min="1"
-												step="1"
+												type="text"
+												inputmode="numeric"
+												pattern="[0-9]*"
 												bind:value={$formData.hours}
 												placeholder="เช่น 2"
 												disabled={$submitting}
