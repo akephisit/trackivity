@@ -33,10 +33,10 @@ export const load: PageServerLoad = async (event) => {
 		// Fetch all faculties for admin (including inactive ones)
 		const facultiesResponse = await api.get(event, '/api/admin/faculties');
 
-		let faculties = [];
-		if (facultiesResponse.status === 'success') {
-			faculties = facultiesResponse.data.faculties || [];
-		}
+        let faculties = [];
+        if (facultiesResponse.success) {
+            faculties = facultiesResponse.data.faculties || [];
+        }
 
 		// Create forms
 		const createForm = await superValidate(zod(facultyCreateSchema));
@@ -74,12 +74,12 @@ export const actions: Actions = {
 		try {
 			const response = await api.post(event, '/api/faculties', form.data);
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					form,
-					error: response.error || 'เกิดข้อผิดพลาดในการสร้างคณะ'
-				});
-			}
+            if (!response.success) {
+                return fail(400, { 
+                    form,
+                    error: response.error || 'เกิดข้อผิดพลาดในการสร้างคณะ'
+                });
+            }
 
 			return { form, success: true };
 		} catch (error) {
@@ -111,12 +111,12 @@ export const actions: Actions = {
 		try {
 			const response = await api.put(event, `/api/faculties/${facultyId}`, form.data);
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					form,
-					error: response.error || 'เกิดข้อผิดพลาดในการแก้ไขคณะ'
-				});
-			}
+            if (!response.success) {
+                return fail(400, { 
+                    form,
+                    error: response.error || 'เกิดข้อผิดพลาดในการแก้ไขคณะ'
+                });
+            }
 
 			return { form, success: true };
 		} catch (error) {
@@ -141,11 +141,11 @@ export const actions: Actions = {
 		try {
 			const response = await api.delete(event, `/api/faculties/${facultyId}`);
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					error: response.error || 'เกิดข้อผิดพลาดในการลบคณะ'
-				});
-			}
+            if (!response.success) {
+                return fail(400, { 
+                    error: response.error || 'เกิดข้อผิดพลาดในการลบคณะ'
+                });
+            }
 
 			return { success: true };
 		} catch (error) {
@@ -169,11 +169,11 @@ export const actions: Actions = {
 		try {
 			const response = await api.put(event, `/api/faculties/${facultyId}/toggle-status`);
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					error: response.error || 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะคณะ'
-				});
-			}
+            if (!response.success) {
+                return fail(400, { 
+                    error: response.error || 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะคณะ'
+                });
+            }
 
 			return { success: true };
 		} catch (error) {

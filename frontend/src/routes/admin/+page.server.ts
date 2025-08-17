@@ -20,9 +20,9 @@ export const load: PageServerLoad = async (event) => {
 	try {
 		const response = await api.get(event, '/api/admin/dashboard');
 
-		if (response.status === 'success' && response.data) {
-			stats = response.data;
-		}
+    if (response.success && response.data) {
+        stats = response.data;
+    }
 	} catch (error) {
 		console.error('Failed to load dashboard stats:', error);
 	}
@@ -32,9 +32,9 @@ export const load: PageServerLoad = async (event) => {
 	try {
 		const response = await api.get(event, '/api/admin/activities', { limit: '10', recent: 'true' });
 
-		if (response.status === 'success' && response.data) {
-			recentActivities = response.data || [];
-		}
+    if (response.success && response.data) {
+        recentActivities = response.data || [];
+    }
 	} catch (error) {
 		console.error('Failed to load recent activities:', error);
 	}

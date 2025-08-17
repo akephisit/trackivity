@@ -1,8 +1,10 @@
 import type { PageServerLoad, Actions } from './$types';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Activity, ActivityUpdateData } from '$lib/types/activity';
+import { api } from '$lib/server/api-client';
 
-export const load: PageServerLoad = async ({ params, fetch, depends }) => {
+export const load: PageServerLoad = async (event) => {
+  const { params, depends } = event;
   depends('student:activity-edit');
 
   const { id } = params;
@@ -13,33 +15,18 @@ export const load: PageServerLoad = async ({ params, fetch, depends }) => {
 
   try {
     // Fetch activity details
-    const activityRes = await fetch(`/api/activities/${id}`);
-    
-    if (!activityRes.ok) {
-      if (activityRes.status === 404) {
-        throw error(404, 'กิจกรรมไม่พบ');
-      }
-      if (activityRes.status === 403) {
-        throw error(403, 'คุณไม่มีสิทธิ์แก้ไขกิจกรรมนี้');
-      }
-      throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
-    }
-
-    const activityData = await activityRes.json();
-    
-    if (activityData.status !== 'success' || !activityData.data) {
+    const activityRes = await api.get(event, `/api/activities/${id}`);
+    if (!activityRes.success || !activityRes.data) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
-
-    const activity: Activity = activityData.data;
+    const activity: Activity = activityRes.data as any;
 
     // Fetch faculties for dropdown
     let faculties: any[] = [];
     try {
-      const facultiesRes = await fetch('/api/faculties');
-      if (facultiesRes.ok) {
-        const facultiesData = await facultiesRes.json();
-        faculties = facultiesData.data || facultiesData || [];
+      const facultiesRes = await api.get(event, '/api/faculties');
+      if (facultiesRes.success) {
+        faculties = facultiesRes.data || [];
       }
     } catch (e) {
       console.warn('Could not fetch faculties:', e);
@@ -60,7 +47,8 @@ export const load: PageServerLoad = async ({ params, fetch, depends }) => {
 };
 
 export const actions: Actions = {
-  update: async ({ params, request, fetch }) => {
+  update: async (event) => {
+    const { params, request } = event;
     const { id } = params;
     
     if (!id) {
@@ -120,27 +108,10 @@ export const actions: Actions = {
       }
 
       // Update activity
-      const response = await fetch(`/api/activities/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        return fail(response.status, { 
-          error: errorData.message || 'เกิดข้อผิดพลาดในการอัปเดตกิจกรรม',
-          formData: Object.fromEntries(formData)
-        });
-      }
-
-      const result = await response.json();
-      
-      if (result.status !== 'success') {
+      const response = await api.put(event, `/api/activities/${id}`, updateData);
+      if (!response.success) {
         return fail(400, { 
-          error: result.message || 'เกิดข้อผิดพลาดในการอัปเดตกิจกรรม',
+          error: response.error || 'เกิดข้อผิดพลาดในการอัปเดตกิจกรรม',
           formData: Object.fromEntries(formData)
         });
       }

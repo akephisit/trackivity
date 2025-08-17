@@ -2,7 +2,10 @@ import type { PageServerLoad } from './$types';
 import { error } from '@sveltejs/kit';
 import type { Activity, Participation } from '$lib/types/activity';
 
-export const load: PageServerLoad = async ({ params, fetch, depends }) => {
+import { api } from '$lib/server/api-client';
+
+export const load: PageServerLoad = async (event) => {
+  const { params, depends } = event;
   depends('student:activity-details');
 
   const { id } = params;
@@ -13,32 +16,18 @@ export const load: PageServerLoad = async ({ params, fetch, depends }) => {
 
   try {
     // Fetch activity details
-    const activityRes = await fetch(`/api/activities/${id}`);
-    
-    if (!activityRes.ok) {
-      if (activityRes.status === 404) {
-        throw error(404, 'กิจกรรมไม่พบ');
-      }
-      throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
-    }
-
-    const activityData = await activityRes.json();
-    
-    if (activityData.status !== 'success' || !activityData.data) {
+    const activityRes = await api.get(event, `/api/activities/${id}`);
+    if (!activityRes.success || !activityRes.data) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
-
-    const activity: Activity = activityData.data;
+    const activity: Activity = activityRes.data as any;
 
     // Fetch activity participations (only if user has permission)
     let participations: Participation[] = [];
     try {
-      const participationsRes = await fetch(`/api/activities/${id}/participations`);
-      if (participationsRes.ok) {
-        const participationsData = await participationsRes.json();
-        if (participationsData.status === 'success' && participationsData.data?.participations) {
-          participations = participationsData.data.participations;
-        }
+      const participationsRes = await api.get(event, `/api/activities/${id}/participations`);
+      if (participationsRes.success && participationsRes.data?.participations) {
+        participations = participationsRes.data.participations;
       }
     } catch (e) {
       // Ignore participation fetch errors - user might not have permission

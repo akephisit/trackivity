@@ -14,10 +14,10 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดรายการคณะก่อน
 	let faculties: Faculty[] = [];
 	try {
-		const response = await api.get(event, '/api/faculties');
-		if (response.status === 'success') {
-			faculties = response.data?.faculties || response.data || [];
-		}
+    const response = await api.get(event, '/api/faculties');
+    if (response.success) {
+        faculties = response.data?.faculties || response.data || [];
+    }
 	} catch (error) {
 		console.error('Failed to load faculties:', error);
 	}
@@ -25,10 +25,10 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดรายการแอดมิน - ใช้ system-admins endpoint เพื่อให้ได้ข้อมูล is_active
 	let admins: AdminRole[] = [];
 	try {
-		const response = await api.get(event, '/api/admin/system-admins');
+    const response = await api.get(event, '/api/admin/system-admins');
 
-		if (response.status === 'success') {
-			const result = response.data;
+    if (response.success) {
+        const result = response.data;
 			console.log('=== SYSTEM ADMINS API RESPONSE ===');
 			console.log('result type:', typeof result);
 			if (result) {
@@ -189,19 +189,19 @@ export const actions: Actions = {
 			});
 
 			
-			const response = await api.post(event, '/api/admin/create', transformedData);
+        const response = await api.post(event, '/api/admin/create', transformedData);
 
-			if (response.status === 'error') {
-				form.errors._errors = [response.error || 'เกิดข้อผิดพลาดในการสร้างแอดมิน'];
-				return fail(400, { form });
-			}
+        if (!response.success) {
+            form.errors._errors = [response.error || 'เกิดข้อผิดพลาดในการสร้างแอดมิน'];
+            return fail(400, { form });
+        }
 
-			if (response.status === 'success') {
-				return { form, success: true, message: 'สร้างแอดมินสำเร็จ' };
-			} else {
-				form.errors._errors = ['เกิดข้อผิดพลาดในการสร้างแอดมิน'];
-				return fail(400, { form });
-			}
+        if (response.success) {
+            return { form, success: true, message: 'สร้างแอดมินสำเร็จ' };
+        } else {
+            form.errors._errors = ['เกิดข้อผิดพลาดในการสร้างแอดมิน'];
+            return fail(400, { form });
+        }
 		} catch (error) {
 			console.error('Create admin error:', error);
 			
@@ -227,24 +227,24 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await api.delete(event, `/api/users/${adminId}`);
+        const response = await api.delete(event, `/api/users/${adminId}`);
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					error: response.error || 'เกิดข้อผิดพลาดในการลบแอดมิน' 
-				});
-			}
+        if (!response.success) {
+            return fail(400, { 
+                error: response.error || 'เกิดข้อผิดพลาดในการลบแอดมิน' 
+            });
+        }
 
-			if (response.status === 'success') {
-				return { 
-					success: true, 
-					message: 'ลบแอดมินสำเร็จ' 
-				};
-			} else {
-				return fail(400, { 
-					error: 'เกิดข้อผิดพลาดในการลบแอดมิน' 
-				});
-			}
+        if (response.success) {
+            return { 
+                success: true, 
+                message: 'ลบแอดมินสำเร็จ' 
+            };
+        } else {
+            return fail(400, { 
+                error: 'เกิดข้อผิดพลาดในการลบแอดมิน' 
+            });
+        }
 		} catch (error) {
 			console.error('Delete admin error:', error);
 			
@@ -268,27 +268,27 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await api.put(event, `/api/admin/roles/${adminId}/toggle-status`, {
-				is_enabled: isActive  // Send is_enabled instead of is_active
-			});
+        const response = await api.put(event, `/api/admin/roles/${adminId}/toggle-status`, {
+            is_enabled: isActive  // Send is_enabled instead of is_active
+        });
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					error: response.error || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
-				});
-			}
+        if (!response.success) {
+            return fail(400, { 
+                error: response.error || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
+            });
+        }
 
-			if (response.status === 'success') {
-				return { 
-					success: true, 
-					message: response.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ`,
-					data: response.data
-				};
-			} else {
-				return fail(400, { 
-					error: `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
-				});
-			}
+        if (response.success) {
+            return { 
+                success: true, 
+                message: response.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ`,
+                data: response.data
+            };
+        } else {
+            return fail(400, { 
+                error: `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
+            });
+        }
 		} catch (error) {
 			console.error('Toggle admin status error:', error);
 			
@@ -354,25 +354,25 @@ export const actions: Actions = {
 			};
 
 			// ใช้ user endpoint ตาม backend routes
-			const response = await api.put(event, `/api/users/${targetUserId}`, preparedData);
+        const response = await api.put(event, `/api/users/${targetUserId}`, preparedData);
 
-			if (response.status === 'error') {
-				return fail(400, { 
-					error: response.error || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
-				});
-			}
+        if (!response.success) {
+            return fail(400, { 
+                error: response.error || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
+            });
+        }
 
-			if (response.status === 'success') {
-				return { 
-					success: true, 
-					message: 'อัพเดตข้อมูลแอดมินสำเร็จ',
-					data: response.data
-				};
-			} else {
-				return fail(400, { 
-					error: 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
-				});
-			}
+        if (response.success) {
+            return { 
+                success: true, 
+                message: 'อัพเดตข้อมูลแอดมินสำเร็จ',
+                data: response.data
+            };
+        } else {
+            return fail(400, { 
+                error: 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
+            });
+        }
 		} catch (error) {
 			console.error('Update admin error:', error);
 			

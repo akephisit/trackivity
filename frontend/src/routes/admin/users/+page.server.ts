@@ -83,7 +83,7 @@ export const load: PageServerLoad = async (event) => {
 
         // Process faculties response first (for SuperAdmin only)
         let faculties: Faculty[] = [];
-        if (facultiesResponse && facultiesResponse.status === 'success') {
+        if (facultiesResponse && facultiesResponse.success) {
             const rawFaculties = facultiesResponse.data;
             faculties = rawFaculties?.faculties || rawFaculties || [];
         }
@@ -96,7 +96,7 @@ export const load: PageServerLoad = async (event) => {
         let users: User[] = [];
         let pagination = { page: page, total_pages: 1, total_count: 0, limit: limit } as any;
 
-        if (usersResponse.status === 'success') {
+        if (usersResponse.success) {
             const src = usersResponse.data as any;
             const rawUsers: any[] = src.users || src.data?.users || [];
             const totalCount: number = src.total_count ?? src.pagination?.total ?? rawUsers.length;
@@ -210,7 +210,7 @@ export const load: PageServerLoad = async (event) => {
             recent_registrations: 0
         };
 
-        if (statsResponse.status === 'success') {
+        if (statsResponse.success) {
             const rawStats = statsResponse.data;
             // Support both system-wide and faculty-scoped shapes
             if (rawStats.system_stats) {

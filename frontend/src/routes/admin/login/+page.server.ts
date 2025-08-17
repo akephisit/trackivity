@@ -11,11 +11,11 @@ export const load: PageServerLoad = async (event) => {
 	
 	if (sessionId) {
 		try {
-			const response = await api.get(event, '/api/admin/auth/me');
-			
-			if (response.status === 'success') {
-				throw redirect(303, '/admin');
-			}
+        const response = await api.get(event, '/api/admin/auth/me');
+        
+        if (response.success) {
+            throw redirect(303, '/admin');
+        }
 		} catch (error) {
 			// If redirect, throw it
 			if (error instanceof Response) {
@@ -50,10 +50,10 @@ export const actions: Actions = {
 				remember_me: form.data.remember_me
 			});
 
-			if (response.status === 'error') {
-				form.errors._errors = [response.error || 'การเข้าสู่ระบบไม่สำเร็จ'];
-				return fail(400, { form });
-			}
+            if (!response.success) {
+                form.errors._errors = [response.error || 'การเข้าสู่ระบบไม่สำเร็จ'];
+                return fail(400, { form });
+            }
 
 			if (response.data?.success && response.data?.session) {
 				// Set session cookie

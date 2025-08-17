@@ -16,7 +16,7 @@ async function validateSession(sessionId: string, eventFetch: any): Promise<Sess
         
         const response = await apiClient.get(mockEvent as any, '/api/auth/me');
 
-        if (response.status === 'success') {
+        if (response.success) {
             // Backend returns { success, data: SessionUser } for student endpoint
             // and { user: SessionUser, ... } for admin endpoint.
             const user = (response.data as any)?.user ?? (response.data as any)?.data ?? (response.data as any)?.session?.user;

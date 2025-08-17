@@ -107,10 +107,10 @@
 
 			if (response.ok) {
 				const result = await response.json();
-				if (result.status === 'success') {
-					// Refresh the page to update registration status
-					window.location.reload();
-				} else {
+            if (result.success === true) {
+                // Refresh the page to update registration status
+                window.location.reload();
+            } else {
 					alert(result.message || 'เกิดข้อผิดพลาดในการลงทะเบียน');
 				}
 			} else {

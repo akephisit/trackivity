@@ -21,11 +21,11 @@ export const load: PageServerLoad = async (event) => {
 	// Load faculties list
 	let faculties: Faculty[] = [];
 	try {
-		const response = await api.get(event, '/api/faculties');
-		
-		if (response.status === 'success') {
-			faculties = response.data?.faculties || response.data || [];
-		}
+        const response = await api.get(event, '/api/faculties');
+        
+        if (response.success) {
+            faculties = response.data?.faculties || response.data || [];
+        }
 	} catch (error) {
 		console.error('Failed to load faculties:', error);
 	}
@@ -41,10 +41,10 @@ export const load: PageServerLoad = async (event) => {
 			apiUrl = `/api/faculties/${userFacultyId}/admins`;
 		}
 
-		const response = await api.get(event, apiUrl);
+        const response = await api.get(event, apiUrl);
 
-		if (response.status === 'success' && response.data) {
-			const result = response.data;
+        if (response.success && response.data) {
+            const result = response.data;
 				const adminData = result.users || result.admins || result || [];
 				
 				// Ensure adminData is an array
@@ -188,16 +188,15 @@ export const actions: Actions = {
 
 		try {
 			// Authorization check - use proxy
-			const authResponse = await fetch(`/api/admin/auth/me`);
+            const authResponse = await api.get(event, `/api/admin/auth/me`);
 
-			if (!authResponse.ok) {
-				form.errors._errors = ['ไม่สามารถยืนยันตัวตนได้'];
-				return fail(401, { form });
-			}
-
-			const authResult = await authResponse.json();
-			const userLevel = authResult.user?.admin_role?.admin_level;
-			const userFacultyId = authResult.user?.admin_role?.faculty_id;
+            if (!authResponse.success) {
+                form.errors._errors = ['ไม่สามารถยืนยันตัวตนได้'];
+                return fail(401, { form });
+            }
+            const authResult = authResponse.data as any;
+            const userLevel = authResult.user?.admin_role?.admin_level;
+            const userFacultyId = authResult.user?.admin_role?.faculty_id;
 
 			// Check authorization based on admin levels
 			if (form.data.admin_level === AdminLevel.FacultyAdmin) {
@@ -264,39 +263,14 @@ export const actions: Actions = {
 				? `/api/faculties/${transformedData.faculty_id}/admins`
 				: `/api/admin/create`;
 
-			const response = await fetch(endpoint, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(transformedData)
-			});
+				const response = await api.post(event, endpoint, transformedData);
 
-			// Check if response body exists and has content
-			const responseText = await response.text();
-			if (!responseText.trim()) {
-				form.errors._errors = ['Server returned empty response'];
-				return fail(500, { form });
-			}
-
-			let result;
-			try {
-				result = JSON.parse(responseText);
-			} catch (parseError) {
-				console.error('JSON parse error:', parseError, 'Response text:', responseText);
-				form.errors._errors = ['Invalid response format from server'];
-				return fail(500, { form });
-			}
-
-			if (!response.ok) {
-				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสร้างแอดมินคณะ'];
-				return fail(400, { form });
-			}
-
-			if (result.status === 'success') {
-				return { form, success: true, message: 'สร้างแอดมินคณะสำเร็จ' };
-			} else {
-				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสร้างแอดมินคณะ'];
-				return fail(400, { form });
-			}
+				if (response.success) {
+					return { form, success: true, message: response.message || 'สร้างแอดมินคณะสำเร็จ' };
+				} else {
+					form.errors._errors = [response.error || 'เกิดข้อผิดพลาดในการสร้างแอดมินคณะ'];
+					return fail(400, { form });
+				}
 		} catch (error) {
 			console.error('Create faculty admin error:', error);
 			
@@ -323,14 +297,13 @@ export const actions: Actions = {
 
 		try {
 			// Verify authorization
-			const authResponse = await fetch(`/api/admin/auth/me`);
+            const authResponse = await api.get(event, `/api/admin/auth/me`);
 
-			if (!authResponse.ok) {
-				return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
-			}
-
-			const authResult = await authResponse.json();
-			const userLevel = authResult.user?.admin_role?.admin_level;
+            if (!authResponse.success) {
+                return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
+            }
+            const authResult = authResponse.data as any;
+            const userLevel = authResult.user?.admin_role?.admin_level;
 
 			// Only SuperAdmin can toggle status, or FacultyAdmin for their own faculty
 			if (userLevel !== AdminLevel.SuperAdmin) {
@@ -339,52 +312,13 @@ export const actions: Actions = {
 				return fail(403, { error: 'ไม่มีสิทธิ์ในการเปลี่ยนสถานะแอดมินนี้' });
 			}
 
-			const response = await fetch(`/api/admin/roles/${adminId}/toggle-status`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					is_active: isActive
-				})
-			});
+            const response = await api.put(event, `/api/admin/roles/${adminId}/toggle-status`, { is_active: isActive });
 
-			const contentType = response.headers.get('content-type');
-			let result;
-			
-			if (contentType && contentType.includes('application/json')) {
-				try {
-					result = await response.json();
-				} catch (parseError) {
-					console.error('Failed to parse JSON response:', parseError);
-					return fail(500, { error: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลจากเซิร์ฟเวอร์' });
+				if (response.success) {
+					return { success: true, message: response.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินคณะสำเร็จ`, data: response.data };
+				} else {
+					return fail(400, { error: response.error || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินคณะ` });
 				}
-			} else {
-				const responseText = await response.text();
-				console.error('Non-JSON response received:', responseText);
-				return fail(500, { error: 'เซิร์ฟเวอร์ตอบกลับข้อมูลในรูปแบบที่ไม่ถูกต้อง' });
-			}
-
-			if (!response.ok) {
-				if (response.status === 404) {
-					return fail(404, { error: 'ไม่พบแอดมินที่ต้องการเปลี่ยนสถานะ' });
-				} else if (response.status === 403) {
-					return fail(403, { error: 'ไม่มีสิทธิ์ในการเปลี่ยนสถานะแอดมินนี้' });
-				}
-				return fail(response.status, { 
-					error: result?.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
-				});
-			}
-
-			if (result.status === 'success') {
-				return { 
-					success: true, 
-					message: result.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินคณะสำเร็จ`,
-					data: result.data
-				};
-			} else {
-				return fail(400, { 
-					error: result.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินคณะ` 
-				});
-			}
 		} catch (error) {
 			console.error('Toggle faculty admin status error:', error);
 			return fail(500, { error: 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะแอดมินคณะ' });
@@ -418,14 +352,13 @@ export const actions: Actions = {
 			const targetUserId = userId || adminId;
 
 			// Verify authorization
-			const authResponse = await fetch(`/api/admin/auth/me`);
+            const authResponse = await api.get(event, `/api/admin/auth/me`);
 
-			if (!authResponse.ok) {
-				return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
-			}
-
-			const authResult = await authResponse.json();
-			const userLevel = authResult.user?.admin_role?.admin_level;
+            if (!authResponse.success) {
+                return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
+            }
+            const authResult = authResponse.data as any;
+            const userLevel = authResult.user?.admin_role?.admin_level;
 
 			// Only SuperAdmin can update faculty admin info
 			if (userLevel !== AdminLevel.SuperAdmin) {
@@ -448,59 +381,11 @@ export const actions: Actions = {
 				...(updateData.department_id !== undefined && { department_id: updateData.department_id || null })
 			};
 
-			const response = await fetch(`/api/users/${targetUserId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(preparedData)
-			});
-
-			const contentType = response.headers.get('content-type');
-			let result;
-			
-			if (contentType && contentType.includes('application/json')) {
-				try {
-					result = await response.json();
-				} catch (parseError) {
-					console.error('Response JSON parse error:', parseError);
-					return fail(500, { error: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลจากเซิร์ฟเวอร์' });
-				}
-			} else {
-				const responseText = await response.text();
-				if (!responseText.trim()) {
-					return fail(500, { error: 'เซิร์ฟเวอร์ตอบกลับข้อมูลไม่ครบถ้วน' });
-				}
-				
-				result = {
-					status: response.ok ? 'success' : 'error',
-					message: response.ok ? 'User updated successfully' : responseText
-				};
-			}
-
-			if (!response.ok) {
-				if (response.status === 404) {
-					return fail(404, { error: 'ไม่พบแอดมินคณะที่ต้องการอัพเดต' });
-				} else if (response.status === 409) {
-					return fail(409, { error: 'อีเมลนี้มีผู้ใช้แล้ว' });
-				} else if (response.status === 403) {
-					return fail(403, { error: 'ไม่มีสิทธิ์ในการแก้ไขข้อมูลแอดมินคณะนี้' });
-				}
-				
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมินคณะ' 
-				});
-			}
-
-			if (result.status === 'success' || response.ok) {
-				return { 
-					success: true, 
-					message: 'อัพเดตข้อมูลแอดมินคณะสำเร็จ',
-					data: result.data || result
-				};
-			} else {
-				return fail(400, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมินคณะ' 
-				});
-			}
+            const response = await api.put(event, `/api/users/${targetUserId}`, preparedData);
+            if (!response.success) {
+                return fail(400, { error: response.error || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมินคณะ' });
+            }
+            return { success: true, message: 'อัพเดตข้อมูลแอดมินคณะสำเร็จ', data: response.data };
 		} catch (error) {
 			console.error('Update faculty admin error:', error);
 			return fail(500, { error: 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมินคณะ' });
@@ -518,54 +403,35 @@ export const actions: Actions = {
 
 		try {
 			// Verify authorization - only SuperAdmin can delete faculty admins
-			const authResponse = await fetch(`/api/admin/auth/me`);
+            const authResponse = await api.get(event, `/api/admin/auth/me`);
 
-			if (!authResponse.ok) {
-				return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
-			}
+            if (!authResponse.success) {
+                return fail(401, { error: 'ไม่สามารถยืนยันตัวตนได้' });
+            }
 
-			const authResult = await authResponse.json();
-			if (authResult.user?.admin_role?.admin_level !== AdminLevel.SuperAdmin) {
-				return fail(403, { error: 'เฉพาะซุปเปอร์แอดมินเท่านั้นที่สามารถลบแอดมินคณะได้' });
-			}
-			
-			const response = await fetch(`/api/users/${adminId}`, {
-				method: 'DELETE',
-			});
+            const authResult = authResponse.data as any;
+            if (authResult.user?.admin_role?.admin_level !== AdminLevel.SuperAdmin) {
+                return fail(403, { error: 'เฉพาะซุปเปอร์แอดมินเท่านั้นที่สามารถลบแอดมินคณะได้' });
+            }
+            
+            const response = await api.delete(event, `/api/users/${adminId}`);
 
-			const contentType = response.headers.get('content-type');
-			let result;
-			
-			if (contentType && contentType.includes('application/json')) {
-				result = await response.json();
-			} else {
-				result = {
-					status: response.ok ? 'success' : 'error',
-					message: response.ok ? 'User deleted successfully' : 'Failed to delete user'
-				};
-			}
+            const result = response;
 
-			if (!response.ok) {
-				if (response.status === 404) {
-					return fail(404, { error: 'ไม่พบแอดมินคณะที่ต้องการลบ' });
-				} else if (response.status === 403) {
-					return fail(403, { error: 'ไม่มีสิทธิ์ในการลบแอดมินคณะนี้' });
-				}
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการลบแอดมินคณะ' 
-				});
-			}
+            if (!response.success) {
+                return fail(400, { error: response.error || 'เกิดข้อผิดพลาดในการลบแอดมินคณะ' });
+            }
 
-			if (result.status === 'success' || response.ok) {
-				return { 
-					success: true, 
-					message: 'ลบแอดมินคณะสำเร็จ' 
-				};
-			} else {
-				return fail(400, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการลบแอดมินคณะ' 
-				});
-			}
+            if (response.success) {
+                return { 
+                    success: true, 
+                    message: 'ลบแอดมินคณะสำเร็จ' 
+                };
+            } else {
+                return fail(400, { 
+                    error: response.error || 'เกิดข้อผิดพลาดในการลบแอดมินคณะ' 
+                });
+            }
 		} catch (error) {
 			console.error('Delete faculty admin error:', error);
 			return fail(500, { error: 'เกิดข้อผิดพลาดในการลบแอดมินคณะ' });

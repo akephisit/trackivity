@@ -14,9 +14,9 @@ export const load = (async (event) => {
 		// Get admin user info to check permissions
 		const adminResponse = await api.get(event, '/api/admin/auth/me');
 
-		if (adminResponse.status === 'error') {
-			throw redirect(302, '/admin/login');
-		}
+        if (!adminResponse.success) {
+            throw redirect(302, '/admin/login');
+        }
 
 		const adminData = adminResponse.data;
 		
@@ -38,9 +38,9 @@ export const load = (async (event) => {
 		const activitiesResponse = await api.get(event, '/api/admin/activities/assigned');
 
 		let activities = [];
-		if (activitiesResponse.status === 'success') {
-			activities = activitiesResponse.data?.activities || [];
-		}
+        if (activitiesResponse.success) {
+            activities = activitiesResponse.data?.activities || [];
+        }
 
 		return {
 			admin: user,

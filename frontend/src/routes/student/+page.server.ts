@@ -1,16 +1,16 @@
 import type { PageServerLoad } from './$types';
+import { api } from '$lib/server/api-client';
 
-export const load: PageServerLoad = async ({ fetch, depends }) => {
+export const load: PageServerLoad = async (event) => {
+  const { depends } = event;
   depends('student:dashboard');
 
   // Recent activities for dashboard
   let recentActivities: any[] = [];
   try {
-    const params = new URLSearchParams({ per_page: '5', active_only: 'true' });
-    const res = await fetch(`/api/activities?${params.toString()}`);
-    if (res.ok) {
-      const payload = await res.json();
-      recentActivities = (payload?.data ?? payload) || [];
+    const res = await api.get(event, `/api/activities`, { per_page: '5', active_only: 'true' });
+    if (res.success) {
+      recentActivities = res.data ?? [];
     }
   } catch (_) {}
 
@@ -28,4 +28,3 @@ export const load: PageServerLoad = async ({ fetch, depends }) => {
     stats
   };
 };
-

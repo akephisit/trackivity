@@ -101,7 +101,7 @@ export const load: PageServerLoad = async (event) => {
         ]);
 
         // Process users response
-        if (usersResponse.status === 'error') {
+        if (!usersResponse.success) {
             console.error('Failed to fetch users:', usersResponse.error);
             error(500, usersResponse.error || 'Failed to fetch users');
         }
@@ -113,7 +113,7 @@ export const load: PageServerLoad = async (event) => {
         }
 
         // Process statistics response
-        if (statsResponse.status === 'error') {
+        if (!statsResponse.success) {
             console.error('Failed to fetch user statistics:', statsResponse.error);
             error(500, statsResponse.error || 'Failed to fetch user statistics');
         }
@@ -126,13 +126,13 @@ export const load: PageServerLoad = async (event) => {
 
         // Process faculties response (for SuperAdmin)
         let faculties: Faculty[] = [];
-        if (facultiesResponse && facultiesResponse.status === 'success') {
+        if (facultiesResponse && facultiesResponse.success) {
             faculties = facultiesResponse.data || [];
         }
 
         // Process departments response
         let departments: Department[] = [];
-        if (departmentsResponse && departmentsResponse.status === 'success') {
+        if (departmentsResponse && departmentsResponse.success) {
             departments = departmentsResponse.data || [];
         }
 

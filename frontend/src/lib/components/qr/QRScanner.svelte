@@ -221,7 +221,7 @@
       
       const result = await response.json();
       
-      if (response.ok && result.status === 'success') {
+      if (response.ok && (result.success === true)) {
         const scanResult: ScanResult = {
           success: true,
           message: result.message || 'สแกนสำเร็จ',

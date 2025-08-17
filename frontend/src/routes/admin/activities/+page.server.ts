@@ -35,8 +35,8 @@ export const load: PageServerLoad = async (event) => {
 
 		let activities: Activity[] = [];
 		
-		if (response.status === 'success') {
-			const rawActivities = response.data?.activities || response.data || [];
+    if (response.success) {
+        const rawActivities = response.data?.activities || response.data || [];
 			
 			activities = rawActivities.map((activity: any) => ({
 				id: activity.id,
@@ -108,7 +108,7 @@ export const actions: Actions = {
 
             const response = await api.delete(event, `/api/activities/${activityId}`);
 
-            if (response.status === 'error') {
+            if (!response.success) {
                 return fail(500, { error: response.error || 'ลบกิจกรรมไม่สำเร็จ' });
             }
 

@@ -21,13 +21,13 @@ export const load: PageServerLoad = async (event) => {
     // Try admin endpoint first; if 404, fallback to public endpoint
     let activityResponse = await api.get(event, `/api/admin/activities/${id}`);
     
-    if (activityResponse.status === 'error') {
+    if (!activityResponse.success) {
       // Try fallback to public endpoint
       activityResponse = await api.get(event, `/api/activities/${id}`);
     }
     
     // Extract activity data from response
-    const rawActivity = activityResponse.data;
+    const rawActivity = activityResponse.data as any;
     if (!rawActivity) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
@@ -73,7 +73,7 @@ export const load: PageServerLoad = async (event) => {
     try {
       const participationsResponse = await api.get(event, `/api/activities/${id}/participations`);
       
-      if (participationsResponse.status === 'success' && participationsResponse.data?.participations) {
+      if (participationsResponse.success && participationsResponse.data?.participations) {
         participations = participationsResponse.data.participations;
         
         // Calculate participation statistics
@@ -94,7 +94,7 @@ export const load: PageServerLoad = async (event) => {
     try {
       const facultiesResponse = await api.get(event, `/api/admin/faculties`);
       
-      if (facultiesResponse.status === 'success' && facultiesResponse.data) {
+      if (facultiesResponse.success && facultiesResponse.data) {
         faculties = facultiesResponse.data;
       }
     } catch (e) {
@@ -137,7 +137,7 @@ export const actions: Actions = {
     try {
       const response = await api.put(event, `/api/activities/${id}`, { status });
 
-      if (response.status === 'error') {
+      if (!response.success) {
         return {
           error: response.error || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
         };
@@ -178,7 +178,7 @@ export const actions: Actions = {
         notes
       });
 
-      if (response.status === 'error') {
+      if (!response.success) {
         return {
           error: response.error || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
         };
@@ -214,7 +214,7 @@ export const actions: Actions = {
     try {
       const response = await api.delete(event, `/api/admin/activities/${id}/participations/${participationId}`);
 
-      if (response.status === 'error') {
+      if (!response.success) {
         return {
           error: response.error || 'ไม่สามารถลบผู้เข้าร่วมได้'
         };
@@ -242,7 +242,7 @@ export const actions: Actions = {
     try {
       const response = await api.delete(event, `/api/activities/${id}`);
 
-      if (response.status === 'error') {
+      if (!response.success) {
         return {
           error: response.error || 'ไม่สามารถลบกิจกรรมได้'
         };

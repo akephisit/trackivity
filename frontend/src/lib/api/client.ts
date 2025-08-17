@@ -4,7 +4,6 @@
  */
 
 import { browser } from '$app/environment';
-import { goto } from '$app/navigation';
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -171,46 +170,45 @@ export class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     const timeout = options.timeout || this.timeout;
     const retries = options.retries !== undefined ? options.retries : this.retryAttempts;
+    let lastError: Error | undefined;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const requestOptions: RequestInit = {
+        ...options,
+        headers: this.buildHeaders(options),
+        signal: controller.signal,
+        credentials: 'include'
+      };
 
-    const requestOptions: RequestInit = {
-      ...options,
-      headers: this.buildHeaders(options),
-      signal: controller.signal,
-      credentials: 'include'
-    };
-
-    try {
-      let lastError: Error;
-
-      for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-          const response = await fetch(url, requestOptions);
-          clearTimeout(timeoutId);
-
-          return await this.handleResponse<T>(response);
-        } catch (error) {
-          lastError = error as Error;
-          
-          if (attempt < retries && this.shouldRetry(error as Error)) {
-            await this.delay(this.retryDelay * (attempt + 1));
-            continue;
-          }
-          break;
+      try {
+        const response = await fetch(url, requestOptions);
+        clearTimeout(timeoutId);
+        return await this.handleResponse<T>(response);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        const handled = this.handleError(err);
+        lastError = handled as Error;
+        if (attempt < retries && this.shouldRetry(handled as Error)) {
+          await this.delay(this.retryDelay * (attempt + 1));
+          continue;
         }
+        throw handled;
       }
-
-      throw lastError!;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw this.handleError(error);
     }
+
+    // Fallback, should not reach here
+    throw lastError ?? new NetworkError('Network request failed');
   }
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
     const contentType = response.headers.get('content-type');
+    
+    // Handle no-content success responses
+    if (response.status === 204) {
+      return { success: true } as ApiResponse<T>;
+    }
     
     if (!contentType?.includes('application/json')) {
       // Some backend rejections (e.g., auth middleware) may send empty bodies
@@ -263,7 +261,12 @@ export class ApiClient {
       );
     }
 
-    return data;
+    // Normalize legacy responses (without success flag) into ApiResponse shape
+    if (typeof data === 'object' && data !== null && !('success' in data)) {
+      return { success: true, data } as ApiResponse<T>;
+    }
+
+    return data as ApiResponse<T>;
   }
 
   private handleError(error: any): Error {
@@ -275,7 +278,7 @@ export class ApiClient {
       return error;
     }
 
-    if (!navigator.onLine) {
+    if (browser && typeof navigator !== 'undefined' && !navigator.onLine) {
       return new NetworkError('No internet connection');
     }
 

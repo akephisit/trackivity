@@ -3,7 +3,7 @@ import { error } from '@sveltejs/kit';
 
 // API Response interface
 export interface ApiResponse<T = any> {
-  status: 'success' | 'error';
+  success: boolean;
   data?: T;
   message?: string;
   error?: string;
@@ -79,7 +79,7 @@ export class ApiClient {
 
       if (!response.ok) {
         // Standard error handling
-        const errorMessage = data.message || data.error || `HTTP ${response.status}`;
+        const errorMessage = data?.message || data?.error || `HTTP ${response.status}`;
         
         // Convert HTTP errors to SvelteKit errors
         if (response.status === 401) {
@@ -93,18 +93,22 @@ export class ApiClient {
         }
 
         return {
-          status: 'error',
+          success: false,
           error: errorMessage,
           data: undefined
         };
       }
 
-      // Normalize response format
-      return {
-        status: 'success',
-        data: data.data || data,
-        message: data.message
-      };
+      // Normalize response format to { success, data }
+      // If backend already returns { success }, honor it; else wrap
+      if (typeof data === 'object' && data !== null) {
+        if ('success' in data) {
+          return data as ApiResponse<T>;
+        }
+        return { success: true, data: (data as any).data ?? data, message: (data as any).message } as ApiResponse<T>;
+      }
+
+      return { success: true, data: data as T } as ApiResponse<T>;
 
     } catch (err) {
       if (err && typeof err === 'object' && 'status' in err) {
@@ -119,7 +123,7 @@ export class ApiClient {
   /**
    * GET request
    */
-  async get<T>(event: RequestEvent, endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+  async get<T = any>(event: RequestEvent, endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
     const url = params ? `${endpoint}?${new URLSearchParams(params).toString()}` : endpoint;
     return this.makeRequest<T>(event, url, { method: 'GET' });
   }
@@ -127,7 +131,7 @@ export class ApiClient {
   /**
    * POST request
    */
-  async post<T>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async post<T = any>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined
@@ -137,7 +141,7 @@ export class ApiClient {
   /**
    * PUT request
    */
-  async put<T>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async put<T = any>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, {
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined
@@ -147,7 +151,7 @@ export class ApiClient {
   /**
    * PATCH request
    */
-  async patch<T>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async patch<T = any>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, {
       method: 'PATCH',
       body: body ? JSON.stringify(body) : undefined
@@ -157,14 +161,14 @@ export class ApiClient {
   /**
    * DELETE request
    */
-  async delete<T>(event: RequestEvent, endpoint: string): Promise<ApiResponse<T>> {
+  async delete<T = any>(event: RequestEvent, endpoint: string): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, { method: 'DELETE' });
   }
 
   /**
    * Upload file with multipart/form-data
    */
-  async upload<T>(event: RequestEvent, endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
+  async upload<T = any>(event: RequestEvent, endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
     const sessionId = event.cookies.get('session_id');
     const headers: Record<string, string> = {};
 
@@ -186,21 +190,21 @@ export const apiClient = new ApiClient();
 
 // Convenience functions
 export const api = {
-  get: <T>(event: RequestEvent, endpoint: string, params?: Record<string, string>) => 
+  get: <T = any>(event: RequestEvent, endpoint: string, params?: Record<string, string>) => 
     apiClient.get<T>(event, endpoint, params),
   
-  post: <T>(event: RequestEvent, endpoint: string, body?: any) => 
+  post: <T = any>(event: RequestEvent, endpoint: string, body?: any) => 
     apiClient.post<T>(event, endpoint, body),
   
-  put: <T>(event: RequestEvent, endpoint: string, body?: any) => 
+  put: <T = any>(event: RequestEvent, endpoint: string, body?: any) => 
     apiClient.put<T>(event, endpoint, body),
   
-  patch: <T>(event: RequestEvent, endpoint: string, body?: any) => 
+  patch: <T = any>(event: RequestEvent, endpoint: string, body?: any) => 
     apiClient.patch<T>(event, endpoint, body),
   
-  delete: <T>(event: RequestEvent, endpoint: string) => 
+  delete: <T = any>(event: RequestEvent, endpoint: string) => 
     apiClient.delete<T>(event, endpoint),
   
-  upload: <T>(event: RequestEvent, endpoint: string, formData: FormData) => 
+  upload: <T = any>(event: RequestEvent, endpoint: string, formData: FormData) => 
     apiClient.upload<T>(event, endpoint, formData)
 };

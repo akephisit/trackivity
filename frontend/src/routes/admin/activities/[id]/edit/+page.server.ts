@@ -106,9 +106,9 @@ export const load: PageServerLoad = async (event) => {
       
       if (facultiesRes.ok) {
         const facultiesData = await facultiesRes.json();
-        if (facultiesData.status === 'success' && facultiesData.data) {
-          faculties = facultiesData.data;
-        }
+      if (facultiesData.success === true && facultiesData.data) {
+        faculties = facultiesData.data;
+      }
       }
     } catch (e) {
       console.warn('Could not fetch faculties:', e);
@@ -126,9 +126,9 @@ export const load: PageServerLoad = async (event) => {
       
       if (departmentsRes.ok) {
         const departmentsData = await departmentsRes.json();
-        if (departmentsData.status === 'success' && departmentsData.data) {
-          departments = departmentsData.data;
-        }
+      if (departmentsData.success === true && departmentsData.data) {
+        departments = departmentsData.data;
+      }
       }
     } catch (e) {
       console.warn('Could not fetch departments:', e);
@@ -251,7 +251,7 @@ export const actions: Actions = {
         ? await response.json().catch(() => ({}))
         : {};
       
-      if (result.status === 'success') {
+      if (result.success === true) {
         // Redirect to activity detail page
         throw redirect(302, `/admin/activities/${id}`);
       } else {

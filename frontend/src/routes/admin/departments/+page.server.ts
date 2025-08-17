@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
 import type { Department, Faculty } from '$lib/types/admin';
 import { requireAdmin } from '$lib/server/auth';
+import { api } from '$lib/server/api-client';
 
 // Department schemas
 const departmentCreateSchema = z.object({
@@ -27,7 +28,8 @@ const departmentUpdateSchema = z.object({
 	status: z.boolean().optional()
 });
 
-export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) => {
+export const load: PageServerLoad = async (event) => {
+    const { cookies, depends, parent } = event;
 	depends('app:page-data');
 	
 	const sessionId = cookies.get('session_id');
@@ -44,42 +46,35 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch, parent }) 
 		apiEndpoint = `/api/faculties/${admin_role.faculty_id}/departments`;
 	}
 
-	try {
-		// Fetch departments
-		const departmentsResponse = await fetch(apiEndpoint);
+    try {
+        // Fetch departments
+        const departmentsResponse = await api.get(event, apiEndpoint);
 
-		let departments: Department[] = [];
-		if (departmentsResponse.ok) {
-			const departmentsData = await departmentsResponse.json();
-			if (departmentsData.status === 'success') {
-				departments = departmentsData.data.departments || [];
-			}
-		}
+        let departments: Department[] = [];
+        if (departmentsResponse.success) {
+            const departmentsData = departmentsResponse.data as any;
+            departments = departmentsData.departments || departmentsData || [];
+        }
 
 		// For FacultyAdmin, get their faculty info
 		let currentFaculty: Faculty | null = null;
-		if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
-			const facultyResponse = await fetch(`/api/faculties/${admin_role.faculty_id}`);
-
-			if (facultyResponse.ok) {
-				const facultyData = await facultyResponse.json();
-				if (facultyData.status === 'success') {
-					currentFaculty = facultyData.data.faculty;
-				}
-			}
-		}
+        if (admin_role?.admin_level === 'FacultyAdmin' && admin_role.faculty_id) {
+            const facultyResponse = await api.get(event, `/api/faculties/${admin_role.faculty_id}`);
+            if (facultyResponse.success) {
+                const facultyData = facultyResponse.data as any;
+                currentFaculty = facultyData.faculty || facultyData;
+            }
+        }
 
 		// If SuperAdmin, load faculties list for selection
 		let faculties: Faculty[] | null = null;
-		if (admin_role?.admin_level === 'SuperAdmin') {
-			const facRes = await fetch(`/api/admin/faculties`);
-			if (facRes.ok) {
-				const facData = await facRes.json();
-				if (facData.status === 'success') {
-					faculties = facData.data.faculties || [];
-				}
-			}
-		}
+        if (admin_role?.admin_level === 'SuperAdmin') {
+            const facRes = await api.get(event, `/api/admin/faculties`);
+            if (facRes.success) {
+                const facData = facRes.data as any;
+                faculties = facData.faculties || facData || [];
+            }
+        }
 
 		// Create forms
 		const createForm = await superValidate(zod(departmentCreateSchema));
@@ -143,28 +138,13 @@ export const actions: Actions = {
         const apiEndpoint = `/api/faculties/${targetFacultyId}/departments`;
 
 		try {
-            const response = await event.fetch(apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form.data)
-            });
-
-            const contentType = response.headers.get('content-type') || '';
-            if (!response.ok) {
-                if (contentType.includes('application/json')) {
-                    const result = await response.json();
-                    return fail(response.status, { 
-                        form,
-                        error: result.message || result.error || 'เกิดข้อผิดพลาดในการสร้างภาควิชา'
-                    });
-                } else {
-                    const text = await response.text().catch(() => '');
-                    return fail(response.status, { form, error: text || 'เกิดข้อผิดพลาดในการสร้างภาควิชา' });
-                }
+            const response = await api.post(event, apiEndpoint, form.data);
+            if (!response.success) {
+                return fail(400, { 
+                    form,
+                    error: response.error || 'เกิดข้อผิดพลาดในการสร้างภาควิชา'
+                });
             }
-
-            // If OK, try to parse JSON but tolerate empty
-            try { await response.json(); } catch {}
             return { form, success: true };
 		} catch (error) {
 			console.error('Failed to create department:', error);
@@ -199,20 +179,13 @@ export const actions: Actions = {
 		}
 
 		try {
-            const response = await event.fetch(`/api/departments/${departmentId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form.data)
-            });
-
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					form,
-					error: result.message || 'เกิดข้อผิดพลาดในการแก้ไขภาควิชา'
-				});
-			}
+            const response = await api.put(event, `/api/departments/${departmentId}`, form.data);
+            if (!response.success) {
+                return fail(400, { 
+                    form,
+                    error: response.error || 'เกิดข้อผิดพลาดในการแก้ไขภาควิชา'
+                });
+            }
 
 			return { form, success: true };
 		} catch (error) {
@@ -245,17 +218,12 @@ export const actions: Actions = {
 		const departmentId = formData.get('departmentId') as string;
 
         try {
-            const response = await event.fetch(`/api/departments/${departmentId}`, {
-                method: 'DELETE'
-            });
-
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					error: result.message || result.error || 'เกิดข้อผิดพลาดในการลบภาควิชา'
-				});
-			}
+            const response = await api.delete(event, `/api/departments/${departmentId}`);
+            if (!response.success) {
+                return fail(400, { 
+                    error: response.error || 'เกิดข้อผิดพลาดในการลบภาควิชา'
+                });
+            }
 
 			return { success: true };
 		} catch (error) {
@@ -287,17 +255,12 @@ export const actions: Actions = {
 		const departmentId = formData.get('departmentId') as string;
 
         try {
-            const response = await event.fetch(`/api/departments/${departmentId}/toggle-status`, {
-                method: 'PUT'
-            });
-
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะภาควิชา'
-				});
-			}
+            const response = await api.put(event, `/api/departments/${departmentId}/toggle-status`);
+            if (!response.success) {
+                return fail(400, { 
+                    error: response.error || 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะภาควิชา'
+                });
+            }
 
 			return { success: true };
 		} catch (error) {
