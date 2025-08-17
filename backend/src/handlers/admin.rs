@@ -2500,7 +2500,10 @@ pub async fn create_admin_activity(
             eligible_faculties, activity_type, start_date, end_date, 
             start_time_only, end_time_only, hours
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8,
+            $9::jsonb, $10::activity_type, $11, $12, $13, $14, $15
+        )
         RETURNING id, title, description, location,
                   ((start_date::timestamp + start_time_only) AT TIME ZONE 'UTC') as start_time,
                   ((end_date::timestamp + end_time_only) AT TIME ZONE 'UTC') as end_time,

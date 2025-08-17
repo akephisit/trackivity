@@ -83,12 +83,15 @@ export const POST: RequestHandler = async (event) => {
 
 		// สร้าง payload ให้ตรงกับ backend /api/admin/activities
 		const payload = {
-			title: body.activity_name.trim(),
+			activity_name: body.activity_name.trim(),
 			description: body.description ? String(body.description).trim() : '',
 			start_date: body.start_date,
 			end_date: body.end_date,
 			start_time: body.start_time,
 			end_time: body.end_time,
+			// include time-only aliases for backend compatibility
+			start_time_only: body.start_time,
+			end_time_only: body.end_time,
 			activity_type: body.activity_type,
 			location: body.location.trim(),
 			max_participants: body.max_participants ?? null,
@@ -122,8 +125,10 @@ export const POST: RequestHandler = async (event) => {
 				throw error(403, 'ไม่ได้รับอนุญาตให้สร้างกิจกรรม');
 			} else if (response.status === 400) {
 				throw error(400, errorMessage);
+			} else if (response.status === 422) {
+				throw error(422, errorMessage);
 			} else {
-				throw error(500, errorMessage);
+				throw error(response.status, errorMessage);
 			}
 		}
 
