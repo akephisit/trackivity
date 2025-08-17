@@ -3,9 +3,7 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import { Separator } from '$lib/components/ui/separator';
-	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { 
@@ -38,9 +36,7 @@
 		IconEye,
 		IconEyeOff,
 		IconCheck,
-		IconX,
-		IconPlus,
-		IconBarChart
+		IconChartBar
 	} from '@tabler/icons-svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -60,7 +56,7 @@
 		form?: any;
 	}>();
 	
-	const { activity, participations, participationStats, faculties, user } = data;
+	const { activity, participations, participationStats } = data;
 
 	let showParticipations = $state(true);
 	let showStats = $state(true);
@@ -183,7 +179,7 @@
 	function exportParticipants() {
 		const csv = [
 			['ชื่อ', 'รหัสนักศึกษา', 'อีเมล', 'สาขา', 'สถานะ', 'ลงทะเบียนเมื่อ', 'เช็คอินเมื่อ', 'เช็คเอาต์เมื่อ', 'หมายเหตุ'],
-			...participations.map(p => [
+			...participations.map((p: Participation) => [
 				p.user_name,
 				p.student_id,
 				p.email,
@@ -194,7 +190,7 @@
 				p.checked_out_at ? formatDateTime(p.checked_out_at) : '-',
 				p.notes || '-'
 			])
-		].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+		].map(row => row.map((cell: string) => `"${cell}"`).join(',')).join('\n');
 
 		const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
 		const link = document.createElement('a');
@@ -298,7 +294,7 @@
 			<Card>
 				<CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 					<CardTitle class="text-sm font-medium">เสร็จสิ้น</CardTitle>
-					<IconBarChart class="h-4 w-4 text-purple-500" />
+					<IconChartBar class="h-4 w-4 text-purple-500" />
 				</CardHeader>
 				<CardContent>
 					<div class="text-2xl font-bold text-purple-600">{participationStats.completed}</div>
@@ -456,11 +452,19 @@
 							ส่งออก CSV
 						</Button>
 						<Button variant="outline" size="sm" onclick={toggleStats}>
-							{showStats ? <IconEyeOff class="size-4 mr-2" /> : <IconEye class="size-4 mr-2" />}
+							{#if showStats}
+								<IconEyeOff class="size-4 mr-2" />
+							{:else}
+								<IconEye class="size-4 mr-2" />
+							{/if}
 							{showStats ? 'ซ่อน' : 'แสดง'}สถิติ
 						</Button>
 						<Button variant="outline" size="sm" onclick={toggleParticipations}>
-							{showParticipations ? <IconEyeOff class="size-4 mr-2" /> : <IconEye class="size-4 mr-2" />}
+							{#if showParticipations}
+								<IconEyeOff class="size-4 mr-2" />
+							{:else}
+								<IconEye class="size-4 mr-2" />
+							{/if}
 							{showParticipations ? 'ซ่อน' : 'แสดง'}รายชื่อ
 						</Button>
 					</div>
@@ -551,7 +555,7 @@
 </div>
 
 <!-- Edit Participant Dialog -->
-<Dialog.Root bind:open={editingParticipant}>
+<Dialog.Root open={!!editingParticipant} onOpenChange={(open) => { if (!open) editingParticipant = null; }}>
 	<Dialog.Content class="sm:max-w-[425px]">
 		<Dialog.Header>
 			<Dialog.Title>แก้ไขสถานะผู้เข้าร่วม</Dialog.Title>
@@ -635,7 +639,7 @@
 				onclick={async () => {
 					const formData = new FormData();
 					formData.append('participationId', deleteParticipantId);
-					const response = await fetch('?/removeParticipant', {
+					await fetch('?/removeParticipant', {
 						method: 'POST',
 						body: formData
 					});
