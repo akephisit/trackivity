@@ -16,6 +16,8 @@
 	} from '@tabler/icons-svelte/icons';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+
 	import type { Activity } from '$lib/types/activity';
 
 	let { data } = $props();
@@ -92,9 +94,39 @@
 		goto(`/admin/activities/${activityId}/edit`);
 	}
 
-	function deleteActivity(activityId: string) {
-		// TODO: Implement delete functionality
-		toast.info('ฟังก์ชันลบยังไม่พร้อมใช้งาน');
+	let deleteDialogOpen = $state(false);
+	let activityToDelete: { id: string; name: string } | null = $state(null);
+	let deleting = $state(false);
+
+	function confirmDelete(activityId: string, name: string | undefined) {
+		// Normalize to a non-empty string for the dialog
+		const resolvedName = (name && name.trim()) || 'กิจกรรม';
+		activityToDelete = { id: activityId, name: resolvedName };
+		deleteDialogOpen = true;
+	}
+
+	async function performDelete() {
+		if (!activityToDelete) return;
+		deleting = true;
+		try {
+			const fd = new FormData();
+			fd.append('activityId', activityToDelete.id);
+			const res = await fetch('?/delete', { method: 'POST', body: fd });
+			const result = await res.json().catch(() => ({}));
+			if (res.ok && (result.type === 'success' || result.success === true)) {
+				toast.success('ลบกิจกรรมสำเร็จ');
+				deleteDialogOpen = false;
+				activityToDelete = null;
+				// Refresh list
+				goto('/admin/activities', { replaceState: true });
+			} else {
+				toast.error(result.error || 'ลบกิจกรรมไม่สำเร็จ');
+			}
+		} catch (e) {
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		} finally {
+			deleting = false;
+		}
 	}
 
 </script>
@@ -309,7 +341,7 @@
 													<Button
 														variant="ghost"
 														size="sm"
-														onclick={() => deleteActivity(activity.id)}
+														onclick={() => confirmDelete(activity.id, activity.activity_name || activity.name)}
 														class="text-red-600 hover:text-red-700 hover:bg-red-50"
 														title="ลบ"
 													>
@@ -328,3 +360,33 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Delete Confirmation Dialog -->
+<AlertDialog.Root bind:open={deleteDialogOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>ยืนยันการลบกิจกรรม</AlertDialog.Title>
+			<AlertDialog.Description>
+				{#if activityToDelete}
+					คุณแน่ใจหรือไม่ที่จะลบกิจกรรม "{activityToDelete.name}"?
+					<br />การดำเนินการนี้ไม่สามารถยกเลิกได้
+				{:else}
+					กำลังโหลดข้อมูล...
+				{/if}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel
+				onclick={() => {
+					deleteDialogOpen = false;
+					activityToDelete = null;
+				}}
+			>
+				ยกเลิก
+			</AlertDialog.Cancel>
+			<AlertDialog.Action onclick={performDelete} class="bg-red-600 text-white hover:bg-red-700" disabled={deleting}>
+				{deleting ? 'กำลังลบ...' : 'ลบกิจกรรม'}
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>

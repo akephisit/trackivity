@@ -1,6 +1,6 @@
 import { requireFacultyAdmin } from '$lib/server/auth';
-import { error } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import { error, fail } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
 import type { Activity } from '$lib/types/activity';
 import { AdminLevel } from '$lib/types/admin';
 import { PUBLIC_API_URL } from '$env/static/public';
@@ -100,4 +100,40 @@ export const load: PageServerLoad = async (event) => {
 			canCreateActivity: adminLevel === AdminLevel.SuperAdmin || adminLevel === AdminLevel.FacultyAdmin
 		};
 	}
+};
+
+export const actions: Actions = {
+    delete: async (event) => {
+        // Ensure only FacultyAdmin/SuperAdmin can delete
+        await requireFacultyAdmin(event);
+
+        try {
+            const formData = await event.request.formData();
+            const activityId = formData.get('activityId');
+            if (!activityId || typeof activityId !== 'string') {
+                return fail(400, { error: 'ไม่พบรหัสกิจกรรม' });
+            }
+
+            const resp = await event.fetch(`/api/activities/${activityId}`, {
+                method: 'DELETE'
+            });
+
+            const ct = resp.headers.get('content-type') || '';
+            if (!resp.ok) {
+                if (ct.includes('application/json')) {
+                    const data = await resp.json().catch(() => ({}));
+                    return fail(resp.status, { error: data.message || data.error || 'ลบกิจกรรมไม่สำเร็จ' });
+                } else {
+                    const text = await resp.text().catch(() => '');
+                    return fail(resp.status, { error: text || 'ลบกิจกรรมไม่สำเร็จ' });
+                }
+            }
+
+            // Success (body may be empty)
+            return { success: true };
+        } catch (err) {
+            console.error('Delete activity error:', err);
+            return fail(500, { error: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์' });
+        }
+    }
 };
