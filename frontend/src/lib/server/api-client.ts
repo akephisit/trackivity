@@ -99,12 +99,26 @@ export class ApiClient {
         };
       }
 
-      // Normalize response format to { success, data }
-      // If backend already returns { success }, honor it; else wrap
+      // Normalize to unified shape { success, data, error }
       if (typeof data === 'object' && data !== null) {
         if ('success' in data) {
-          return data as ApiResponse<T>;
+          const d: any = data;
+          if (d.success === true) {
+            // Ensure payload is under data for consumers
+            return {
+              success: true,
+              data: d.data ?? d,
+              message: d.message
+            } as ApiResponse<T>;
+          } else {
+            return {
+              success: false,
+              error: d.error || d.message || 'Request failed',
+              data: d.data
+            } as ApiResponse<T>;
+          }
         }
+        // Legacy/non-standard success shape
         return { success: true, data: (data as any).data ?? data, message: (data as any).message } as ApiResponse<T>;
       }
 
