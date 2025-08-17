@@ -396,6 +396,34 @@
 				</div>
 			</div>
 
+			<!-- Extra admin fields -->
+			<div class="grid gap-4 md:grid-cols-2">
+				{#if activity.activity_type}
+					<div>
+						<p class="font-medium">ประเภทกิจกรรม</p>
+						<p class="text-sm text-muted-foreground">{activity.activity_type}</p>
+					</div>
+				{/if}
+				{#if activity.academic_year}
+					<div>
+						<p class="font-medium">ปีการศึกษา</p>
+						<p class="text-sm text-muted-foreground">{activity.academic_year}</p>
+					</div>
+				{/if}
+				{#if activity.hours}
+					<div>
+						<p class="font-medium">ชั่วโมงกิจกรรม</p>
+						<p class="text-sm text-muted-foreground">{activity.hours}</p>
+					</div>
+				{/if}
+				{#if activity.organizer}
+					<div>
+						<p class="font-medium">ผู้จัด</p>
+						<p class="text-sm text-muted-foreground">{activity.organizer}</p>
+					</div>
+				{/if}
+			</div>
+
 			<Separator />
 
 			<!-- Quick Status Update -->

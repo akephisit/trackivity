@@ -85,6 +85,7 @@ pub fn create_routes() -> Router<SessionState> {
         .route("/api/admin/dashboard", get(admin::get_dashboard))
         .route("/api/admin/users", get(admin::get_admin_users))
         .route("/api/admin/activities", get(admin::get_admin_activities))
+        .route("/api/admin/activities/{id}", get(admin::get_admin_activity))
         .route("/api/admin/activities", post(admin::create_admin_activity))
         .route("/api/admin/create", post(admin::create_admin))
         .route("/api/admin/roles/{id}/toggle-status", put(admin::toggle_admin_status))

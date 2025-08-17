@@ -329,6 +329,34 @@
 					</AlertDescription>
 				</Alert>
 
+				<!-- Read-only extra fields (not editable in current API) -->
+				<div class="grid gap-4 md:grid-cols-2">
+					{#if activity.activity_type}
+						<div>
+							<Label>ประเภทกิจกรรม</Label>
+							<p class="text-sm text-muted-foreground">{activity.activity_type}</p>
+						</div>
+					{/if}
+					{#if activity.academic_year}
+						<div>
+							<Label>ปีการศึกษา</Label>
+							<p class="text-sm text-muted-foreground">{activity.academic_year}</p>
+						</div>
+					{/if}
+					{#if activity.hours}
+						<div>
+							<Label>ชั่วโมงกิจกรรม</Label>
+							<p class="text-sm text-muted-foreground">{activity.hours}</p>
+						</div>
+					{/if}
+					{#if activity.organizer}
+						<div>
+							<Label>ผู้จัด</Label>
+							<p class="text-sm text-muted-foreground">{activity.organizer}</p>
+						</div>
+					{/if}
+				</div>
+
 				<!-- Action Buttons -->
 				<div class="flex flex-col sm:flex-row gap-4 pt-4">
 					<Button 

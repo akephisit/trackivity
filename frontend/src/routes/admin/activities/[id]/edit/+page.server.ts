@@ -22,38 +22,57 @@ export const load: PageServerLoad = async (event) => {
   }
 
   try {
-    // Fetch activity details from public activities endpoint
-    const activityRes = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
-      headers: {
-        'Cookie': `session_id=${sessionId}`,
-        'X-Session-ID': sessionId
-      }
-    });
-    
-    if (!activityRes.ok) {
-      if (activityRes.status === 404) {
-        throw error(404, 'ไม่พบกิจกรรมที่ระบุ');
-      }
-      if (activityRes.status === 403) {
-        throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
-      }
-      throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
-    }
+    // Try admin endpoint first; fallback to public endpoint on 404
+    let activityData: any;
+    {
+      const res = await fetch(`/api/admin/activities/${id}`, {
+        headers: {
+          'Cookie': `session_id=${sessionId}`,
+          'X-Session-ID': sessionId
+        }
+      });
 
-    const activityData = await activityRes.json();
+      if (res.ok) {
+        activityData = await res.json();
+      } else if (res.status === 404) {
+        const fallback = await fetch(`/api/activities/${id}`, {
+          headers: {
+            'Cookie': `session_id=${sessionId}`,
+            'X-Session-ID': sessionId
+          }
+        });
+        if (!fallback.ok) {
+          if (fallback.status === 404) {
+            throw error(404, 'ไม่พบกิจกรรมที่ระบุ');
+          }
+          if (fallback.status === 403) {
+            throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+          }
+          throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
+        }
+        activityData = await fallback.json();
+      } else if (res.status === 403) {
+        throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+      } else {
+        throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
+      }
+    }
 
     const rawActivity = activityData?.data ?? activityData;
     if (!rawActivity) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
 
+    const startIso = rawActivity.start_time ?? (rawActivity.start_date && rawActivity.start_time_only ? new Date(`${rawActivity.start_date}T${rawActivity.start_time_only}`).toISOString() : undefined);
+    const endIso = rawActivity.end_time ?? (rawActivity.end_date && rawActivity.end_time_only ? new Date(`${rawActivity.end_date}T${rawActivity.end_time_only}`).toISOString() : undefined);
+
     const activity: Activity = {
       id: rawActivity.id,
       title: rawActivity.title ?? rawActivity.activity_name ?? rawActivity.name,
       description: rawActivity.description ?? '',
       location: rawActivity.location ?? '',
-      start_time: rawActivity.start_time ?? rawActivity.start_date,
-      end_time: rawActivity.end_time ?? rawActivity.end_date,
+      start_time: startIso ?? rawActivity.start_date,
+      end_time: endIso ?? rawActivity.end_date,
       max_participants: rawActivity.max_participants ?? undefined,
       current_participants: rawActivity.current_participants ?? 0,
       status: rawActivity.status ?? 'draft',
@@ -64,13 +83,21 @@ export const load: PageServerLoad = async (event) => {
       created_at: rawActivity.created_at,
       updated_at: rawActivity.updated_at,
       is_registered: rawActivity.is_registered ?? false,
-      user_participation_status: rawActivity.user_participation_status ?? undefined
+      user_participation_status: rawActivity.user_participation_status ?? undefined,
+      activity_type: rawActivity.activity_type ?? undefined,
+      hours: rawActivity.hours ?? undefined,
+      organizer: rawActivity.organizer ?? undefined,
+      academic_year: rawActivity.academic_year ?? undefined,
+      start_date: rawActivity.start_date ?? undefined,
+      end_date: rawActivity.end_date ?? undefined,
+      start_time_only: rawActivity.start_time_only ?? undefined,
+      end_time_only: rawActivity.end_time_only ?? undefined
     };
 
     // Fetch faculties list
     let faculties: any[] = [];
     try {
-      const facultiesRes = await fetch(`${PUBLIC_API_URL}/api/admin/faculties`, {
+      const facultiesRes = await fetch(`/api/admin/faculties`, {
         headers: {
           'Cookie': `session_id=${sessionId}`,
           'X-Session-ID': sessionId
@@ -90,7 +117,7 @@ export const load: PageServerLoad = async (event) => {
     // Fetch departments list
     let departments: any[] = [];
     try {
-      const departmentsRes = await fetch(`${PUBLIC_API_URL}/api/admin/departments`, {
+      const departmentsRes = await fetch(`/api/departments`, {
         headers: {
           'Cookie': `session_id=${sessionId}`,
           'X-Session-ID': sessionId
@@ -193,7 +220,7 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
+      const response = await fetch(`/api/activities/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

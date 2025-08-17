@@ -73,6 +73,8 @@ pub struct AdminActivityInfo {
     pub organizer: Option<String>,
     pub eligible_faculties: Option<serde_json::Value>,
     pub hours: Option<i32>,
+    // Extra helpful fields
+    pub faculty_id: Option<Uuid>,
 }
 
 /// Get admin dashboard statistics
@@ -609,7 +611,8 @@ pub async fn get_admin_activities(
             a.academic_year,
             a.organizer,
             a.eligible_faculties,
-            a.hours
+            a.hours,
+            a.faculty_id
         FROM activities a
     "#
     .to_string();
@@ -685,6 +688,7 @@ pub async fn get_admin_activities(
                     organizer: row.get::<Option<String>, _>("organizer"),
                     eligible_faculties: row.get::<Option<serde_json::Value>, _>("eligible_faculties"),
                     hours: row.get::<Option<i32>, _>("hours"),
+                    faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
                 };
 
                 admin_activities.push(admin_activity);
@@ -707,6 +711,88 @@ pub async fn get_admin_activities(
             let error_response = json!({
                 "status": "error",
                 "message": "Failed to retrieve admin activities"
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get single admin activity with enhanced information
+pub async fn get_admin_activity(
+    State(session_state): State<SessionState>,
+    _admin: AdminUser,
+    Path(activity_id): Path<Uuid>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let query = r#"
+        SELECT 
+            a.id,
+            a.title,
+            a.description,
+            a.location,
+            a.start_date,
+            a.end_date,
+            a.start_time_only,
+            a.end_time_only,
+            a.activity_type::text as activity_type,
+            a.max_participants,
+            a.status,
+            a.created_at,
+            a.updated_at,
+            a.academic_year,
+            a.organizer,
+            a.eligible_faculties,
+            a.hours,
+            a.faculty_id
+        FROM activities a
+        WHERE a.id = $1
+    "#;
+
+    let result = sqlx::query(query)
+        .bind(activity_id)
+        .fetch_one(&session_state.db_pool)
+        .await;
+
+    match result {
+        Ok(row) => {
+            let admin_activity = AdminActivityInfo {
+                id: row.get("id"),
+                title: row.get("title"),
+                description: row.get("description"),
+                location: row.get("location"),
+                start_date: row.get::<Option<chrono::NaiveDate>, _>("start_date"),
+                end_date: row.get::<Option<chrono::NaiveDate>, _>("end_date"),
+                start_time_only: row.get::<Option<chrono::NaiveTime>, _>("start_time_only"),
+                end_time_only: row.get::<Option<chrono::NaiveTime>, _>("end_time_only"),
+                activity_type: row.get::<Option<String>, _>("activity_type"),
+                max_participants: row.get::<Option<i32>, _>("max_participants"),
+                status: row.get::<ActivityStatus, _>("status"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+                academic_year: row.get::<Option<String>, _>("academic_year"),
+                organizer: row.get::<Option<String>, _>("organizer"),
+                eligible_faculties: row.get::<Option<serde_json::Value>, _>("eligible_faculties"),
+                hours: row.get::<Option<i32>, _>("hours"),
+                faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
+            };
+
+            let response = json!({
+                "status": "success",
+                "data": admin_activity,
+                "message": "Admin activity retrieved successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Activity not found"
+            });
+            Err((StatusCode::NOT_FOUND, Json(error_response)))
+        }
+        Err(_) => {
+            let error_response = json!({
+                "status": "error",
+                "message": "Failed to retrieve activity"
             });
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }

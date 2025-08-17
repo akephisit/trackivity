@@ -30,6 +30,7 @@ export interface Activity {
 	activity_type?: ActivityType;
 	hours?: number;
 	organizer?: string;
+	academic_year?: string;
 	name?: string;
 	require_score?: boolean;
 	organizerType?: 'คณะ' | 'มหาวิทยาลัย';
