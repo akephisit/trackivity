@@ -14,7 +14,7 @@
 		IconEye,
 		IconAward
 	} from '@tabler/icons-svelte/icons';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 
@@ -117,8 +117,8 @@
 				toast.success('ลบกิจกรรมสำเร็จ');
 				deleteDialogOpen = false;
 				activityToDelete = null;
-				// Refresh list
-				goto('/admin/activities', { replaceState: true });
+				// Refresh list by re-running load
+				await invalidateAll();
 			} else {
 				toast.error(result.error || 'ลบกิจกรรมไม่สำเร็จ');
 			}
