@@ -13,6 +13,17 @@ BEGIN
     END IF;
 END $$;
 
+-- Add hours field (if not exists)
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='hours') THEN
+        ALTER TABLE activities ADD COLUMN hours INTEGER;
+        RAISE NOTICE 'Added hours column to activities table';
+    ELSE
+        RAISE NOTICE 'hours column already exists in activities table';
+    END IF;
+END $$;
+
 -- Add organizer field (if not exists)
 DO $$ 
 BEGIN 
