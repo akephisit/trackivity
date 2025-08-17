@@ -6,6 +6,13 @@ CREATE TYPE admin_level AS ENUM ('super_admin', 'faculty_admin', 'regular_admin'
 CREATE TYPE activity_status AS ENUM ('draft', 'published', 'ongoing', 'completed', 'cancelled');
 CREATE TYPE participation_status AS ENUM ('registered', 'checked_in', 'checked_out', 'completed', 'no_show');
 CREATE TYPE subscription_type AS ENUM ('basic', 'premium', 'enterprise');
+-- Activity type used by admin UI
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'activity_type') THEN
+        CREATE TYPE activity_type AS ENUM ('Academic', 'Sports', 'Cultural', 'Social', 'Other');
+    END IF;
+END $$;
 
 -- Create faculties table
 CREATE TABLE faculties (
@@ -62,16 +69,26 @@ CREATE TABLE activities (
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
     location VARCHAR(255) NOT NULL,
-    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    -- finalized schema for admin UI
+    activity_type activity_type,
+    academic_year VARCHAR(20) NOT NULL,
+    organizer VARCHAR(255) NOT NULL,
+    eligible_faculties JSONB NOT NULL DEFAULT '[]',
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    start_time_only TIME NOT NULL,
+    end_time_only TIME NOT NULL,
+    hours INTEGER NOT NULL,
     max_participants INTEGER CHECK (max_participants > 0),
     status activity_status NOT NULL DEFAULT 'draft',
     faculty_id UUID REFERENCES faculties(id) ON DELETE SET NULL,
-    department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
     created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    CHECK (end_time > start_time)
+    CHECK (
+        (end_date > start_date) OR 
+        (end_date = start_date AND end_time_only > start_time_only)
+    )
 );
 
 -- Create participations table
@@ -108,10 +125,13 @@ CREATE INDEX idx_users_department_id ON users(department_id);
 CREATE INDEX idx_admin_roles_user_id ON admin_roles(user_id);
 CREATE INDEX idx_admin_roles_faculty_id ON admin_roles(faculty_id);
 CREATE INDEX idx_activities_faculty_id ON activities(faculty_id);
-CREATE INDEX idx_activities_department_id ON activities(department_id);
 CREATE INDEX idx_activities_created_by ON activities(created_by);
-CREATE INDEX idx_activities_start_time ON activities(start_time);
 CREATE INDEX idx_activities_status ON activities(status);
+-- New indexes for finalized schema
+CREATE INDEX idx_activities_academic_year ON activities(academic_year);
+CREATE INDEX idx_activities_activity_type ON activities(activity_type);
+CREATE INDEX idx_activities_start_date ON activities(start_date);
+CREATE INDEX idx_activities_eligible_faculties ON activities USING GIN (eligible_faculties);
 CREATE INDEX idx_participations_user_id ON participations(user_id);
 CREATE INDEX idx_participations_activity_id ON participations(activity_id);
 CREATE INDEX idx_participations_status ON participations(status);
