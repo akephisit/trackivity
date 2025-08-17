@@ -1,3 +1,6 @@
+-- Ensure required extensions
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Create custom types
 CREATE TYPE admin_level AS ENUM ('super_admin', 'faculty_admin', 'regular_admin');
 CREATE TYPE activity_status AS ENUM ('draft', 'published', 'ongoing', 'completed', 'cancelled');
