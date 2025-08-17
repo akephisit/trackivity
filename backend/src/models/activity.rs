@@ -13,22 +13,8 @@ pub enum ActivityStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Activity {
-    pub id: Uuid,
-    pub title: String,
-    pub description: String,
-    pub location: String,
-    pub start_time: DateTime<Utc>,
-    pub end_time: DateTime<Utc>,
-    pub max_participants: Option<i32>,
-    pub status: ActivityStatus,
-    pub faculty_id: Option<Uuid>,
-    pub department_id: Option<Uuid>,
-    pub created_by: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
+// Note: activity rows are now read via ad-hoc SELECTs combining date + time-only.
+// The legacy Activity struct mapping has been removed to avoid mismatches.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateActivity {

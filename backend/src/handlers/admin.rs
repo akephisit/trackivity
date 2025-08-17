@@ -2495,22 +2495,23 @@ pub async fn create_admin_activity(
     let create_result = sqlx::query(
         r#"
         INSERT INTO activities (
-            title, description, location, start_time, end_time, max_participants, 
-            faculty_id, department_id, created_by, academic_year, organizer, 
+            title, description, location, max_participants, 
+            faculty_id, created_by, academic_year, organizer, 
             eligible_faculties, activity_type, start_date, end_date, 
             start_time_only, end_time_only, hours
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-        RETURNING id, title, description, location, start_time, end_time, max_participants, 
-                  status, faculty_id, department_id, created_by, created_at, updated_at,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING id, title, description, location,
+                  ((start_date::timestamp + start_time_only) AT TIME ZONE 'UTC') as start_time,
+                  ((end_date::timestamp + end_time_only) AT TIME ZONE 'UTC') as end_time,
+                  max_participants, 
+                  status, faculty_id, created_by, created_at, updated_at,
                   academic_year, organizer, eligible_faculties, activity_type, hours
         "#
     )
     .bind(&request.activity_name)  // title
     .bind(request.description.unwrap_or_default())  // description
     .bind(&request.location)  // location
-    .bind(start_datetime)  // start_time
-    .bind(end_datetime)  // end_time
     .bind(request.max_participants)  // max_participants
     .bind(faculty_id)  // faculty_id
     .bind(user_id)  // created_by
@@ -2538,7 +2539,6 @@ pub async fn create_admin_activity(
                 "max_participants": row.get::<Option<i32>, _>("max_participants"),
                 "status": row.get::<String, _>("status"),
                 "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
-                "department_id": row.get::<Option<Uuid>, _>("department_id"),
                 "created_by": row.get::<Uuid, _>("created_by"),
                 "created_at": row.get::<DateTime<Utc>, _>("created_at"),
                 "updated_at": row.get::<DateTime<Utc>, _>("updated_at"),

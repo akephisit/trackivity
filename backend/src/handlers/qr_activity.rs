@@ -357,20 +357,18 @@ pub async fn get_assigned_activities(
                 a.title,
                 a.description,
                 a.location,
-                a.start_time,
-                a.end_time,
+                ((a.start_date::timestamp + a.start_time_only) AT TIME ZONE 'UTC') as start_time,
+                ((a.end_date::timestamp + a.end_time_only) AT TIME ZONE 'UTC') as end_time,
                 a.status,
                 a.max_participants,
                 f.name as faculty_name,
-                d.name as department_name,
                 COUNT(p.id) as current_participants
             FROM activities a
             LEFT JOIN faculties f ON a.faculty_id = f.id
-            LEFT JOIN departments d ON a.department_id = d.id
             LEFT JOIN participations p ON a.id = p.activity_id
             WHERE a.status IN ('published', 'ongoing')
-            GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.status, a.max_participants, f.name, d.name
-            ORDER BY a.start_time ASC
+            GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.status, a.max_participants, f.name
+            ORDER BY a.start_date ASC, a.start_time_only ASC
             "#
         )
         .fetch_all(&session_state.db_pool)
@@ -384,21 +382,19 @@ pub async fn get_assigned_activities(
                 a.title,
                 a.description,
                 a.location,
-                a.start_time,
-                a.end_time,
+                ((a.start_date::timestamp + a.start_time_only) AT TIME ZONE 'UTC') as start_time,
+                ((a.end_date::timestamp + a.end_time_only) AT TIME ZONE 'UTC') as end_time,
                 a.status,
                 a.max_participants,
                 f.name as faculty_name,
-                d.name as department_name,
                 COUNT(p.id) as current_participants
             FROM activities a
             LEFT JOIN faculties f ON a.faculty_id = f.id
-            LEFT JOIN departments d ON a.department_id = d.id
             LEFT JOIN participations p ON a.id = p.activity_id
             WHERE a.status IN ('published', 'ongoing')
             AND (a.created_by = $1 OR a.faculty_id = $2)
-            GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.status, a.max_participants, f.name, d.name
-            ORDER BY a.start_time ASC
+            GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.status, a.max_participants, f.name
+            ORDER BY a.start_date ASC, a.start_time_only ASC
             "#
         )
         .bind(admin.session_user.user_id)
@@ -420,8 +416,7 @@ pub async fn get_assigned_activities(
                     "status": row.get::<String, _>("status"),
                     "max_participants": row.get::<Option<i32>, _>("max_participants"),
                     "current_participants": row.get::<i64, _>("current_participants"),
-                    "faculty_name": row.get::<Option<String>, _>("faculty_name"),
-                    "department_name": row.get::<Option<String>, _>("department_name")
+                    "faculty_name": row.get::<Option<String>, _>("faculty_name")
                 })
             }).collect();
 

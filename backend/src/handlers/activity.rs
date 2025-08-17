@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::middleware::session::{AdminUser, SessionState};
 use crate::models::session::SessionUser;
 use crate::models::{
-    activity::{Activity, ActivityStatus},
+    activity::{ActivityStatus},
     participation::{Participation, ParticipationStatus},
 };
 
@@ -55,8 +55,6 @@ pub struct ActivityWithDetails {
     pub status: ActivityStatus,
     pub faculty_id: Option<Uuid>,
     pub faculty_name: Option<String>,
-    pub department_id: Option<Uuid>,
-    pub department_name: Option<String>,
     pub created_by: Uuid,
     pub created_by_name: String,
     pub created_at: DateTime<Utc>,
@@ -115,9 +113,7 @@ pub async fn get_activities(
     let faculty_id = params
         .get("faculty_id")
         .and_then(|f| Uuid::parse_str(f).ok());
-    let department_id = params
-        .get("department_id")
-        .and_then(|d| Uuid::parse_str(d).ok());
+    // department filter removed
 
     let mut query = r#"
         SELECT 
@@ -125,24 +121,21 @@ pub async fn get_activities(
             a.title,
             a.description,
             a.location,
-            a.start_time,
-            a.end_time,
+            ((a.start_date::timestamp + a.start_time_only) AT TIME ZONE 'UTC') as start_time,
+            ((a.end_date::timestamp + a.end_time_only) AT TIME ZONE 'UTC') as end_time,
             a.max_participants,
             a.status,
             a.faculty_id,
-            a.department_id,
             a.created_by,
             a.created_at,
             a.updated_at,
             f.name as faculty_name,
-            d.name as department_name,
             u.first_name || ' ' || u.last_name as created_by_name,
             COALESCE(COUNT(p.id), 0) as current_participants,
             CASE WHEN up.id IS NOT NULL THEN true ELSE false END as is_registered,
             up.status as user_participation_status
         FROM activities a
         LEFT JOIN faculties f ON a.faculty_id = f.id
-        LEFT JOIN departments d ON a.department_id = d.id
         LEFT JOIN users u ON a.created_by = u.id
         LEFT JOIN participations p ON a.id = p.activity_id
         LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $3
@@ -153,7 +146,6 @@ pub async fn get_activities(
         SELECT COUNT(DISTINCT a.id) 
         FROM activities a
         LEFT JOIN faculties f ON a.faculty_id = f.id
-        LEFT JOIN departments d ON a.department_id = d.id
     "#
     .to_string();
 
@@ -178,9 +170,7 @@ pub async fn get_activities(
         param_count += 1;
     }
 
-    if department_id.is_some() {
-        conditions.push(format!("a.department_id = ${}", param_count));
-    }
+    // department filter removed
 
     if !conditions.is_empty() {
         let where_clause = format!(" WHERE {}", conditions.join(" AND "));
@@ -188,8 +178,8 @@ pub async fn get_activities(
         count_query.push_str(&where_clause);
     }
 
-    query.push_str(" GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.faculty_id, a.department_id, a.created_by, a.created_at, a.updated_at, f.name, d.name, u.first_name, u.last_name, up.id, up.status");
-    query.push_str(" ORDER BY a.start_time DESC LIMIT $1 OFFSET $2");
+    query.push_str(" GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.max_participants, a.status, a.faculty_id, a.created_by, a.created_at, a.updated_at, f.name, u.first_name, u.last_name, up.id, up.status");
+    query.push_str(" ORDER BY a.start_date DESC, a.start_time_only DESC LIMIT $1 OFFSET $2");
 
     let mut query_builder = sqlx::query(&query)
         .bind(limit)
@@ -214,10 +204,7 @@ pub async fn get_activities(
         count_query_builder = count_query_builder.bind(f_id);
     }
 
-    if let Some(d_id) = department_id {
-        query_builder = query_builder.bind(d_id);
-        count_query_builder = count_query_builder.bind(d_id);
-    }
+    // no department filter
 
     let activities_result = query_builder.fetch_all(&session_state.db_pool).await;
     let total_count_result = count_query_builder.fetch_one(&session_state.db_pool).await;
@@ -241,8 +228,6 @@ pub async fn get_activities(
                     status: row.get::<ActivityStatus, _>("status"),
                     faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
                     faculty_name: row.get::<Option<String>, _>("faculty_name"),
-                    department_id: row.get::<Option<Uuid>, _>("department_id"),
-                    department_name: row.get::<Option<String>, _>("department_name"),
                     created_by: row.get("created_by"),
                     created_by_name: row.get("created_by_name"),
                     created_at: row.get("created_at"),
@@ -291,29 +276,26 @@ pub async fn get_activity(
             a.title,
             a.description,
             a.location,
-            a.start_time,
-            a.end_time,
+            ((a.start_date::timestamp + a.start_time_only) AT TIME ZONE 'UTC') as start_time,
+            ((a.end_date::timestamp + a.end_time_only) AT TIME ZONE 'UTC') as end_time,
             a.max_participants,
             a.status,
             a.faculty_id,
-            a.department_id,
             a.created_by,
             a.created_at,
             a.updated_at,
             f.name as faculty_name,
-            d.name as department_name,
             u.first_name || ' ' || u.last_name as created_by_name,
             COALESCE(COUNT(p.id), 0) as current_participants,
             CASE WHEN up.id IS NOT NULL THEN true ELSE false END as is_registered,
             up.status as user_participation_status
         FROM activities a
         LEFT JOIN faculties f ON a.faculty_id = f.id
-        LEFT JOIN departments d ON a.department_id = d.id
         LEFT JOIN users u ON a.created_by = u.id
         LEFT JOIN participations p ON a.id = p.activity_id
         LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $2
         WHERE a.id = $1
-        GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.faculty_id, a.department_id, a.created_by, a.created_at, a.updated_at, f.name, d.name, u.first_name, u.last_name, up.id, up.status
+        GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.max_participants, a.status, a.faculty_id, a.created_by, a.created_at, a.updated_at, f.name, u.first_name, u.last_name, up.id, up.status
         "#
     )
     .bind(&activity_id)
@@ -336,10 +318,6 @@ pub async fn get_activity(
                 faculty_id: row.get("faculty_id"),
                 faculty_name: row
                     .get::<Option<String>, _>("faculty_name")
-                    .filter(|s| !s.is_empty()),
-                department_id: row.get("department_id"),
-                department_name: row
-                    .get::<Option<String>, _>("department_name")
                     .filter(|s| !s.is_empty()),
                 created_by: row.get("created_by"),
                 created_by_name: row
@@ -408,30 +386,52 @@ pub async fn create_activity(
         return Err((StatusCode::BAD_REQUEST, Json(error_response)));
     }
 
-    let create_result = sqlx::query_as::<_, Activity>(
+    let start_naive = request.start_time.naive_utc();
+    let end_naive = request.end_time.naive_utc();
+    let create_result = sqlx::query(
         r#"
-        INSERT INTO activities (title, description, location, start_time, end_time, max_participants, faculty_id, department_id, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id, title, description, location, start_time, end_time, max_participants, status, faculty_id, department_id, created_by, created_at, updated_at
+        INSERT INTO activities (
+            title, description, location, max_participants, faculty_id, created_by,
+            start_date, end_date, start_time_only, end_time_only
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8::date, $9::time, $10::time)
+        RETURNING id, title, description, location,
+          ((start_date::timestamp + start_time_only) AT TIME ZONE 'UTC') as start_time,
+          ((end_date::timestamp + end_time_only) AT TIME ZONE 'UTC') as end_time,
+          max_participants, status, faculty_id, created_by, created_at, updated_at
         "#
     )
     .bind(&request.title)
     .bind(&request.description)
     .bind(&request.location)
-    .bind(request.start_time)
-    .bind(request.end_time)
     .bind(request.max_participants)
     .bind(request.faculty_id)
-    .bind(request.department_id)
     .bind(user.user_id)
+    .bind(start_naive.date())
+    .bind(end_naive.date())
+    .bind(start_naive.time())
+    .bind(end_naive.time())
     .fetch_one(&session_state.db_pool)
     .await;
 
     match create_result {
-        Ok(activity) => {
+        Ok(row) => {
             let response = json!({
                 "status": "success",
-                "data": activity,
+                "data": {
+                    "id": row.get::<Uuid, _>("id"),
+                    "title": row.get::<String, _>("title"),
+                    "description": row.get::<String, _>("description"),
+                    "location": row.get::<String, _>("location"),
+                    "start_time": row.get::<DateTime<Utc>, _>("start_time"),
+                    "end_time": row.get::<DateTime<Utc>, _>("end_time"),
+                    "max_participants": row.get::<Option<i32>, _>("max_participants"),
+                    "status": row.get::<ActivityStatus, _>("status"),
+                    "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
+                    "created_by": row.get::<Uuid, _>("created_by"),
+                    "created_at": row.get::<DateTime<Utc>, _>("created_at"),
+                    "updated_at": row.get::<DateTime<Utc>, _>("updated_at")
+                },
                 "message": "Activity created successfully"
             });
             Ok(Json(response))
@@ -522,13 +522,13 @@ pub async fn update_activity(
     }
 
     if request.start_time.is_some() {
-        query.push_str(&format!(", start_time = ${}", param_count));
-        param_count += 1;
+        query.push_str(&format!(", start_date = ${}, start_time_only = ${}", param_count, param_count + 1));
+        param_count += 2;
     }
 
     if request.end_time.is_some() {
-        query.push_str(&format!(", end_time = ${}", param_count));
-        param_count += 1;
+        query.push_str(&format!(", end_date = ${}, end_time_only = ${}", param_count, param_count + 1));
+        param_count += 2;
     }
 
     if request.max_participants.is_some() {
@@ -546,15 +546,15 @@ pub async fn update_activity(
         param_count += 1;
     }
 
-    if request.department_id.is_some() {
-        query.push_str(&format!(", department_id = ${}", param_count));
-        param_count += 1;
-    }
+    // department removed
 
-    query.push_str(&format!(" WHERE id = ${} RETURNING id, title, description, location, start_time, end_time, max_participants, status, faculty_id, department_id, created_by, created_at, updated_at", param_count));
+    query.push_str(&format!(" WHERE id = ${} RETURNING id, title, description, location,
+        ((start_date::timestamp + start_time_only) AT TIME ZONE 'UTC') as start_time,
+        ((end_date::timestamp + end_time_only) AT TIME ZONE 'UTC') as end_time,
+        max_participants, status, faculty_id, created_by, created_at, updated_at", param_count));
 
     // Execute query with proper parameter binding
-    let mut query_builder = sqlx::query_as::<_, Activity>(&query);
+    let mut query_builder = sqlx::query(&query);
 
     if let Some(title) = &request.title {
         query_builder = query_builder.bind(title);
@@ -566,10 +566,12 @@ pub async fn update_activity(
         query_builder = query_builder.bind(location);
     }
     if let Some(start_time) = request.start_time {
-        query_builder = query_builder.bind(start_time);
+        let st = start_time.naive_utc();
+        query_builder = query_builder.bind(st.date()).bind(st.time());
     }
     if let Some(end_time) = request.end_time {
-        query_builder = query_builder.bind(end_time);
+        let et = end_time.naive_utc();
+        query_builder = query_builder.bind(et.date()).bind(et.time());
     }
     if let Some(max_participants) = request.max_participants {
         query_builder = query_builder.bind(max_participants);
@@ -580,16 +582,26 @@ pub async fn update_activity(
     if let Some(faculty_id) = request.faculty_id {
         query_builder = query_builder.bind(faculty_id);
     }
-    if let Some(department_id) = request.department_id {
-        query_builder = query_builder.bind(department_id);
-    }
     query_builder = query_builder.bind(activity_id);
 
     match query_builder.fetch_one(&session_state.db_pool).await {
-        Ok(activity) => {
+        Ok(row) => {
             let response = json!({
                 "status": "success",
-                "data": activity,
+                "data": {
+                    "id": row.get::<Uuid, _>("id"),
+                    "title": row.get::<String, _>("title"),
+                    "description": row.get::<String, _>("description"),
+                    "location": row.get::<String, _>("location"),
+                    "start_time": row.get::<DateTime<Utc>, _>("start_time"),
+                    "end_time": row.get::<DateTime<Utc>, _>("end_time"),
+                    "max_participants": row.get::<Option<i32>, _>("max_participants"),
+                    "status": row.get::<ActivityStatus, _>("status"),
+                    "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
+                    "created_by": row.get::<Uuid, _>("created_by"),
+                    "created_at": row.get::<DateTime<Utc>, _>("created_at"),
+                    "updated_at": row.get::<DateTime<Utc>, _>("updated_at")
+                },
                 "message": "Activity updated successfully"
             });
             Ok(Json(response))
