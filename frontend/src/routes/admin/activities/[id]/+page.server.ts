@@ -158,8 +158,8 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`${PUBLIC_API_URL}/api/admin/activities/${id}`, {
-        method: 'PATCH',
+      const response = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Cookie': `session_id=${sessionId}`,
@@ -168,11 +168,19 @@ export const actions: Actions = {
         body: JSON.stringify({ status })
       });
 
+      const ct = response.headers.get('content-type') || '';
       if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          error: errorData.message || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
-        };
+        if (ct.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            error: errorData.message || errorData.error || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
+          };
+        } else {
+          const text = await response.text().catch(() => '');
+          return {
+            error: text || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
+          };
+        }
       }
 
       return {
@@ -219,11 +227,19 @@ export const actions: Actions = {
         body: JSON.stringify({ status, notes })
       });
 
+      const ct = response.headers.get('content-type') || '';
       if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          error: errorData.message || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
-        };
+        if (ct.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            error: errorData.message || errorData.error || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
+          };
+        } else {
+          const text = await response.text().catch(() => '');
+          return {
+            error: text || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
+          };
+        }
       }
 
       return {
@@ -266,11 +282,19 @@ export const actions: Actions = {
         }
       });
 
+      const ct = response.headers.get('content-type') || '';
       if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          error: errorData.message || 'ไม่สามารถลบผู้เข้าร่วมได้'
-        };
+        if (ct.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            error: errorData.message || errorData.error || 'ไม่สามารถลบผู้เข้าร่วมได้'
+          };
+        } else {
+          const text = await response.text().catch(() => '');
+          return {
+            error: text || 'ไม่สามารถลบผู้เข้าร่วมได้'
+          };
+        }
       }
 
       return {
@@ -305,11 +329,19 @@ export const actions: Actions = {
         }
       });
 
+      const ct = response.headers.get('content-type') || '';
       if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          error: errorData.message || 'ไม่สามารถลบกิจกรรมได้'
-        };
+        if (ct.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            error: errorData.message || errorData.error || 'ไม่สามารถลบกิจกรรมได้'
+          };
+        } else {
+          const text = await response.text().catch(() => '');
+          return {
+            error: text || 'ไม่สามารถลบกิจกรรมได้'
+          };
+        }
       }
 
       throw redirect(302, '/admin/activities');

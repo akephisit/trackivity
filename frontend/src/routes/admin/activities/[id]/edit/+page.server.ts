@@ -170,8 +170,9 @@ export const actions: Actions = {
       title,
       description: description || undefined,
       location,
-      start_time,
-      end_time,
+      // Convert local datetime to ISO (UTC)
+      start_time: new Date(start_time).toISOString(),
+      end_time: new Date(end_time).toISOString(),
       status: status as any,
       faculty_id: faculty_id || undefined,
       department_id: department_id || undefined
@@ -202,15 +203,26 @@ export const actions: Actions = {
         body: JSON.stringify(updateData)
       });
 
+      const ct = response.headers.get('content-type') || '';
       if (!response.ok) {
-        const errorData = await response.json();
-        return {
-          error: errorData.message || 'ไม่สามารถแก้ไขกิจกรรมได้',
-          formData: Object.fromEntries(formData)
-        };
+        if (ct.includes('application/json')) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            error: errorData.message || errorData.error || 'ไม่สามารถแก้ไขกิจกรรมได้',
+            formData: Object.fromEntries(formData)
+          };
+        } else {
+          const text = await response.text().catch(() => '');
+          return {
+            error: text || 'ไม่สามารถแก้ไขกิจกรรมได้',
+            formData: Object.fromEntries(formData)
+          };
+        }
       }
 
-      const result = await response.json();
+      const result = ct.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : {};
       
       if (result.status === 'success') {
         // Redirect to activity detail page
