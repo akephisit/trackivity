@@ -22,8 +22,8 @@ export const load: PageServerLoad = async (event) => {
   }
 
   try {
-    // Fetch activity details
-    const activityRes = await fetch(`${PUBLIC_API_URL}/api/admin/activities/${id}`, {
+    // Fetch activity details from public activities endpoint
+    const activityRes = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
       headers: {
         'Cookie': `session_id=${sessionId}`,
         'X-Session-ID': sessionId
@@ -41,12 +41,31 @@ export const load: PageServerLoad = async (event) => {
     }
 
     const activityData = await activityRes.json();
-    
-    if (activityData.status !== 'success' || !activityData.data) {
+
+    const rawActivity = activityData?.data ?? activityData;
+    if (!rawActivity) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
 
-    const activity: Activity = activityData.data;
+    const activity: Activity = {
+      id: rawActivity.id,
+      title: rawActivity.title ?? rawActivity.activity_name ?? rawActivity.name,
+      description: rawActivity.description ?? '',
+      location: rawActivity.location ?? '',
+      start_time: rawActivity.start_time ?? rawActivity.start_date,
+      end_time: rawActivity.end_time ?? rawActivity.end_date,
+      max_participants: rawActivity.max_participants ?? undefined,
+      current_participants: rawActivity.current_participants ?? 0,
+      status: rawActivity.status ?? 'draft',
+      faculty_id: rawActivity.faculty_id ?? undefined,
+      faculty_name: rawActivity.faculty_name ?? undefined,
+      created_by: rawActivity.created_by,
+      created_by_name: rawActivity.created_by_name ?? 'ระบบ',
+      created_at: rawActivity.created_at,
+      updated_at: rawActivity.updated_at,
+      is_registered: rawActivity.is_registered ?? false,
+      user_participation_status: rawActivity.user_participation_status ?? undefined
+    };
 
     // Fetch faculties list
     let faculties: any[] = [];
@@ -173,8 +192,8 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`${PUBLIC_API_URL}/api/admin/activities/${id}`, {
-        method: 'PATCH',
+      const response = await fetch(`${PUBLIC_API_URL}/api/activities/${id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Cookie': `session_id=${sessionId}`,
