@@ -12,8 +12,7 @@
 		Select, 
 		SelectContent, 
 		SelectItem, 
-		SelectTrigger, 
-		SelectValue 
+		SelectTrigger
 	} from '$lib/components/ui/select';
 	import { 
 		Table, 
@@ -425,7 +424,7 @@
 					<div class="flex-1">
 						<Select type="single" name="status" bind:value={selectedStatus}>
 							<SelectTrigger class="w-full">
-								<SelectValue placeholder="เลือกสถานะ" />
+								{selectedStatus ? statusOptions.find(s => s.value === selectedStatus)?.label || 'เลือกสถานะ' : 'เลือกสถานะ'}
 							</SelectTrigger>
 							<SelectContent>
 								{#each statusOptions as option}
@@ -583,7 +582,7 @@
 					<Label for="participantStatus">สถานะ</Label>
 					<Select type="single" name="participantStatus" bind:value={participantStatus}>
 						<SelectTrigger>
-							<SelectValue placeholder="เลือกสถานะ" />
+							{participantStatus ? participationStatusOptions.find(s => s.value === participantStatus)?.label || 'เลือกสถานะ' : 'เลือกสถานะ'}
 						</SelectTrigger>
 						<SelectContent>
 							{#each participationStatusOptions as option}

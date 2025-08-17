@@ -10,8 +10,7 @@
 		Select, 
 		SelectContent, 
 		SelectItem, 
-		SelectTrigger,
-		SelectValue
+		SelectTrigger
 	} from '$lib/components/ui/select';
 	import {
 		IconArrowLeft,
@@ -33,7 +32,8 @@
 		form?: { error?: string; formData?: any; } 
 	}>();
 	
-	const { activity, faculties, departments, user } = data;
+	const { activity, faculties, departments } = data;
+	// user is available in data but not currently used
 
 	let submitting = $state(false);
 	let selectedStatus = $state(activity.status);
@@ -248,7 +248,7 @@
 					<Label for="status">สถานะกิจกรรม *</Label>
 					<Select type="single" name="status" bind:value={selectedStatus}>
 						<SelectTrigger>
-							<SelectValue placeholder="เลือกสถานะ" />
+							{selectedStatus ? statusOptions.find(s => s.value === selectedStatus)?.label || 'เลือกสถานะ' : 'เลือกสถานะ'}
 						</SelectTrigger>
 						<SelectContent>
 							{#each statusOptions as option}
@@ -277,7 +277,7 @@
 						<Label for="faculty_id">คณะ</Label>
 						<Select type="single" name="faculty_id" bind:value={selectedFaculty}>
 							<SelectTrigger>
-								<SelectValue placeholder="เลือกคณะ (ไม่บังคับ)" />
+								{selectedFaculty ? faculties.find((f: any) => f.id === selectedFaculty)?.name || 'เลือกคณะ (ไม่บังคับ)' : 'เลือกคณะ (ไม่บังคับ)'}
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="">ไม่ระบุคณะ</SelectItem>
@@ -298,7 +298,7 @@
 						<Label for="department_id">สาขาวิชา</Label>
 						<Select type="single" name="department_id" bind:value={selectedDepartment}>
 							<SelectTrigger>
-								<SelectValue placeholder="เลือกสาขาวิชา (ไม่บังคับ)" />
+								{selectedDepartment ? departments.find((d: any) => d.id === selectedDepartment)?.name || 'เลือกสาขาวิชา (ไม่บังคับ)' : 'เลือกสาขาวิชา (ไม่บังคับ)'}
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="">ไม่ระบุสาขาวิชา</SelectItem>
