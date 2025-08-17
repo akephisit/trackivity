@@ -8,7 +8,7 @@ import type {
     Faculty
 } from '$lib/types/admin';
 import { AdminLevel } from '$lib/types/admin';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { api } from '$lib/server/api-client';
 
 /**
  * Server Load Function for General User Management
@@ -60,32 +60,31 @@ export const load: PageServerLoad = async (event) => {
             throw error(403, 'Insufficient permissions to view user data');
         }
 
-        // Build query string for API request
-        const queryParams = new URLSearchParams();
-        if (filters.search) queryParams.set('search', filters.search);
-        if (filters.faculty_id) queryParams.set('faculty_id', filters.faculty_id);
-        if (filters.department_id) queryParams.set('department_id', filters.department_id);
-        if (filters.status && filters.status !== 'all') queryParams.set('status', filters.status);
-        if (filters.role && filters.role !== 'all') queryParams.set('role', filters.role);
-        if (filters.created_after) queryParams.set('created_after', filters.created_after);
-        if (filters.created_before) queryParams.set('created_before', filters.created_before);
-        // Use limit/offset as expected by backend
-        queryParams.set('limit', limit.toString());
-        queryParams.set('offset', offset.toString());
+        // Build query parameters object for API client
+        const queryParams: Record<string, string> = {
+            limit: limit.toString(),
+            offset: offset.toString()
+        };
+        if (filters.search) queryParams.search = filters.search;
+        if (filters.faculty_id) queryParams.faculty_id = filters.faculty_id;
+        if (filters.department_id) queryParams.department_id = filters.department_id;
+        if (filters.status && filters.status !== 'all') queryParams.status = filters.status;
+        if (filters.role && filters.role !== 'all') queryParams.role = filters.role;
+        if (filters.created_after) queryParams.created_after = filters.created_after;
+        if (filters.created_before) queryParams.created_before = filters.created_before;
 
         // Make API requests
         const [usersResponse, statsResponse, facultiesResponse] = await Promise.all([
-            event.fetch(`${apiEndpoint}?${queryParams.toString()}`),
-            event.fetch(statsEndpoint),
+            api.get(event, apiEndpoint, queryParams),
+            api.get(event, statsEndpoint),
             // Load faculties for filtering (only for SuperAdmin)
-            adminLevel === AdminLevel.SuperAdmin ? event.fetch(`/api/faculties`) : Promise.resolve(null)
+            adminLevel === AdminLevel.SuperAdmin ? api.get(event, '/api/faculties') : Promise.resolve(null)
         ]);
 
         // Process faculties response first (for SuperAdmin only)
         let faculties: Faculty[] = [];
-        if (facultiesResponse && facultiesResponse.ok) {
-            const facultiesResult = await facultiesResponse.json();
-            const rawFaculties = facultiesResult.data || facultiesResult;
+        if (facultiesResponse && facultiesResponse.status === 'success') {
+            const rawFaculties = facultiesResponse.data;
             faculties = rawFaculties?.faculties || rawFaculties || [];
         }
 
@@ -97,9 +96,8 @@ export const load: PageServerLoad = async (event) => {
         let users: User[] = [];
         let pagination = { page: page, total_pages: 1, total_count: 0, limit: limit } as any;
 
-        if (usersResponse.ok) {
-            const usersResult = await usersResponse.json();
-            const src = (usersResult.data || usersResult) as any;
+        if (usersResponse.status === 'success') {
+            const src = usersResponse.data as any;
             const rawUsers: any[] = src.users || src.data?.users || [];
             const totalCount: number = src.total_count ?? src.pagination?.total ?? rawUsers.length;
 
@@ -198,7 +196,7 @@ export const load: PageServerLoad = async (event) => {
                 total_pages: Math.max(1, Math.ceil(totalCount / limit))
             };
         } else {
-            console.error('Failed to load users:', await usersResponse.text());
+            console.error('Failed to load users:', usersResponse.error);
         }
 
         // Process stats response
@@ -212,9 +210,8 @@ export const load: PageServerLoad = async (event) => {
             recent_registrations: 0
         };
 
-        if (statsResponse.ok) {
-            const statsResult = await statsResponse.json();
-            const rawStats = statsResult.data || statsResult;
+        if (statsResponse.status === 'success') {
+            const rawStats = statsResponse.data;
             // Support both system-wide and faculty-scoped shapes
             if (rawStats.system_stats) {
                 stats = {
@@ -230,7 +227,7 @@ export const load: PageServerLoad = async (event) => {
                 stats = rawStats as UserStats;
             }
         } else {
-            console.error('Failed to load user stats:', await statsResponse.text());
+            console.error('Failed to load user stats:', statsResponse.error);
         }
 
 

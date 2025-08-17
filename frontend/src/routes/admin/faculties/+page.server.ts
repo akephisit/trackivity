@@ -3,6 +3,7 @@ import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { z } from 'zod';
 import type { PageServerLoad, Actions } from './$types';
+import { api } from '$lib/server/api-client';
 
 // Faculty schemas
 const facultyCreateSchema = z.object({
@@ -19,7 +20,8 @@ const facultyUpdateSchema = z.object({
 	status: z.boolean().optional()
 });
 
-export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
+export const load: PageServerLoad = async (event) => {
+	const { cookies, depends } = event;
 	depends('app:page-data');
 	
 	const sessionId = cookies.get('session_id');
@@ -29,14 +31,11 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 
 	try {
 		// Fetch all faculties for admin (including inactive ones)
-		const facultiesResponse = await fetch(`/api/admin/faculties`);
+		const facultiesResponse = await api.get(event, '/api/admin/faculties');
 
 		let faculties = [];
-		if (facultiesResponse.ok) {
-			const facultiesData = await facultiesResponse.json();
-			if (facultiesData.status === 'success') {
-				faculties = facultiesData.data.faculties || [];
-			}
+		if (facultiesResponse.status === 'success') {
+			faculties = facultiesResponse.data.faculties || [];
 		}
 
 		// Create forms
@@ -59,7 +58,8 @@ export const load: PageServerLoad = async ({ cookies, depends, fetch }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, cookies, fetch }) => {
+	create: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -72,22 +72,12 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`/api/faculties`, {
-				method: 'POST',
-				headers: { 
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`,
-					'X-Session-ID': sessionId
-				},
-				body: JSON.stringify(form.data)
-			});
+			const response = await api.post(event, '/api/faculties', form.data);
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
+			if (response.status === 'error') {
+				return fail(400, { 
 					form,
-					error: result.message || 'เกิดข้อผิดพลาดในการสร้างคณะ'
+					error: response.error || 'เกิดข้อผิดพลาดในการสร้างคณะ'
 				});
 			}
 
@@ -101,7 +91,8 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, cookies, fetch }) => {
+	update: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -118,22 +109,12 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`/api/faculties/${facultyId}`, {
-				method: 'PUT',
-				headers: { 
-					'Content-Type': 'application/json',
-					'Cookie': `session_id=${sessionId}`,
-					'X-Session-ID': sessionId
-				},
-				body: JSON.stringify(form.data)
-			});
+			const response = await api.put(event, `/api/faculties/${facultyId}`, form.data);
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
+			if (response.status === 'error') {
+				return fail(400, { 
 					form,
-					error: result.message || 'เกิดข้อผิดพลาดในการแก้ไขคณะ'
+					error: response.error || 'เกิดข้อผิดพลาดในการแก้ไขคณะ'
 				});
 			}
 
@@ -147,7 +128,8 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, cookies, fetch }) => {
+	delete: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -157,19 +139,11 @@ export const actions: Actions = {
 		const facultyId = formData.get('facultyId') as string;
 
 		try {
-			const response = await fetch(`/api/faculties/${facultyId}`, {
-				method: 'DELETE',
-				headers: {
-					'Cookie': `session_id=${sessionId}`,
-					'X-Session-ID': sessionId
-				}
-			});
+			const response = await api.delete(event, `/api/faculties/${facultyId}`);
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการลบคณะ'
+			if (response.status === 'error') {
+				return fail(400, { 
+					error: response.error || 'เกิดข้อผิดพลาดในการลบคณะ'
 				});
 			}
 
@@ -182,7 +156,8 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, cookies, fetch }) => {
+	toggleStatus: async (event) => {
+		const { request, cookies } = event;
 		const sessionId = cookies.get('session_id');
 		if (!sessionId) {
 			throw redirect(302, '/admin/login');
@@ -192,19 +167,11 @@ export const actions: Actions = {
 		const facultyId = formData.get('facultyId') as string;
 
 		try {
-			const response = await fetch(`/api/faculties/${facultyId}/toggle-status`, {
-				method: 'PUT',
-				headers: {
-					'Cookie': `session_id=${sessionId}`,
-					'X-Session-ID': sessionId
-				}
-			});
+			const response = await api.put(event, `/api/faculties/${facultyId}/toggle-status`);
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะคณะ'
+			if (response.status === 'error') {
+				return fail(400, { 
+					error: response.error || 'เกิดข้อผิดพลาดในการเปลี่ยนสถานะคณะ'
 				});
 			}
 

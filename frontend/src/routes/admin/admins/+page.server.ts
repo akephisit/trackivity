@@ -6,6 +6,7 @@ import { adminCreateSchema } from '$lib/schemas/auth';
 import type { PageServerLoad, Actions } from './$types';
 import type { AdminRole, Faculty } from '$lib/types/admin';
 import { AdminLevel } from '$lib/types/admin';
+import { api } from '$lib/server/api-client';
 
 export const load: PageServerLoad = async (event) => {
 	const user = await requireSuperAdmin(event);
@@ -13,10 +14,9 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดรายการคณะก่อน
 	let faculties: Faculty[] = [];
 	try {
-		const response = await event.fetch(`/api/faculties`);
-		if (response.ok) {
-			const result = await response.json();
-			faculties = result.data?.faculties || result.data || [];
+		const response = await api.get(event, '/api/faculties');
+		if (response.status === 'success') {
+			faculties = response.data?.faculties || response.data || [];
 		}
 	} catch (error) {
 		console.error('Failed to load faculties:', error);
@@ -25,30 +25,29 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดรายการแอดมิน - ใช้ system-admins endpoint เพื่อให้ได้ข้อมูล is_active
 	let admins: AdminRole[] = [];
 	try {
-		const response = await event.fetch(`/api/admin/system-admins`);
+		const response = await api.get(event, '/api/admin/system-admins');
 
-		if (response.ok) {
-			const result = await response.json();
+		if (response.status === 'success') {
+			const result = response.data;
 			console.log('=== SYSTEM ADMINS API RESPONSE ===');
-			console.log('result.status:', result.status);
-			console.log('result.data type:', typeof result.data);
-			if (result.data) {
-				console.log('super_admins count:', result.data.super_admins?.length || 0);
-				console.log('faculty_groups count:', result.data.faculty_groups?.length || 0);
+			console.log('result type:', typeof result);
+			if (result) {
+				console.log('super_admins count:', result.super_admins?.length || 0);
+				console.log('faculty_groups count:', result.faculty_groups?.length || 0);
 			}
 			console.log('================================');
-			if (result.status === 'success' && result.data) {
+			if (result) {
 				// API ส่งข้อมูลในรูปแบบ { super_admins: [], faculty_groups: [...] }
 				let adminUsers: any[] = [];
 				
 				// รวม super_admins เข้าด้วย
-				if (result.data.super_admins && Array.isArray(result.data.super_admins)) {
-					adminUsers = [...result.data.super_admins];
+				if (result.super_admins && Array.isArray(result.super_admins)) {
+					adminUsers = [...result.super_admins];
 				}
 				
 				// รวม admins จาก faculty_groups
-				if (result.data.faculty_groups && Array.isArray(result.data.faculty_groups)) {
-					result.data.faculty_groups.forEach((group: any) => {
+				if (result.faculty_groups && Array.isArray(result.faculty_groups)) {
+					result.faculty_groups.forEach((group: any) => {
 						if (group.admins && Array.isArray(group.admins)) {
 							adminUsers = [...adminUsers, ...group.admins];
 						}
@@ -132,7 +131,8 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, fetch }) => {
+	create: async (event) => {
+		const { request } = event;
 		const form = await superValidate(request, zod(adminCreateSchema));
 
 		if (!form.valid) {
@@ -189,23 +189,17 @@ export const actions: Actions = {
 			});
 
 			
-			const response = await fetch(`/api/admin/create`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(transformedData)
-			});
+			const response = await api.post(event, '/api/admin/create', transformedData);
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสร้างแอดมิน'];
+			if (response.status === 'error') {
+				form.errors._errors = [response.error || 'เกิดข้อผิดพลาดในการสร้างแอดมิน'];
 				return fail(400, { form });
 			}
 
-			if (result.status === 'success') {
+			if (response.status === 'success') {
 				return { form, success: true, message: 'สร้างแอดมินสำเร็จ' };
 			} else {
-				form.errors._errors = [result.message || 'เกิดข้อผิดพลาดในการสร้างแอดมิน'];
+				form.errors._errors = ['เกิดข้อผิดพลาดในการสร้างแอดมิน'];
 				return fail(400, { form });
 			}
 		} catch (error) {
@@ -223,7 +217,8 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, fetch }) => {
+	delete: async (event) => {
+		const { request } = event;
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 
@@ -232,45 +227,22 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`/api/users/${adminId}`, {
-				method: 'DELETE',
-			});
+			const response = await api.delete(event, `/api/users/${adminId}`);
 
-			// ตรวจสอบว่า response มี content หรือไม่
-			const contentType = response.headers.get('content-type');
-			let result;
-			
-			if (contentType && contentType.includes('application/json')) {
-				result = await response.json();
-			} else {
-				// ถ้าไม่มี JSON response ให้สร้าง default result
-				result = {
-					status: response.ok ? 'success' : 'error',
-					message: response.ok ? 'User deleted successfully' : 'Failed to delete user'
-				};
-			}
-
-			if (!response.ok) {
-				// จัดการ specific error cases
-				if (response.status === 404) {
-					return fail(404, { error: 'ไม่พบแอดมินที่ต้องการลบ' });
-				} else if (response.status === 403) {
-					return fail(403, { error: 'ไม่มีสิทธิ์ในการลบแอดมินนี้' });
-				}
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการลบแอดมิน' 
+			if (response.status === 'error') {
+				return fail(400, { 
+					error: response.error || 'เกิดข้อผิดพลาดในการลบแอดมิน' 
 				});
 			}
 
-			// ตรวจสอบ result structure
-			if (result.status === 'success' || response.ok) {
+			if (response.status === 'success') {
 				return { 
 					success: true, 
 					message: 'ลบแอดมินสำเร็จ' 
 				};
 			} else {
 				return fail(400, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการลบแอดมิน' 
+					error: 'เกิดข้อผิดพลาดในการลบแอดมิน' 
 				});
 			}
 		} catch (error) {
@@ -285,7 +257,8 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, fetch }) => {
+	toggleStatus: async (event) => {
+		const { request } = event;
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string; // admin role id
 		const isActive = formData.get('isActive') === 'true';
@@ -295,54 +268,25 @@ export const actions: Actions = {
 		}
 
 		try {
-			const response = await fetch(`/api/admin/roles/${adminId}/toggle-status`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					is_enabled: isActive  // Send is_enabled instead of is_active
-				})
+			const response = await api.put(event, `/api/admin/roles/${adminId}/toggle-status`, {
+				is_enabled: isActive  // Send is_enabled instead of is_active
 			});
 
-			const contentType = response.headers.get('content-type');
-			let result;
-			
-			if (contentType && contentType.includes('application/json')) {
-				try {
-					result = await response.json();
-				} catch (parseError) {
-					console.error('Failed to parse JSON response:', parseError);
-					return fail(500, { 
-						error: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลจากเซิร์ฟเวอร์' 
-					});
-				}
-			} else {
-				const responseText = await response.text();
-				console.error('Non-JSON response received:', responseText);
-				return fail(500, { 
-					error: 'เซิร์ฟเวอร์ตอบกลับข้อมูลในรูปแบบที่ไม่ถูกต้อง' 
+			if (response.status === 'error') {
+				return fail(400, { 
+					error: response.error || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
 				});
 			}
 
-			if (!response.ok) {
-				if (response.status === 404) {
-					return fail(404, { error: 'ไม่พบแอดมินที่ต้องการเปลี่ยนสถานะ' });
-				} else if (response.status === 403) {
-					return fail(403, { error: 'ไม่มีสิทธิ์ในการเปลี่ยนสถานะแอดมินนี้' });
-				}
-				return fail(response.status, { 
-					error: result?.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
-				});
-			}
-
-			if (result.status === 'success') {
+			if (response.status === 'success') {
 				return { 
 					success: true, 
-					message: result.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ`,
-					data: result.data
+					message: response.message || `${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมินสำเร็จ`,
+					data: response.data
 				};
 			} else {
 				return fail(400, { 
-					error: result.message || `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
+					error: `เกิดข้อผิดพลาดในการ${isActive ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}แอดมิน` 
 				});
 			}
 		} catch (error) {
@@ -360,7 +304,8 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, fetch }) => {
+	update: async (event) => {
+		const { request } = event;
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 		const userId = formData.get('userId') as string; // รับ user_id แทน admin_id
@@ -409,63 +354,23 @@ export const actions: Actions = {
 			};
 
 			// ใช้ user endpoint ตาม backend routes
-			const response = await fetch(`/api/users/${targetUserId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(preparedData)
-			});
+			const response = await api.put(event, `/api/users/${targetUserId}`, preparedData);
 
-			// ตรวจสอบว่า response มี content หรือไม่
-			const contentType = response.headers.get('content-type');
-			let result;
-			
-			if (contentType && contentType.includes('application/json')) {
-				try {
-					result = await response.json();
-				} catch (parseError) {
-					console.error('Response JSON parse error:', parseError);
-					return fail(500, { error: 'เกิดข้อผิดพลาดในการประมวลผลข้อมูลจากเซิร์ฟเวอร์' });
-				}
-			} else {
-				// ถ้าไม่มี JSON response
-				const responseText = await response.text();
-				if (!responseText.trim()) {
-					return fail(500, { 
-						error: 'เซิร์ฟเวอร์ตอบกลับข้อมูลไม่ครบถ้วน กรุณาลองใหม่อีกครั้ง' 
-					});
-				}
-				
-				result = {
-					status: response.ok ? 'success' : 'error',
-					message: response.ok ? 'User updated successfully' : responseText
-				};
-			}
-
-			if (!response.ok) {
-				// Handle specific error cases
-				if (response.status === 404) {
-					return fail(404, { error: 'ไม่พบแอดมินที่ต้องการอัพเดต' });
-				} else if (response.status === 409) {
-					return fail(409, { error: 'อีเมลนี้มีผู้ใช้แล้ว' });
-				} else if (response.status === 403) {
-					return fail(403, { error: 'ไม่มีสิทธิ์ในการแก้ไขข้อมูลแอดมินนี้' });
-				}
-				
-				return fail(response.status, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
+			if (response.status === 'error') {
+				return fail(400, { 
+					error: response.error || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
 				});
 			}
 
-			// ตรวจสอบ result structure
-			if (result.status === 'success' || response.ok) {
+			if (response.status === 'success') {
 				return { 
 					success: true, 
 					message: 'อัพเดตข้อมูลแอดมินสำเร็จ',
-					data: result.data || result
+					data: response.data
 				};
 			} else {
 				return fail(400, { 
-					error: result.message || 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
+					error: 'เกิดข้อผิดพลาดในการอัพเดตข้อมูลแอดมิน' 
 				});
 			}
 		} catch (error) {

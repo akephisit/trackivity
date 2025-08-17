@@ -10,6 +10,7 @@ import type {
 	ExtendedAdminRole
 } from '$lib/types/admin';
 import { AdminLevel, ADMIN_PERMISSIONS } from '$lib/types/admin';
+import { api } from '$lib/server/api-client';
 
 export const load: PageServerLoad = async (event) => {
 	// Role-based access: Both SuperAdmin and FacultyAdmin can access this page
@@ -20,13 +21,10 @@ export const load: PageServerLoad = async (event) => {
 	// Load faculties list
 	let faculties: Faculty[] = [];
 	try {
-		const response = await event.fetch(`/api/faculties`);
+		const response = await api.get(event, '/api/faculties');
 		
-		if (response.ok) {
-			const result = await response.json();
-			if (result.status === 'success') {
-				faculties = result.data?.faculties || result.data || [];
-			}
+		if (response.status === 'success') {
+			faculties = response.data?.faculties || response.data || [];
 		}
 	} catch (error) {
 		console.error('Failed to load faculties:', error);
@@ -43,12 +41,11 @@ export const load: PageServerLoad = async (event) => {
 			apiUrl = `/api/faculties/${userFacultyId}/admins`;
 		}
 
-		const response = await event.fetch(apiUrl);
+		const response = await api.get(event, apiUrl);
 
-		if (response.ok) {
-			const result = await response.json();
-			if (result.status === 'success' && result.data) {
-				const adminData = result.data.users || result.data.admins || result.data || [];
+		if (response.status === 'success' && response.data) {
+			const result = response.data;
+				const adminData = result.users || result.admins || result || [];
 				
 				// Ensure adminData is an array
 				if (!Array.isArray(adminData)) {
@@ -124,7 +121,6 @@ export const load: PageServerLoad = async (event) => {
 							full_name: `${admin.first_name} ${admin.last_name}`
 						};
 					});
-			}
 		}
 	} catch (error) {
 		console.error('Failed to load faculty admins:', error);
@@ -182,7 +178,8 @@ function formatDateTime(date: Date): string {
 
 
 export const actions: Actions = {
-	create: async ({ request, fetch }) => {
+	create: async (event) => {
+		const { request } = event;
 		const form = await superValidate(request, zod(adminCreateSchema));
 
 		if (!form.valid) {
@@ -314,7 +311,8 @@ export const actions: Actions = {
 		}
 	},
 
-	toggleStatus: async ({ request, fetch }) => {
+	toggleStatus: async (event) => {
+		const { request } = event;
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 		const isActive = formData.get('isActive') === 'true';
@@ -393,7 +391,8 @@ export const actions: Actions = {
 		}
 	},
 
-	update: async ({ request, fetch }) => {
+	update: async (event) => {
+		const { request } = event;
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 		const userId = formData.get('userId') as string;
@@ -508,7 +507,8 @@ export const actions: Actions = {
 		}
 	},
 
-	delete: async ({ request, fetch }) => {
+	delete: async (event) => {
+		const { request } = event;
 		const formData = await request.formData();
 		const adminId = formData.get('adminId') as string;
 

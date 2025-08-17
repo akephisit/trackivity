@@ -2,17 +2,18 @@ import { fail, redirect } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { adminLoginSchema } from '$lib/schemas/auth';
+import { api } from '$lib/server/api-client';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ cookies, fetch }) => {
+export const load: PageServerLoad = async (event) => {
 	// Check if admin already logged in
-	const sessionId = cookies.get('session_id');
+	const sessionId = event.cookies.get('session_id');
 	
 	if (sessionId) {
 		try {
-			const response = await fetch(`/api/admin/auth/me`);
+			const response = await api.get(event, '/api/admin/auth/me');
 			
-			if (response.ok) {
+			if (response.status === 'success') {
 				throw redirect(303, '/admin');
 			}
 		} catch (error) {
@@ -22,7 +23,7 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
 			}
 			
 			// If other error, clear invalid session
-			cookies.delete('session_id', { path: '/' });
+			event.cookies.delete('session_id', { path: '/' });
 		}
 	}
 
@@ -35,37 +36,28 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, fetch }) => {
-		const form = await superValidate(request, zod(adminLoginSchema));
+	default: async (event) => {
+		const form = await superValidate(event.request, zod(adminLoginSchema));
 
 		if (!form.valid) {
 			return fail(400, { form });
 		}
 
 		try {
-			const response = await fetch(`/api/admin/auth/login`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				credentials: 'include',
-				body: JSON.stringify({
-					email: form.data.email,
-					password: form.data.password,
-					remember_me: form.data.remember_me
-				})
+			const response = await api.post(event, '/api/admin/auth/login', {
+				email: form.data.email,
+				password: form.data.password,
+				remember_me: form.data.remember_me
 			});
 
-			const result = await response.json();
-
-			if (!response.ok) {
-				form.errors._errors = [result.message || 'การเข้าสู่ระบบไม่สำเร็จ'];
+			if (response.status === 'error') {
+				form.errors._errors = [response.error || 'การเข้าสู่ระบบไม่สำเร็จ'];
 				return fail(400, { form });
 			}
 
-			if (result.success && result.session) {
+			if (response.data?.success && response.data?.session) {
 				// Set session cookie
-				cookies.set('session_id', result.session.session_id, {
+				event.cookies.set('session_id', response.data.session.session_id, {
 					path: '/',
 					httpOnly: true,
 					secure: process.env.NODE_ENV === 'production',
@@ -75,7 +67,7 @@ export const actions: Actions = {
 
 				throw redirect(303, '/admin');
 			} else {
-				form.errors._errors = [result.message || 'การเข้าสู่ระบบไม่สำเร็จ'];
+				form.errors._errors = [response.data?.message || 'การเข้าสู่ระบบไม่สำเร็จ'];
 				return fail(400, { form });
 			}
 		} catch (error) {

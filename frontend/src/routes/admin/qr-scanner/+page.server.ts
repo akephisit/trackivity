@@ -1,7 +1,9 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { api } from '$lib/server/api-client';
 
-export const load = (async ({ cookies, url, fetch }) => {
+export const load = (async (event) => {
+	const { cookies, url } = event;
 	const sessionId = cookies.get('session_id');
 	
 	if (!sessionId) {
@@ -10,17 +12,13 @@ export const load = (async ({ cookies, url, fetch }) => {
 
 	try {
 		// Get admin user info to check permissions
-		const adminResponse = await fetch('/api/admin/auth/me', {
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
-		});
+		const adminResponse = await api.get(event, '/api/admin/auth/me');
 
-		if (!adminResponse.ok) {
+		if (adminResponse.status === 'error') {
 			throw redirect(302, '/admin/login');
 		}
 
-		const adminData = await adminResponse.json();
+		const adminData = adminResponse.data;
 		
 		// Check if user has permission to scan QR codes
 		// FacultyAdmin and RegularAdmin should be able to scan
@@ -37,16 +35,11 @@ export const load = (async ({ cookies, url, fetch }) => {
 		}
 
 		// Get assigned activities for the admin
-		const activitiesResponse = await fetch('/api/admin/activities/assigned', {
-			headers: {
-				'Authorization': `Bearer ${sessionId}`
-			}
-		});
+		const activitiesResponse = await api.get(event, '/api/admin/activities/assigned');
 
 		let activities = [];
-		if (activitiesResponse.ok) {
-			const activitiesData = await activitiesResponse.json();
-			activities = activitiesData.data?.activities || [];
+		if (activitiesResponse.status === 'success') {
+			activities = activitiesResponse.data?.activities || [];
 		}
 
 		return {

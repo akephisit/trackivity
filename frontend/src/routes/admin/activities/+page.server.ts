@@ -3,22 +3,18 @@ import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { Activity } from '$lib/types/activity';
 import { AdminLevel } from '$lib/types/admin';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { api } from '$lib/server/api-client';
 
 export const load: PageServerLoad = async (event) => {
 	// ตรวจสอบสิทธิ์ - เฉพาะ FacultyAdmin หรือ SuperAdmin
 	const user = await requireFacultyAdmin(event);
-	const sessionId = event.cookies.get('session_id');
 	const adminLevel = user.admin_role?.admin_level;
 	const facultyId = user.admin_role?.faculty_id;
-
-	if (!sessionId) {
-		throw error(401, 'ไม่มีการ authentication');
-	}
 
 	try {
 		// กำหนด API endpoint ตามระดับแอดมิน
 		let apiEndpoint: string;
+		let params: Record<string, string> = {};
 		
 		if (adminLevel === AdminLevel.SuperAdmin) {
 			// SuperAdmin ดูกิจกรรมทั้งหมด
@@ -28,24 +24,19 @@ export const load: PageServerLoad = async (event) => {
 			if (!facultyId) {
 				throw error(403, 'Faculty admin ต้องมี faculty_id');
 			}
-			apiEndpoint = `/api/admin/activities?faculty_id=${facultyId}`;
+			apiEndpoint = `/api/admin/activities`;
+			params.faculty_id = facultyId;
 		} else {
 			throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลกิจกรรม');
 		}
 
 		// เรียก API เพื่อดึงข้อมูลกิจกรรม
-		const response = await fetch(`${PUBLIC_API_URL}${apiEndpoint}`, {
-			headers: {
-				'Cookie': `session_id=${sessionId}`,
-				'X-Session-ID': sessionId
-			}
-		});
+		const response = await api.get(event, apiEndpoint, Object.keys(params).length > 0 ? params : undefined);
 
 		let activities: Activity[] = [];
 		
-		if (response.ok) {
-			const result = await response.json();
-			const rawActivities = result.data?.activities || result.activities || result.data || [];
+		if (response.status === 'success') {
+			const rawActivities = response.data?.activities || response.data || [];
 			
 			activities = rawActivities.map((activity: any) => ({
 				id: activity.id,
@@ -72,7 +63,7 @@ export const load: PageServerLoad = async (event) => {
 				status: activity.status || 'รอดำเนินการ'
 			}));
 		} else {
-			console.error('Failed to load activities:', await response.text());
+			console.error('Failed to load activities:', response.error);
 			// ไม่ throw error แต่ให้ส่งค่า array ว่างไป
 		}
 
@@ -115,22 +106,13 @@ export const actions: Actions = {
                 return fail(400, { error: 'ไม่พบรหัสกิจกรรม' });
             }
 
-            const resp = await event.fetch(`/api/activities/${activityId}`, {
-                method: 'DELETE'
-            });
+            const response = await api.delete(event, `/api/activities/${activityId}`);
 
-            const ct = resp.headers.get('content-type') || '';
-            if (!resp.ok) {
-                if (ct.includes('application/json')) {
-                    const data = await resp.json().catch(() => ({}));
-                    return fail(resp.status, { error: data.message || data.error || 'ลบกิจกรรมไม่สำเร็จ' });
-                } else {
-                    const text = await resp.text().catch(() => '');
-                    return fail(resp.status, { error: text || 'ลบกิจกรรมไม่สำเร็จ' });
-                }
+            if (response.status === 'error') {
+                return fail(500, { error: response.error || 'ลบกิจกรรมไม่สำเร็จ' });
             }
 
-            // Success (body may be empty)
+            // Success
             return { success: true };
         } catch (err) {
             console.error('Delete activity error:', err);

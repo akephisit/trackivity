@@ -10,6 +10,7 @@ import type {
     Department
 } from '$lib/types/admin';
 import { AdminLevel } from '$lib/types/admin';
+import { api } from '$lib/server/api-client';
 
 /**
  * Server Load Function for Faculty-Scoped User Management
@@ -76,82 +77,63 @@ export const load: PageServerLoad = async (event) => {
             if (v !== undefined && v !== '' && v !== 'all') params.set(k, String(v));
         }
 
+        // Convert params to object for API client
+        const paramsObj: Record<string, string> = {};
+        params.forEach((value, key) => {
+            paramsObj[key] = value;
+        });
+
         // Parallel fetch of users and statistics
         const [usersResponse, statsResponse, facultiesResponse, departmentsResponse] = await Promise.all([
             // Fetch users
-            event.fetch(`${apiEndpoint}?${params}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }),
+            api.get(event, apiEndpoint, paramsObj),
             
             // Fetch statistics
-            event.fetch(statsEndpoint, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }),
+            api.get(event, statsEndpoint),
 
             // Fetch faculties for SuperAdmin filtering
             adminLevel === AdminLevel.SuperAdmin ? 
-                event.fetch('/api/faculties', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                }) : Promise.resolve(null),
+                api.get(event, '/api/faculties') : Promise.resolve(null),
 
             // Fetch departments for the relevant faculty
-            event.fetch(`/api/faculties/${facultyId || filters.faculty_id || 'current'}/departments`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }).catch(() => null) // Handle case where faculty doesn't have departments endpoint
+            api.get(event, `/api/faculties/${facultyId || filters.faculty_id || 'current'}/departments`)
+                .catch(() => null) // Handle case where faculty doesn't have departments endpoint
         ]);
 
         // Process users response
-        if (!usersResponse.ok) {
-            console.error('Failed to fetch users:', usersResponse.status, usersResponse.statusText);
-            error(usersResponse.status, 'Failed to fetch users');
+        if (usersResponse.status === 'error') {
+            console.error('Failed to fetch users:', usersResponse.error);
+            error(500, usersResponse.error || 'Failed to fetch users');
         }
 
-        const usersData = await usersResponse.json();
-        // Check for error status or missing data
-        if (usersData.status === 'error' || (!usersData.data && !usersData.users)) {
-            error(500, usersData.message || 'Failed to fetch users');
+        const usersData = usersResponse.data;
+        // Check for missing data
+        if (!usersData && !usersData?.users) {
+            error(500, 'Failed to fetch users');
         }
 
         // Process statistics response
-        if (!statsResponse.ok) {
-            console.error('Failed to fetch user statistics:', statsResponse.status, statsResponse.statusText);
-            error(statsResponse.status, 'Failed to fetch user statistics');
+        if (statsResponse.status === 'error') {
+            console.error('Failed to fetch user statistics:', statsResponse.error);
+            error(500, statsResponse.error || 'Failed to fetch user statistics');
         }
 
-        const statsData = await statsResponse.json();
-        // Check for error status or missing data
-        if (statsData.status === 'error' || !statsData.data) {
-            error(500, statsData.message || 'Failed to fetch user statistics');
+        const statsData = statsResponse.data;
+        // Check for missing data
+        if (!statsData) {
+            error(500, 'Failed to fetch user statistics');
         }
 
         // Process faculties response (for SuperAdmin)
         let faculties: Faculty[] = [];
-        if (facultiesResponse && facultiesResponse.ok) {
-            const facultiesData = await facultiesResponse.json();
-            if (facultiesData.status === 'success') {
-                faculties = facultiesData.data || [];
-            }
+        if (facultiesResponse && facultiesResponse.status === 'success') {
+            faculties = facultiesResponse.data || [];
         }
 
         // Process departments response
         let departments: Department[] = [];
-        if (departmentsResponse && departmentsResponse.ok) {
-            const departmentsData = await departmentsResponse.json();
-            if (departmentsData.status === 'success') {
-                departments = departmentsData.data || [];
-            }
+        if (departmentsResponse && departmentsResponse.status === 'success') {
+            departments = departmentsResponse.data || [];
         }
 
         // Normalize users into a consistent shape expected by the table

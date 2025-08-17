@@ -1,6 +1,7 @@
 import { requireAdmin } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 import type { AdminDashboardStats } from '$lib/types/admin';
+import { api } from '$lib/server/api-client';
 
 export const load: PageServerLoad = async (event) => {
 	const user = await requireAdmin(event);
@@ -17,13 +18,10 @@ export const load: PageServerLoad = async (event) => {
 	};
 
 	try {
-		const response = await event.fetch(`/api/admin/dashboard`);
+		const response = await api.get(event, '/api/admin/dashboard');
 
-		if (response.ok) {
-			const result = await response.json();
-			if (result.status === 'success' && result.data) {
-				stats = result.data;
-			}
+		if (response.status === 'success' && response.data) {
+			stats = response.data;
 		}
 	} catch (error) {
 		console.error('Failed to load dashboard stats:', error);
@@ -32,13 +30,10 @@ export const load: PageServerLoad = async (event) => {
 	// โหลดกิจกรรมล่าสุด (optional)
 	let recentActivities: any[] = [];
 	try {
-		const response = await event.fetch(`/api/admin/activities?limit=10&recent=true`);
+		const response = await api.get(event, '/api/admin/activities', { limit: '10', recent: 'true' });
 
-		if (response.ok) {
-			const result = await response.json();
-			if (result.status === 'success' && result.data) {
-				recentActivities = result.data || [];
-			}
+		if (response.status === 'success' && response.data) {
+			recentActivities = response.data || [];
 		}
 	} catch (error) {
 		console.error('Failed to load recent activities:', error);

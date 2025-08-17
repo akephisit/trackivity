@@ -1,25 +1,25 @@
 import { type Handle, type HandleServerError } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import type { SessionUser, Permission, AdminLevel } from '$lib/types';
-
-// Backend API base URL
-const API_BASE_URL = process.env.PUBLIC_API_URL || 'http://localhost:3000';
+import { apiClient } from '$lib/server/api-client';
 
 // Session validation function
-async function validateSession(sessionId: string): Promise<SessionUser | null> {
+async function validateSession(sessionId: string, eventFetch: any): Promise<SessionUser | null> {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-            headers: {
-                'Cookie': `session_id=${sessionId}`,
-                'X-Session-ID': sessionId
+        // Create a mock event object for the API client
+        const mockEvent = {
+            fetch: eventFetch,
+            cookies: {
+                get: (name: string) => name === 'session_id' ? sessionId : undefined
             }
-        });
+        };
+        
+        const response = await apiClient.get(mockEvent as any, '/api/auth/me');
 
-        if (response.ok) {
-            const data = await response.json();
+        if (response.status === 'success') {
             // Backend returns { success, data: SessionUser } for student endpoint
             // and { user: SessionUser, ... } for admin endpoint.
-            const user = (data as any)?.user ?? (data as any)?.data ?? (data as any)?.session?.user;
+            const user = (response.data as any)?.user ?? (response.data as any)?.data ?? (response.data as any)?.session?.user;
             return (user || null) as SessionUser | null;
         }
     } catch (error) {
@@ -116,7 +116,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
     // Validate session if present (only for non-exempt pages)
     if (sessionId) {
-        const user = await validateSession(sessionId);
+        const user = await validateSession(sessionId, event.fetch);
         if (user) {
             event.locals.user = user;
         } else {
