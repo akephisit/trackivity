@@ -12,8 +12,7 @@ use uuid::Uuid;
 use crate::middleware::session::{AdminUser, SessionState};
 use crate::models::session::SessionUser;
 use crate::models::{
-    activity::Activity,
-    participation::{ParticipationStatus},
+    participation::ParticipationStatus,
     user::User,
 };
 use crate::utils::qr::{generate_client_qr_data, validate_client_qr_data};
@@ -149,17 +148,17 @@ pub async fn qr_checkin(
     Path(activity_id): Path<Uuid>,
     Json(request): Json<QrCheckInRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    // ตรวจสอบว่า activity มีอยู่จริง
-    let activity_check = sqlx::query_as::<_, Activity>(
-        "SELECT * FROM activities WHERE id = $1"
+    // ตรวจสอบว่า activity มีอยู่จริง (query แบบ scalar)
+    let activity_exists = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM activities WHERE id = $1"
     )
     .bind(&activity_id)
-    .fetch_one(&session_state.db_pool)
+    .fetch_optional(&session_state.db_pool)
     .await;
 
-    let activity = match activity_check {
-        Ok(activity) => activity,
-        Err(sqlx::Error::RowNotFound) => {
+    match activity_exists {
+        Ok(Some(_)) => {}
+        Ok(None) => {
             let error_response = json!({
                 "status": "error",
                 "message": "Activity not found"
@@ -173,7 +172,7 @@ pub async fn qr_checkin(
             });
             return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
         }
-    };
+    }
 
     // Parse QR data
     let client_data: crate::utils::qr::ClientQrData = match serde_json::from_str(&request.qr_data) {
