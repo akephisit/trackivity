@@ -1,8 +1,11 @@
 import type { PageServerLoad, Actions } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import type { Activity, ActivityUpdateData } from '$lib/types/activity';
+import { requireFacultyAdmin } from '$lib/server/auth';
+import { PUBLIC_API_URL } from '$env/static/public';
 
-export const load: PageServerLoad = async ({ params, fetch, depends, locals }) => {
+export const load: PageServerLoad = async (event) => {
+  const { params, fetch, depends } = event;
   depends('admin:activity-edit');
 
   const { id } = params;
@@ -11,16 +14,19 @@ export const load: PageServerLoad = async ({ params, fetch, depends, locals }) =
     throw error(404, 'Activity ID is required');
   }
 
-  // Check admin authorization  
-  if (!locals.user || (locals.user as any).role !== 'admin') {
-    throw redirect(302, '/admin/login');
+  // Check admin authorization (FacultyAdmin or SuperAdmin)
+  const user = await requireFacultyAdmin(event);
+  const sessionId = event.cookies.get('session_id');
+  if (!sessionId) {
+    throw error(401, 'ไม่มีการ authentication');
   }
 
   try {
     // Fetch activity details
-    const activityRes = await fetch(`/api/admin/activities/${id}`, {
+    const activityRes = await fetch(`${PUBLIC_API_URL}/api/admin/activities/${id}`, {
       headers: {
-        'Authorization': `Bearer ${(locals.user as any).token}`
+        'Cookie': `session_id=${sessionId}`,
+        'X-Session-ID': sessionId
       }
     });
     
@@ -45,9 +51,10 @@ export const load: PageServerLoad = async ({ params, fetch, depends, locals }) =
     // Fetch faculties list
     let faculties: any[] = [];
     try {
-      const facultiesRes = await fetch('/api/admin/faculties', {
+      const facultiesRes = await fetch(`${PUBLIC_API_URL}/api/admin/faculties`, {
         headers: {
-          'Authorization': `Bearer ${(locals.user as any).token}`
+          'Cookie': `session_id=${sessionId}`,
+          'X-Session-ID': sessionId
         }
       });
       
@@ -64,9 +71,10 @@ export const load: PageServerLoad = async ({ params, fetch, depends, locals }) =
     // Fetch departments list
     let departments: any[] = [];
     try {
-      const departmentsRes = await fetch('/api/admin/departments', {
+      const departmentsRes = await fetch(`${PUBLIC_API_URL}/api/admin/departments`, {
         headers: {
-          'Authorization': `Bearer ${(locals.user as any).token}`
+          'Cookie': `session_id=${sessionId}`,
+          'X-Session-ID': sessionId
         }
       });
       
@@ -84,7 +92,7 @@ export const load: PageServerLoad = async ({ params, fetch, depends, locals }) =
       activity,
       faculties,
       departments,
-      user: locals.user
+      user
     };
   } catch (e) {
     if (e instanceof Error && 'status' in e) {
@@ -97,9 +105,12 @@ export const load: PageServerLoad = async ({ params, fetch, depends, locals }) =
 };
 
 export const actions: Actions = {
-  update: async ({ request, params, locals, fetch }) => {
-    if (!locals.user || (locals.user as any).role !== 'admin') {
-      throw error(403, 'ไม่มีสิทธิ์ในการดำเนินการนี้');
+  update: async (event) => {
+    const { request, params, fetch } = event;
+    await requireFacultyAdmin(event);
+    const sessionId = event.cookies.get('session_id');
+    if (!sessionId) {
+      throw error(401, 'ไม่มีการ authentication');
     }
 
     const { id } = params;
@@ -162,11 +173,12 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`/api/admin/activities/${id}`, {
+      const response = await fetch(`${PUBLIC_API_URL}/api/admin/activities/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(locals.user as any).token}`
+          'Cookie': `session_id=${sessionId}`,
+          'X-Session-ID': sessionId
         },
         body: JSON.stringify(updateData)
       });
