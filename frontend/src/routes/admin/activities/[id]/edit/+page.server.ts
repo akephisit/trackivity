@@ -1,0 +1,205 @@
+import type { PageServerLoad, Actions } from './$types';
+import { error, redirect } from '@sveltejs/kit';
+import type { Activity, ActivityUpdateData } from '$lib/types/activity';
+
+export const load: PageServerLoad = async ({ params, fetch, depends, locals }) => {
+  depends('admin:activity-edit');
+
+  const { id } = params;
+
+  if (!id) {
+    throw error(404, 'Activity ID is required');
+  }
+
+  // Check admin authorization  
+  if (!locals.user || (locals.user as any).role !== 'admin') {
+    throw redirect(302, '/admin/login');
+  }
+
+  try {
+    // Fetch activity details
+    const activityRes = await fetch(`/api/admin/activities/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${(locals.user as any).token}`
+      }
+    });
+    
+    if (!activityRes.ok) {
+      if (activityRes.status === 404) {
+        throw error(404, 'ไม่พบกิจกรรมที่ระบุ');
+      }
+      if (activityRes.status === 403) {
+        throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+      }
+      throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
+    }
+
+    const activityData = await activityRes.json();
+    
+    if (activityData.status !== 'success' || !activityData.data) {
+      throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
+    }
+
+    const activity: Activity = activityData.data;
+
+    // Fetch faculties list
+    let faculties: any[] = [];
+    try {
+      const facultiesRes = await fetch('/api/admin/faculties', {
+        headers: {
+          'Authorization': `Bearer ${(locals.user as any).token}`
+        }
+      });
+      
+      if (facultiesRes.ok) {
+        const facultiesData = await facultiesRes.json();
+        if (facultiesData.status === 'success' && facultiesData.data) {
+          faculties = facultiesData.data;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch faculties:', e);
+    }
+
+    // Fetch departments list
+    let departments: any[] = [];
+    try {
+      const departmentsRes = await fetch('/api/admin/departments', {
+        headers: {
+          'Authorization': `Bearer ${(locals.user as any).token}`
+        }
+      });
+      
+      if (departmentsRes.ok) {
+        const departmentsData = await departmentsRes.json();
+        if (departmentsData.status === 'success' && departmentsData.data) {
+          departments = departmentsData.data;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch departments:', e);
+    }
+
+    return {
+      activity,
+      faculties,
+      departments,
+      user: locals.user
+    };
+  } catch (e) {
+    if (e instanceof Error && 'status' in e) {
+      throw e; // Re-throw SvelteKit errors
+    }
+    
+    console.error('Error loading activity for edit:', e);
+    throw error(500, 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+  }
+};
+
+export const actions: Actions = {
+  update: async ({ request, params, locals, fetch }) => {
+    if (!locals.user || (locals.user as any).role !== 'admin') {
+      throw error(403, 'ไม่มีสิทธิ์ในการดำเนินการนี้');
+    }
+
+    const { id } = params;
+    const formData = await request.formData();
+
+    // Extract and validate form data
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const location = formData.get('location') as string;
+    const start_time = formData.get('start_time') as string;
+    const end_time = formData.get('end_time') as string;
+    const max_participants = formData.get('max_participants') as string;
+    const status = formData.get('status') as string;
+    const faculty_id = formData.get('faculty_id') as string;
+    const department_id = formData.get('department_id') as string;
+
+    // Validation
+    if (!title || !location || !start_time || !end_time) {
+      return {
+        error: 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน',
+        formData: Object.fromEntries(formData)
+      };
+    }
+
+    // Validate dates
+    const startDate = new Date(start_time);
+    const endDate = new Date(end_time);
+    
+    if (startDate >= endDate) {
+      return {
+        error: 'วันที่และเวลาสิ้นสุดต้องหลังจากวันที่และเวลาเริ่มต้น',
+        formData: Object.fromEntries(formData)
+      };
+    }
+
+    // Prepare update data
+    const updateData: ActivityUpdateData = {
+      title,
+      description: description || undefined,
+      location,
+      start_time,
+      end_time,
+      status: status as any,
+      faculty_id: faculty_id || undefined,
+      department_id: department_id || undefined
+    };
+
+    // Add max_participants if provided
+    if (max_participants && max_participants.trim() !== '') {
+      const maxParticipantsNum = parseInt(max_participants);
+      if (isNaN(maxParticipantsNum) || maxParticipantsNum < 1) {
+        return {
+          error: 'จำนวนผู้เข้าร่วมสูงสุดต้องเป็นตัวเลขที่มากกว่า 0',
+          formData: Object.fromEntries(formData)
+        };
+      }
+      updateData.max_participants = maxParticipantsNum;
+    } else {
+      updateData.max_participants = undefined;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/activities/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(locals.user as any).token}`
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return {
+          error: errorData.message || 'ไม่สามารถแก้ไขกิจกรรมได้',
+          formData: Object.fromEntries(formData)
+        };
+      }
+
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        // Redirect to activity detail page
+        throw redirect(302, `/admin/activities/${id}`);
+      } else {
+        return {
+          error: result.message || 'ไม่สามารถแก้ไขกิจกรรมได้',
+          formData: Object.fromEntries(formData)
+        };
+      }
+    } catch (e) {
+      if (e instanceof Error && 'status' in e && e.status === 302) {
+        throw e; // Re-throw redirect
+      }
+      
+      console.error('Error updating activity:', e);
+      return {
+        error: 'เกิดข้อผิดพลาดในการแก้ไขกิจกรรม',
+        formData: Object.fromEntries(formData)
+      };
+    }
+  }
+};
