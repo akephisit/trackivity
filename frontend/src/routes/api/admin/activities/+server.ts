@@ -83,8 +83,8 @@ export const POST: RequestHandler = async (event) => {
 
 		// สร้าง payload ให้ตรงกับ backend /api/admin/activities
 		const payload = {
-			activity_name: body.activity_name.trim(),
-			description: body.description ? String(body.description).trim() : null,
+			title: body.activity_name.trim(),
+			description: body.description ? String(body.description).trim() : '',
 			start_date: body.start_date,
 			end_date: body.end_date,
 			start_time: body.start_time,
