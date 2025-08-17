@@ -162,6 +162,66 @@ WHERE academic_year IS NULL
    OR end_time_only IS NULL 
    OR eligible_faculties IS NULL;
 
+-- Enforce NOT NULL constraints on required fields (after backfilling)
+DO $$ 
+BEGIN 
+    -- academic_year NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='academic_year' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN academic_year SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on academic_year';
+    END IF;
+
+    -- organizer NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='organizer' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN organizer SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on organizer';
+    END IF;
+
+    -- eligible_faculties NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='eligible_faculties' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN eligible_faculties SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on eligible_faculties';
+    END IF;
+
+    -- activity_type NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='activity_type' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN activity_type SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on activity_type';
+    END IF;
+
+    -- start_date NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='start_date' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN start_date SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on start_date';
+    END IF;
+
+    -- end_date NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='end_date' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN end_date SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on end_date';
+    END IF;
+
+    -- start_time_only NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='start_time_only' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN start_time_only SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on start_time_only';
+    END IF;
+
+    -- end_time_only NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='end_time_only' AND is_nullable='YES') THEN
+        ALTER TABLE activities ALTER COLUMN end_time_only SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on end_time_only';
+    END IF;
+
+    -- hours NOT NULL
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='hours' AND is_nullable='YES') THEN
+        -- Default hours to 1 if NULL before enforcing
+        UPDATE activities SET hours = 1 WHERE hours IS NULL;
+        ALTER TABLE activities ALTER COLUMN hours SET NOT NULL;
+        RAISE NOTICE 'Set NOT NULL on hours';
+    END IF;
+END $$;
+
 -- Final verification
 DO $$
 DECLARE

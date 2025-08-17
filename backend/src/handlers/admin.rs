@@ -60,15 +60,19 @@ pub struct AdminActivityInfo {
     pub title: String,
     pub description: String,
     pub location: String,
-    pub start_time: DateTime<Utc>,
-    pub end_time: DateTime<Utc>,
+    pub start_date: Option<chrono::NaiveDate>,
+    pub end_date: Option<chrono::NaiveDate>,
+    pub start_time_only: Option<chrono::NaiveTime>,
+    pub end_time_only: Option<chrono::NaiveTime>,
+    pub activity_type: Option<String>,
     pub max_participants: Option<i32>,
-    pub current_participants: i64,
     pub status: ActivityStatus,
-    pub created_by_name: String,
-    pub faculty_name: Option<String>,
-    pub department_name: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub academic_year: Option<String>,
+    pub organizer: Option<String>,
+    pub eligible_faculties: Option<serde_json::Value>,
+    pub hours: Option<i32>,
 }
 
 /// Get admin dashboard statistics
@@ -593,29 +597,26 @@ pub async fn get_admin_activities(
             a.title,
             a.description,
             a.location,
-            a.start_time,
-            a.end_time,
+            a.start_date,
+            a.end_date,
+            a.start_time_only,
+            a.end_time_only,
+            a.activity_type,
             a.max_participants,
             a.status,
             a.created_at,
-            u.first_name || ' ' || u.last_name as created_by_name,
-            f.name as faculty_name,
-            d.name as department_name,
-            COALESCE(COUNT(p.id), 0) as current_participants
+            a.updated_at,
+            a.academic_year,
+            a.organizer,
+            a.eligible_faculties,
+            a.hours
         FROM activities a
-        LEFT JOIN users u ON a.created_by = u.id
-        LEFT JOIN faculties f ON a.faculty_id = f.id
-        LEFT JOIN departments d ON a.department_id = d.id
-        LEFT JOIN participations p ON a.id = p.activity_id
     "#
     .to_string();
 
     let mut count_query = r#"
-        SELECT COUNT(DISTINCT a.id) 
+        SELECT COUNT(*) 
         FROM activities a
-        LEFT JOIN users u ON a.created_by = u.id
-        LEFT JOIN faculties f ON a.faculty_id = f.id
-        LEFT JOIN departments d ON a.department_id = d.id
     "#
     .to_string();
 
@@ -640,7 +641,7 @@ pub async fn get_admin_activities(
         count_query.push_str(&where_clause);
     }
 
-    query.push_str(" GROUP BY a.id, a.title, a.description, a.location, a.start_time, a.end_time, a.max_participants, a.status, a.created_at, u.first_name, u.last_name, f.name, d.name");
+    // No grouping needed since no aggregate
     query.push_str(" ORDER BY a.created_at DESC LIMIT $1 OFFSET $2");
 
     let mut query_builder = sqlx::query(&query).bind(limit).bind(offset);
@@ -671,17 +672,19 @@ pub async fn get_admin_activities(
                     title: row.get("title"),
                     description: row.get("description"),
                     location: row.get("location"),
-                    start_time: row.get("start_time"),
-                    end_time: row.get("end_time"),
+                    start_date: row.get::<Option<chrono::NaiveDate>, _>("start_date"),
+                    end_date: row.get::<Option<chrono::NaiveDate>, _>("end_date"),
+                    start_time_only: row.get::<Option<chrono::NaiveTime>, _>("start_time_only"),
+                    end_time_only: row.get::<Option<chrono::NaiveTime>, _>("end_time_only"),
+                    activity_type: row.get::<Option<String>, _>("activity_type"),
                     max_participants: row.get::<Option<i32>, _>("max_participants"),
-                    current_participants: row
-                        .get::<Option<i64>, _>("current_participants")
-                        .unwrap_or(0),
                     status: row.get::<ActivityStatus, _>("status"),
-                    created_by_name: row.get("created_by_name"),
-                    faculty_name: row.get::<Option<String>, _>("faculty_name"),
-                    department_name: row.get::<Option<String>, _>("department_name"),
                     created_at: row.get("created_at"),
+                    updated_at: row.get("updated_at"),
+                    academic_year: row.get::<Option<String>, _>("academic_year"),
+                    organizer: row.get::<Option<String>, _>("organizer"),
+                    eligible_faculties: row.get::<Option<serde_json::Value>, _>("eligible_faculties"),
+                    hours: row.get::<Option<i32>, _>("hours"),
                 };
 
                 admin_activities.push(admin_activity);
@@ -2364,7 +2367,7 @@ pub struct CreateAdminActivityRequest {
     pub organizer: String,
     pub eligible_faculties: Vec<Uuid>,
     pub academic_year: String,
-    pub hours: Option<i32>,
+    pub hours: i32,
 }
 
 /// Create new activity via admin interface with enhanced fields
@@ -2438,6 +2441,29 @@ pub async fn create_admin_activity(
         let error_response = json!({
             "status": "error",
             "message": "เวลาเริ่มต้นต้องน้อยกว่าเวลาสิ้นสุด"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    // Validate required textual fields non-empty
+    if request.activity_name.trim().is_empty()
+        || request.activity_type.trim().is_empty()
+        || request.academic_year.trim().is_empty()
+        || request.organizer.trim().is_empty()
+        || request.location.trim().is_empty()
+    {
+        let error_response = json!({
+            "status": "error",
+            "message": "ข้อมูลไม่ครบถ้วน"
+        });
+        return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+    }
+
+    // Validate hours
+    if request.hours <= 0 {
+        let error_response = json!({
+            "status": "error",
+            "message": "ชั่วโมงกิจกรรมต้องมากกว่า 0"
         });
         return Err((StatusCode::BAD_REQUEST, Json(error_response)));
     }

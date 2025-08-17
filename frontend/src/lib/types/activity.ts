@@ -38,7 +38,7 @@ export interface ActivityCreateData {
 	activity_type: ActivityType;
 	location: string;
 	max_participants?: number;
-	hours?: number;
+	hours: number;
 	organizer: string;
 	eligible_faculties: string;
 	academic_year: string;

@@ -49,12 +49,12 @@ export const load: PageServerLoad = async (event) => {
 			
 			activities = rawActivities.map((activity: any) => ({
 				id: activity.id,
-				activity_name: activity.activity_name || activity.name,
+				activity_name: activity.activity_name || activity.name || activity.title,
 				description: activity.description,
 				start_date: activity.start_date,
 				end_date: activity.end_date,
-				start_time: activity.start_time,
-				end_time: activity.end_time,
+				start_time: activity.start_time_only || activity.start_time,
+				end_time: activity.end_time_only || activity.end_time,
 				activity_type: activity.activity_type,
 				location: activity.location,
 				max_participants: activity.max_participants,
@@ -65,7 +65,7 @@ export const load: PageServerLoad = async (event) => {
 				created_at: activity.created_at,
 				updated_at: activity.updated_at,
 				// Legacy fields for compatibility
-				name: activity.activity_name || activity.name,
+				name: activity.activity_name || activity.name || activity.title,
 				organizer: activity.organizer || 'ระบบ',
 				organizerType: activity.organizerType || 'คณะ',
 				participantCount: activity.participant_count || 0,
