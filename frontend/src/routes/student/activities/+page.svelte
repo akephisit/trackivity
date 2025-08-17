@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Activity } from '$lib/types';
+	import type { Activity } from '$lib/types/activity';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -15,8 +15,10 @@
 		IconSearch,
 		IconFilter,
 		IconAlertCircle,
-		IconChevronRight
+		IconChevronRight,
+		IconEdit
 	} from '@tabler/icons-svelte';
+	import { goto } from '$app/navigation';
 
 	const { data } = $props<{ data: { activities: Activity[] } }>();
 	let activities: Activity[] = $state(data?.activities ?? []);
@@ -35,7 +37,7 @@
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
 			filtered = filtered.filter(activity =>
-				activity.name.toLowerCase().includes(query) ||
+				(activity.title || activity.activity_name || '').toLowerCase().includes(query) ||
 				activity.description?.toLowerCase().includes(query)
 			);
 		}
@@ -44,16 +46,20 @@
 		const now = new Date();
 		switch (selectedTab) {
 			case 'upcoming':
-				filtered = filtered.filter(activity => new Date(activity.start_date) > now);
+				filtered = filtered.filter(activity => 
+					new Date(activity.start_time || activity.start_date || '') > now
+				);
 				break;
 			case 'active':
 				filtered = filtered.filter(activity => 
-					new Date(activity.start_date) <= now && 
-					new Date(activity.end_date) >= now
+					new Date(activity.start_time || activity.start_date || '') <= now && 
+					new Date(activity.end_time || activity.end_date || '') >= now
 				);
 				break;
 			case 'past':
-				filtered = filtered.filter(activity => new Date(activity.end_date) < now);
+				filtered = filtered.filter(activity => 
+					new Date(activity.end_time || activity.end_date || '') < now
+				);
 				break;
 			default:
 				// 'all' - no additional filtering
@@ -78,7 +84,12 @@
 		});
 	}
 
-	function formatDateRange(start: string, end: string): string {
+	function formatDateRange(activity: Activity): string {
+		const start = activity.start_time || activity.start_date;
+		const end = activity.end_time || activity.end_date;
+		
+		if (!start || !end) return 'ไม่ระบุ';
+		
 		const startDate = new Date(start);
 		const endDate = new Date(end);
 		
@@ -120,13 +131,32 @@
 		return types[type] || type;
 	}
 
-	function getActivityStatus(activity: Activity): { text: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' } {
+	function getActivityStatus(activity: Activity): { text: string; variant: 'default' | 'outline' | 'destructive' } {
+		// Use backend status if available
+		if (activity.status) {
+			switch (activity.status) {
+				case 'draft':
+					return { text: 'ร่าง', variant: 'outline' };
+				case 'published':
+					return { text: 'เผยแพร่แล้ว', variant: 'default' };
+				case 'ongoing':
+					return { text: 'กำลังดำเนินการ', variant: 'default' };
+				case 'completed':
+					return { text: 'เสร็จสิ้น', variant: 'outline' };
+				case 'cancelled':
+					return { text: 'ยกเลิก', variant: 'destructive' };
+				default:
+					return { text: activity.status, variant: 'outline' };
+			}
+		}
+
+		// Fallback to time-based status
 		const now = new Date();
-		const start = new Date(activity.start_date);
-		const end = new Date(activity.end_date);
+		const start = new Date(activity.start_time || activity.start_date || '');
+		const end = new Date(activity.end_time || activity.end_date || '');
 
 		if (now < start) {
-			return { text: 'เร็วๆ นี้', variant: 'secondary' };
+			return { text: 'เร็วๆ นี้', variant: 'outline' };
 		} else if (now >= start && now <= end) {
 			return { text: 'กำลังดำเนินการ', variant: 'default' };
 		} else {
@@ -136,6 +166,15 @@
 
 	function toggleFilters() {
 		showFilters = !showFilters;
+	}
+
+	function goToActivity(activityId: string) {
+		goto(`/student/activities/${activityId}`);
+	}
+
+	function goToEditActivity(activityId: string, event: Event) {
+		event.stopPropagation();
+		goto(`/student/activities/${activityId}/edit`);
 	}
 </script>
 
@@ -236,15 +275,30 @@
 				{:else}
 					<div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{#each filteredActivities as activity}
-							<Card class="hover:shadow-md transition-shadow cursor-pointer group">
+							<Card 
+								class="hover:shadow-md transition-shadow cursor-pointer group"
+								onclick={() => goToActivity(activity.id)}
+							>
 								<CardHeader class="pb-3">
 									<div class="flex items-start justify-between gap-2">
 										<CardTitle class="text-base line-clamp-2 group-hover:text-primary transition-colors">
-											{activity.name}
+											{activity.title || activity.activity_name || 'ไม่ระบุชื่อ'}
 										</CardTitle>
-										<Badge variant={getActivityBadgeVariant(activity.activity_type)}>
-											{getActivityTypeText(activity.activity_type)}
-										</Badge>
+										<div class="flex items-center gap-2">
+											{#if activity.activity_type}
+												<Badge variant={getActivityBadgeVariant(activity.activity_type)}>
+													{getActivityTypeText(activity.activity_type)}
+												</Badge>
+											{/if}
+											<Button 
+												size="sm" 
+												variant="ghost"
+												onclick={(e) => goToEditActivity(activity.id, e)}
+												class="opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6"
+											>
+												<IconEdit class="size-3" />
+											</Button>
+										</div>
 									</div>
 									{#if activity.description}
 										<p class="text-sm text-muted-foreground line-clamp-2 mt-2">
@@ -258,7 +312,7 @@
 									<div class="flex items-center gap-2 text-sm text-muted-foreground">
 										<IconClock class="size-4 flex-shrink-0" />
 										<span class="line-clamp-1">
-											{formatDateRange(activity.start_date, activity.end_date)}
+											{formatDateRange(activity)}
 										</span>
 									</div>
 									
@@ -271,10 +325,24 @@
 									{/if}
 									
 									<!-- Participants -->
-									{#if activity.max_participants}
+									{#if activity.max_participants || activity.current_participants}
 										<div class="flex items-center gap-2 text-sm text-muted-foreground">
 											<IconUsers class="size-4 flex-shrink-0" />
-											<span>{activity.current_participants || 0}/{activity.max_participants} คน</span>
+											<span>
+												{activity.current_participants || 0}
+												{#if activity.max_participants}
+													/{activity.max_participants}
+												{/if}
+												คน
+											</span>
+										</div>
+									{/if}
+									
+									<!-- Faculty -->
+									{#if activity.faculty_name}
+										<div class="flex items-center gap-2 text-sm text-muted-foreground">
+											<IconMapPin class="size-4 flex-shrink-0" />
+											<span class="line-clamp-1">{activity.faculty_name}</span>
 										</div>
 									{/if}
 									
@@ -288,10 +356,17 @@
 										{/snippet}
 										{@render statusBadge()}
 										
-										<Button size="sm" variant="ghost" class="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-											ดูรายละเอียด
-											<IconChevronRight class="size-4 ml-1" />
-										</Button>
+										<div class="flex items-center gap-2">
+											{#if activity.is_registered}
+												<Badge variant="outline" class="text-xs">
+													ลงทะเบียนแล้ว
+												</Badge>
+											{/if}
+											<Button size="sm" variant="ghost" class="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+												ดูรายละเอียด
+												<IconChevronRight class="size-4 ml-1" />
+											</Button>
+										</div>
 									</div>
 								</CardContent>
 							</Card>

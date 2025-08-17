@@ -1,34 +1,85 @@
 export type ActivityType = 'Academic' | 'Sports' | 'Cultural' | 'Social' | 'Other';
-export type ActivityStatus = 'รอดำเนินการ' | 'กำลังดำเนินการ' | 'เสร็จสิ้น';
+export type ActivityStatus = 'draft' | 'published' | 'ongoing' | 'completed' | 'cancelled';
+export type ParticipationStatus = 'registered' | 'checked_in' | 'checked_out' | 'completed';
 
+// Updated to match backend API response structure
 export interface Activity {
 	id: string;
-	activity_name: string;
+	title: string;
 	description: string;
-	start_date: string; // ISO date
-	end_date: string; // ISO date
-	start_time: string; // HH:MM format
-	end_time: string; // HH:MM format
-	activity_type: ActivityType;
 	location: string;
+	start_time: string; // Full ISO datetime from backend
+	end_time: string; // Full ISO datetime from backend
 	max_participants?: number;
-	hours?: number; // total hours credited for activity
-	organizer: string;
+	current_participants: number;
+	status: ActivityStatus;
 	faculty_id?: string;
-	created_by: string; // admin user id
+	faculty_name?: string;
+	created_by: string;
+	created_by_name: string;
 	created_at: string;
 	updated_at: string;
-	// For display purposes
-	name?: string; // legacy field
-	require_score?: boolean; // legacy field
-	organizerType?: 'คณะ' | 'มหาวิทยาลัย'; // legacy field
-	participantCount?: number; // legacy field
-	status?: ActivityStatus; // legacy field
-	createdAt?: string; // legacy field
-	updatedAt?: string; // legacy field
+	is_registered: boolean;
+	user_participation_status?: ParticipationStatus;
+	// Legacy fields for backward compatibility
+	activity_name?: string;
+	start_date?: string;
+	end_date?: string;
+	start_time_only?: string;
+	end_time_only?: string;
+	activity_type?: ActivityType;
+	hours?: number;
+	organizer?: string;
+	name?: string;
+	require_score?: boolean;
+	organizerType?: 'คณะ' | 'มหาวิทยาลัย';
+	participantCount?: number;
+	createdAt?: string;
+	updatedAt?: string;
 }
 
+// For creating new activities
 export interface ActivityCreateData {
+	title: string;
+	description: string;
+	location: string;
+	start_time: string; // ISO datetime
+	end_time: string; // ISO datetime
+	max_participants?: number;
+	faculty_id?: string;
+	department_id?: string;
+}
+
+// For updating activities
+export interface ActivityUpdateData {
+	title?: string;
+	description?: string;
+	location?: string;
+	start_time?: string;
+	end_time?: string;
+	max_participants?: number;
+	status?: ActivityStatus;
+	faculty_id?: string;
+	department_id?: string;
+}
+
+// Participation data
+export interface Participation {
+	id: string;
+	user_id: string;
+	user_name: string;
+	student_id: string;
+	email: string;
+	department_name?: string;
+	status: ParticipationStatus;
+	registered_at: string;
+	checked_in_at?: string;
+	checked_out_at?: string;
+	notes?: string;
+}
+
+// Legacy interfaces for backward compatibility
+export interface ActivityFormData {
 	activity_name: string;
 	description: string | null;
 	start_date: string;
@@ -44,13 +95,9 @@ export interface ActivityCreateData {
 	academic_year: string;
 }
 
-export interface ActivityFormData extends ActivityCreateData {
-	// Extends ActivityCreateData for form handling
-}
-
 export interface ActivityApiResponse {
-	success: boolean;
-	data?: Activity;
+	status: string;
+	data?: Activity | Activity[];
 	error?: string;
 	message?: string;
 }
