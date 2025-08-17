@@ -2,7 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import type { Activity, Participation, ActivityStatus } from '$lib/types/activity';
 import { requireFacultyAdmin } from '$lib/server/auth';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { api } from '$lib/server/api-client';
 
 export const load: PageServerLoad = async (event) => {
   const { params, fetch, depends } = event;
@@ -16,50 +16,18 @@ export const load: PageServerLoad = async (event) => {
 
   // Check admin authorization (FacultyAdmin or SuperAdmin)
   const user = await requireFacultyAdmin(event);
-  const sessionId = event.cookies.get('session_id');
-  if (!sessionId) {
-    throw error(401, 'ไม่มีการ authentication');
-  }
 
   try {
     // Try admin endpoint first; if 404, fallback to public endpoint
-    let activityData: any;
-    {
-      const res = await fetch(`/api/admin/activities/${id}`, {
-        headers: {
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        }
-      });
-
-      if (res.ok) {
-        activityData = await res.json();
-      } else if (res.status === 404) {
-        const fallback = await fetch(`/api/activities/${id}`, {
-          headers: {
-            'Cookie': `session_id=${sessionId}`,
-            'X-Session-ID': sessionId
-          }
-        });
-        if (!fallback.ok) {
-          if (fallback.status === 404) {
-            throw error(404, 'ไม่พบกิจกรรมที่ระบุ');
-          }
-          if (fallback.status === 403) {
-            throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
-          }
-          throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
-        }
-        activityData = await fallback.json();
-      } else if (res.status === 403) {
-        throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
-      } else {
-        throw error(500, 'ไม่สามารถโหลดข้อมูลกิจกรรมได้');
-      }
+    let activityResponse = await api.get(event, `/api/admin/activities/${id}`);
+    
+    if (activityResponse.status === 'error') {
+      // Try fallback to public endpoint
+      activityResponse = await api.get(event, `/api/activities/${id}`);
     }
     
-    // Accept both { status:'success', data } and raw object
-    const rawActivity = activityData?.data ?? activityData;
+    // Extract activity data from response
+    const rawActivity = activityResponse.data;
     if (!rawActivity) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
@@ -103,27 +71,19 @@ export const load: PageServerLoad = async (event) => {
     let participationStats = { total: 0, registered: 0, checked_in: 0, checked_out: 0, completed: 0 };
     
     try {
-      const participationsRes = await fetch(`/api/activities/${id}/participations`, {
-        headers: {
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        }
-      });
+      const participationsResponse = await api.get(event, `/api/activities/${id}/participations`);
       
-      if (participationsRes.ok) {
-        const participationsData = await participationsRes.json();
-        if (participationsData.status === 'success' && participationsData.data?.participations) {
-          participations = participationsData.data.participations;
-          
-          // Calculate participation statistics
-          participationStats = {
-            total: participations.length,
-            registered: participations.filter(p => p.status === 'registered').length,
-            checked_in: participations.filter(p => p.status === 'checked_in').length,
-            checked_out: participations.filter(p => p.status === 'checked_out').length,
-            completed: participations.filter(p => p.status === 'completed').length
-          };
-        }
+      if (participationsResponse.status === 'success' && participationsResponse.data?.participations) {
+        participations = participationsResponse.data.participations;
+        
+        // Calculate participation statistics
+        participationStats = {
+          total: participations.length,
+          registered: participations.filter(p => p.status === 'registered').length,
+          checked_in: participations.filter(p => p.status === 'checked_in').length,
+          checked_out: participations.filter(p => p.status === 'checked_out').length,
+          completed: participations.filter(p => p.status === 'completed').length
+        };
       }
     } catch (e) {
       console.warn('Could not fetch participations:', e);
@@ -132,18 +92,10 @@ export const load: PageServerLoad = async (event) => {
     // Fetch faculties list for editing
     let faculties: any[] = [];
     try {
-      const facultiesRes = await fetch(`/api/admin/faculties`, {
-        headers: {
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        }
-      });
+      const facultiesResponse = await api.get(event, `/api/admin/faculties`);
       
-      if (facultiesRes.ok) {
-        const facultiesData = await facultiesRes.json();
-        if (facultiesData.status === 'success' && facultiesData.data) {
-          faculties = facultiesData.data;
-        }
+      if (facultiesResponse.status === 'success' && facultiesResponse.data) {
+        faculties = facultiesResponse.data;
       }
     } catch (e) {
       console.warn('Could not fetch faculties:', e);
@@ -169,12 +121,8 @@ export const load: PageServerLoad = async (event) => {
 export const actions: Actions = {
   // Update activity status
   updateStatus: async (event) => {
-    const { request, params, fetch } = event;
+    const { request, params } = event;
     await requireFacultyAdmin(event);
-    const sessionId = event.cookies.get('session_id');
-    if (!sessionId) {
-      throw error(401, 'ไม่มีการ authentication');
-    }
 
     const { id } = params;
     const formData = await request.formData();
@@ -187,29 +135,12 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`/api/activities/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        },
-        body: JSON.stringify({ status })
-      });
+      const response = await api.put(event, `/api/activities/${id}`, { status });
 
-      const ct = response.headers.get('content-type') || '';
-      if (!response.ok) {
-        if (ct.includes('application/json')) {
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            error: errorData.message || errorData.error || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
-          };
-        } else {
-          const text = await response.text().catch(() => '');
-          return {
-            error: text || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
-          };
-        }
+      if (response.status === 'error') {
+        return {
+          error: response.error || 'ไม่สามารถอัปเดตสถานะกิจกรรมได้'
+        };
       }
 
       return {
@@ -226,12 +157,8 @@ export const actions: Actions = {
 
   // Update participant status
   updateParticipant: async (event) => {
-    const { request, params, fetch } = event;
+    const { request, params } = event;
     await requireFacultyAdmin(event);
-    const sessionId = event.cookies.get('session_id');
-    if (!sessionId) {
-      throw error(401, 'ไม่มีการ authentication');
-    }
 
     const { id } = params;
     const formData = await request.formData();
@@ -246,29 +173,15 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`/api/admin/activities/${id}/participations/${participationId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        },
-        body: JSON.stringify({ status, notes })
+      const response = await api.patch(event, `/api/admin/activities/${id}/participations/${participationId}`, {
+        status,
+        notes
       });
 
-      const ct = response.headers.get('content-type') || '';
-      if (!response.ok) {
-        if (ct.includes('application/json')) {
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            error: errorData.message || errorData.error || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
-          };
-        } else {
-          const text = await response.text().catch(() => '');
-          return {
-            error: text || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
-          };
-        }
+      if (response.status === 'error') {
+        return {
+          error: response.error || 'ไม่สามารถอัปเดตสถานะผู้เข้าร่วมได้'
+        };
       }
 
       return {
@@ -285,12 +198,8 @@ export const actions: Actions = {
 
   // Remove participant
   removeParticipant: async (event) => {
-    const { request, params, fetch } = event;
+    const { request, params } = event;
     await requireFacultyAdmin(event);
-    const sessionId = event.cookies.get('session_id');
-    if (!sessionId) {
-      throw error(401, 'ไม่มีการ authentication');
-    }
 
     const { id } = params;
     const formData = await request.formData();
@@ -303,27 +212,12 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await fetch(`/api/admin/activities/${id}/participations/${participationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        }
-      });
+      const response = await api.delete(event, `/api/admin/activities/${id}/participations/${participationId}`);
 
-      const ct = response.headers.get('content-type') || '';
-      if (!response.ok) {
-        if (ct.includes('application/json')) {
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            error: errorData.message || errorData.error || 'ไม่สามารถลบผู้เข้าร่วมได้'
-          };
-        } else {
-          const text = await response.text().catch(() => '');
-          return {
-            error: text || 'ไม่สามารถลบผู้เข้าร่วมได้'
-          };
-        }
+      if (response.status === 'error') {
+        return {
+          error: response.error || 'ไม่สามารถลบผู้เข้าร่วมได้'
+        };
       }
 
       return {
@@ -340,37 +234,18 @@ export const actions: Actions = {
 
   // Delete activity
   deleteActivity: async (event) => {
-    const { params, fetch } = event;
+    const { params } = event;
     await requireFacultyAdmin(event);
-    const sessionId = event.cookies.get('session_id');
-    if (!sessionId) {
-      throw error(401, 'ไม่มีการ authentication');
-    }
 
     const { id } = params;
 
     try {
-      const response = await fetch(`/api/activities/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Cookie': `session_id=${sessionId}`,
-          'X-Session-ID': sessionId
-        }
-      });
+      const response = await api.delete(event, `/api/activities/${id}`);
 
-      const ct = response.headers.get('content-type') || '';
-      if (!response.ok) {
-        if (ct.includes('application/json')) {
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            error: errorData.message || errorData.error || 'ไม่สามารถลบกิจกรรมได้'
-          };
-        } else {
-          const text = await response.text().catch(() => '');
-          return {
-            error: text || 'ไม่สามารถลบกิจกรรมได้'
-          };
-        }
+      if (response.status === 'error') {
+        return {
+          error: response.error || 'ไม่สามารถลบกิจกรรมได้'
+        };
       }
 
       throw redirect(302, '/admin/activities');
