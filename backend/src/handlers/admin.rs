@@ -601,7 +601,7 @@ pub async fn get_admin_activities(
             a.end_date,
             a.start_time_only,
             a.end_time_only,
-            a.activity_type,
+            a.activity_type::text as activity_type,
             a.max_participants,
             a.status,
             a.created_at,
@@ -2509,7 +2509,7 @@ pub async fn create_admin_activity(
                   ((end_date::timestamp + end_time_only) AT TIME ZONE 'UTC') as end_time,
                   max_participants, 
                   status, faculty_id, created_by, created_at, updated_at,
-                  academic_year, organizer, eligible_faculties, activity_type, hours
+                  academic_year, organizer, eligible_faculties, activity_type::text as activity_type, hours
         "#
     )
     .bind(&request.activity_name)  // title
@@ -2540,7 +2540,7 @@ pub async fn create_admin_activity(
                 "start_time": row.get::<DateTime<Utc>, _>("start_time"),
                 "end_time": row.get::<DateTime<Utc>, _>("end_time"),
                 "max_participants": row.get::<Option<i32>, _>("max_participants"),
-                "status": row.get::<String, _>("status"),
+                "status": row.get::<ActivityStatus, _>("status"),
                 "faculty_id": row.get::<Option<Uuid>, _>("faculty_id"),
                 "created_by": row.get::<Uuid, _>("created_by"),
                 "created_at": row.get::<DateTime<Utc>, _>("created_at"),
