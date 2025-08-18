@@ -209,12 +209,12 @@
         <Alert>
           <IconX class="h-4 w-4" />
           <AlertDescription>
-            ไม่พบกิจกรรมที่คุณสามารถจัดการได้ กรุณาติดต่อผู้ดูแลระบบ
+            ไม่พบกิจกรรมที่กำลังดำเนินการ (ongoing) ที่สามารถสแกน QR Code ได้ กรุณาติดต่อผู้ดูแลระบบ
           </AlertDescription>
         </Alert>
       {:else}
         <div class="space-y-2">
-          <label for="activity-select" class="text-sm font-medium">เลือกกิจกรรมที่ต้องการสแกน:</label>
+          <label for="activity-select" class="text-sm font-medium">เลือกกิจกรรมที่ต้องการสแกน (เฉพาะกิจกรรมที่กำลังดำเนินการ):</label>
           <select 
             bind:value={selectedActivityId}
             on:change={(e) => handleActivityChange(e.currentTarget.value)}
@@ -252,8 +252,14 @@
               </div>
               
               <div class="flex items-center gap-2">
-                <Badge variant={selectedActivity.status === 'published' ? 'default' : 'secondary'}>
-                  {selectedActivity.status}
+                <Badge variant="default" class="bg-green-600 hover:bg-green-700">
+                  <div class="flex items-center gap-1">
+                    <div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    กำลังดำเนินการ
+                  </div>
+                </Badge>
+                <Badge variant="outline" class="text-green-600 border-green-600">
+                  สแกน QR ได้
                 </Badge>
               </div>
             </div>
@@ -358,7 +364,7 @@
       <div class="space-y-2 text-sm text-muted-foreground">
         <div class="flex items-start gap-2">
           <IconCheck class="size-4 mt-0.5 text-green-600" />
-          <span>เลือกกิจกรรมที่ต้องการสแกน QR Code</span>
+          <span>เลือกกิจกรรมที่มีสถานะ "กำลังดำเนินการ" เท่านั้น</span>
         </div>
         <div class="flex items-start gap-2">
           <IconCheck class="size-4 mt-0.5 text-green-600" />
@@ -374,7 +380,7 @@
         </div>
         <div class="flex items-start gap-2">
           <IconCheck class="size-4 mt-0.5 text-green-600" />
-          <span>ตรวจสอบสถิติและประวัติการสแกนได้ในหน้านี้</span>
+          <span>ตรวจสอบสถิติและประวัติการสแกน - สามารถสแกนได้เฉพาะกิจกรรมที่กำลังดำเนินการ</span>
         </div>
       </div>
     </CardContent>

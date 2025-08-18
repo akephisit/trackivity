@@ -149,27 +149,46 @@ pub async fn qr_checkin(
     Path(activity_id): Path<Uuid>,
     Json(request): Json<QrCheckInRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    // ตรวจสอบว่า activity มีอยู่จริง (query แบบ scalar)
-    let activity_exists = sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM activities WHERE id = $1"
+    // ตรวจสอบว่า activity มีอยู่จริงและมีสถานะเป็น 'ongoing'
+    let activity_check = sqlx::query(
+        "SELECT id, status FROM activities WHERE id = $1"
     )
     .bind(&activity_id)
     .fetch_optional(&session_state.db_pool)
     .await;
 
-    match activity_exists {
-        Ok(Some(_)) => {}
+    match activity_check {
+        Ok(Some(activity_row)) => {
+            let activity_status: ActivityStatus = activity_row.get("status");
+            
+            // ตรวจสอบว่าสถานะเป็น 'ongoing' เท่านั้น
+            if activity_status != ActivityStatus::Ongoing {
+                let status_str = match activity_status {
+                    ActivityStatus::Draft => "แบบร่าง",
+                    ActivityStatus::Published => "เผยแพร่แล้ว",
+                    ActivityStatus::Ongoing => "กำลังดำเนินการ",
+                    ActivityStatus::Completed => "เสร็จสิ้นแล้ว",
+                    ActivityStatus::Cancelled => "ยกเลิกแล้ว",
+                };
+                
+                let error_response = json!({
+                    "status": "error",
+                    "message": format!("ไม่สามารถสแกน QR Code ได้ กิจกรรมนี้มีสถานะเป็น '{}' สามารถสแกนได้เฉพาะกิจกรรมที่มีสถานะ 'กำลังดำเนินการ' เท่านั้น", status_str)
+                });
+                return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+            }
+        }
         Ok(None) => {
             let error_response = json!({
                 "status": "error",
-                "message": "Activity not found"
+                "message": "ไม่พบกิจกรรมที่ระบุ"
             });
             return Err((StatusCode::NOT_FOUND, Json(error_response)));
         }
         Err(_) => {
             let error_response = json!({
                 "status": "error",
-                "message": "Failed to check activity"
+                "message": "ไม่สามารถตรวจสอบข้อมูลกิจกรรมได้"
             });
             return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)));
         }
@@ -366,7 +385,7 @@ pub async fn get_assigned_activities(
             FROM activities a
             LEFT JOIN faculties f ON a.faculty_id = f.id
             LEFT JOIN participations p ON a.id = p.activity_id
-            WHERE a.status IN ('published', 'ongoing')
+            WHERE a.status = 'ongoing'
             GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.status, a.max_participants, f.name
             ORDER BY a.start_date ASC, a.start_time_only ASC
             "#
@@ -391,7 +410,7 @@ pub async fn get_assigned_activities(
             FROM activities a
             LEFT JOIN faculties f ON a.faculty_id = f.id
             LEFT JOIN participations p ON a.id = p.activity_id
-            WHERE a.status IN ('published', 'ongoing')
+            WHERE a.status = 'ongoing'
             AND (a.created_by = $1 OR a.faculty_id = $2)
             GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.status, a.max_participants, f.name
             ORDER BY a.start_date ASC, a.start_time_only ASC
