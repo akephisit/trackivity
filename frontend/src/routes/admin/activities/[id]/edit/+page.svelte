@@ -21,6 +21,7 @@
 	} from '@tabler/icons-svelte';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
+    import { toast } from 'svelte-sonner';
 
 	const { data, form } = $props<{ 
 		data: { 
@@ -148,8 +149,30 @@
 				action="?/update"
 				use:enhance={() => {
 					submitting = true;
-					return async ({ update }) => {
+					return async ({ result, update }) => {
 						submitting = false;
+						// Show success toast and redirect to detail page
+						if (result?.type === 'redirect') {
+							toast.success('แก้ไขกิจกรรมสำเร็จ');
+							setTimeout(() => goto(`/admin/activities/${activity.id}`), 50);
+							return;
+						}
+
+						if (result?.type === 'success') {
+							// If server returned an object instead of redirect
+							const data: any = (result as any).data;
+							if (data?.error) {
+								// Let form error render and also show toast
+								toast.error(data.error);
+								await update();
+							} else {
+								toast.success(data?.message || 'แก้ไขกิจกรรมสำเร็จ');
+								setTimeout(() => goto(`/admin/activities/${activity.id}`), 50);
+							}
+							return;
+						}
+
+						// For other results (e.g., error), just update to reflect errors
 						await update();
 					};
 				}}

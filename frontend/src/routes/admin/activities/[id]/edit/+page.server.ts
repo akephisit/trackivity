@@ -251,7 +251,8 @@ export const actions: Actions = {
         ? await response.json().catch(() => ({}))
         : {};
       
-      if (result.success === true) {
+      // Accept both { success: true } and { status: 'success' }
+      if (result.success === true || result.status === 'success') {
         // Redirect to activity detail page
         throw redirect(302, `/admin/activities/${id}`);
       } else {
