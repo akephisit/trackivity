@@ -1,26 +1,54 @@
-import { type Handle, type HandleServerError } from '@sveltejs/kit';
-import { redirect } from '@sveltejs/kit';
-import type { SessionUser, Permission, AdminLevel } from '$lib/types';
+import { type Handle, type HandleServerError, redirect } from '@sveltejs/kit';
+import type { SessionUser, Permission } from '$lib/types';
 import { apiClient } from '$lib/server/api-client';
 
-// Session validation function
-async function validateSession(sessionId: string, eventFetch: any): Promise<SessionUser | null> {
+// Determine if path is considered public (never forces login)
+function isPublicRoute(pathname: string): boolean {
+  // Public pages and assets; extend as needed
+  const PUBLIC_PREFIXES = [
+    '/api', // proxied backend API
+    '/_app', '/build', '/static', '/assets',
+    '/favicon', '/manifest', '/robots.txt', '/service-worker.js',
+    '/', '/login', '/admin/login', '/register', '/unauthorized', '/offline', '/qr'
+  ];
+  return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + (p.endsWith('/') ? '' : '/')));
+}
+
+// Which routes need any authenticated user
+function isStudentProtected(pathname: string): boolean {
+  const PROTECTED_PREFIXES = ['/student', '/dashboard', '/profile', '/activities'];
+  return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
+}
+
+// Which routes need admin login
+function isAdminProtected(pathname: string): boolean {
+  const ADMIN_PREFIX = '/admin';
+  // Admin login itself is public
+  if (pathname === '/admin/login' || pathname.startsWith('/admin/login')) return false;
+  return pathname === ADMIN_PREFIX || pathname.startsWith(ADMIN_PREFIX + '/');
+}
+
+// Session validation function (student or admin)
+async function validateSession(
+  sessionId: string,
+  eventFetch: typeof fetch,
+  kind: 'student' | 'admin'
+): Promise<SessionUser | null> {
     try {
         // Create a mock event object for the API client
         const mockEvent = {
             fetch: eventFetch,
-            cookies: {
-                get: (name: string) => name === 'session_id' ? sessionId : undefined
-            }
-        };
-        
-        const response = await apiClient.get(mockEvent as any, '/api/auth/me');
+            cookies: { get: (name: string) => (name === 'session_id' ? sessionId : undefined) }
+        } as any;
+
+        const endpoint = kind === 'admin' ? '/api/admin/auth/me' : '/api/auth/me';
+        const response = await apiClient.get(mockEvent, endpoint);
 
         if (response.success) {
-            // Backend returns { success, data: SessionUser } for student endpoint
-            // and { user: SessionUser, ... } for admin endpoint.
-            const user = (response.data as any)?.user ?? (response.data as any)?.data ?? (response.data as any)?.session?.user;
-            return (user || null) as SessionUser | null;
+            // Try common shapes
+            const d: any = response.data;
+            const user = d?.user ?? d?.data ?? d?.session?.user ?? null;
+            return (user ?? null) as SessionUser | null;
         }
     } catch (error) {
         console.error('Session validation failed:', error);
@@ -28,50 +56,7 @@ async function validateSession(sessionId: string, eventFetch: any): Promise<Sess
 
     return null;
 }
-
-// Protected routes configuration
-const PROTECTED_ROUTES = [
-    '/dashboard',
-    '/profile',
-    '/activities',
-    '/student',
-    '/admin'
-];
-
-const ADMIN_ROUTES = [
-    '/admin'
-];
-
-const FACULTY_ADMIN_ROUTES = [
-    '/admin/faculty',
-    '/admin/students',
-    '/admin/reports'
-];
-
-const SUPER_ADMIN_ROUTES = [
-    '/admin/system',
-    '/admin/faculties',
-    '/admin/sessions'
-];
-
-// Route protection helper
-function isProtectedRoute(pathname: string): boolean {
-    return PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-}
-
-function requiresAdmin(pathname: string): boolean {
-    return ADMIN_ROUTES.some(route => pathname.startsWith(route));
-}
-
-function requiresFacultyAdmin(pathname: string): boolean {
-    return FACULTY_ADMIN_ROUTES.some(route => pathname.startsWith(route));
-}
-
-function requiresSuperAdmin(pathname: string): boolean {
-    return SUPER_ADMIN_ROUTES.some(route => pathname.startsWith(route));
-}
-
-// Permission checking
+// Permission helpers (for fine-grained admin pages)
 function hasPermission(user: SessionUser, permission: Permission): boolean {
     return user.permissions.includes(permission);
 }
@@ -99,60 +84,45 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.locals.user = null;
     event.locals.session_id = sessionId || null;
 
-    // Fast-path: skip validation entirely for API/static/auth pages
-    // This prevents redundant calls (e.g., /api/auth/me causing another /api/auth/me).
-    if (
-        pathname.startsWith('/api') ||
-        pathname.startsWith('/_app') ||
-        pathname.startsWith('/favicon') ||
-        pathname === '/login' ||
-        pathname === '/admin/login' ||
-        pathname === '/register' ||
-        pathname === '/' ||
-        pathname === '/unauthorized'
-    ) {
+    // Skip auth enforcement for public routes entirely to avoid loops
+    if (isPublicRoute(pathname)) {
         return resolve(event);
     }
 
-    // Validate session if present (only for non-exempt pages)
+    // Validate session if present for protected pages
     if (sessionId) {
-        const user = await validateSession(sessionId, event.fetch);
+        const kind = isAdminProtected(pathname) ? 'admin' : 'student';
+        const user = await validateSession(sessionId, event.fetch, kind);
         if (user) {
             event.locals.user = user;
         } else {
-            // Invalid session, clear cookie
+            // Only clear cookie if we are about to enforce auth
             cookies.delete('session_id', { path: '/' });
             event.locals.session_id = null;
         }
     }
 
-    // Check if route requires authentication
-    if (isProtectedRoute(pathname)) {
+    // Enforce authentication/authorization
+    if (isStudentProtected(pathname) || isAdminProtected(pathname)) {
         if (!event.locals.user) {
-            // Redirect to login with return URL
             const returnUrl = encodeURIComponent(url.pathname + url.search);
-            throw redirect(307, `/login?redirectTo=${returnUrl}`);
+            // Admin sections redirect to admin login
+            if (isAdminProtected(pathname)) {
+                throw redirect(303, `/admin/login?redirectTo=${returnUrl}`);
+            }
+            // Student sections go to normal login
+            throw redirect(303, `/login?redirectTo=${returnUrl}`);
         }
 
-        // Check admin requirements
-        if (requiresAdmin(pathname) && !isAdmin(event.locals.user)) {
-            throw redirect(307, '/unauthorized');
-        }
-
-        // Check faculty admin requirements
-        if (requiresFacultyAdmin(pathname) && !isFacultyAdmin(event.locals.user)) {
-            throw redirect(307, '/unauthorized');
-        }
-
-        // Check super admin requirements
-        if (requiresSuperAdmin(pathname) && !isSuperAdmin(event.locals.user)) {
-            throw redirect(307, '/unauthorized');
-        }
-
-        // Additional permission checks can be added here based on specific routes
-        // Example: Check specific permissions for certain routes
-        if (pathname.startsWith('/admin/sessions') && !hasPermission(event.locals.user, 'ViewAllSessions')) {
-            throw redirect(307, '/unauthorized');
+        // Extra admin checks for admin area
+        if (isAdminProtected(pathname)) {
+            if (!isAdmin(event.locals.user)) {
+                throw redirect(303, '/unauthorized');
+            }
+            // Example fine-grained checks
+            if (pathname.startsWith('/admin/sessions') && !hasPermission(event.locals.user, 'ViewAllSessions')) {
+                throw redirect(303, '/unauthorized');
+            }
         }
     }
 
