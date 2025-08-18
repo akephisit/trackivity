@@ -123,7 +123,6 @@ A comprehensive university activity tracking system built with Rust (Axum) backe
     ```bash
     docker build -t trackivity-frontend \
       --build-arg PUBLIC_API_URL=https://api.your-domain.com \
-      --build-arg VITE_API_URL=https://api.your-domain.com \
       ./frontend
     ```
   - Run: `docker run -d --name trackivity-frontend -p 5173:5173 trackivity-frontend`

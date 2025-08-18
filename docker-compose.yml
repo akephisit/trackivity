@@ -61,7 +61,6 @@ services:
       - ./frontend/.env
     environment:
       PUBLIC_API_URL: http://backend:3000
-      VITE_API_URL: http://backend:3000
     depends_on:
       - backend
     develop:

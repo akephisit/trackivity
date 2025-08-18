@@ -62,7 +62,6 @@ RUST_LOG=debug
 ```bash
 # API URLs
 PUBLIC_API_URL=http://localhost:3000
-VITE_API_URL=http://localhost:3000
 
 # Development
 NODE_ENV=development
@@ -346,7 +345,6 @@ RUST_LOG=info
 
 # Frontend
 PUBLIC_API_URL=https://api.trackivity.com
-VITE_API_URL=https://api.trackivity.com
 ```
 
 ## Support และ Maintenance
