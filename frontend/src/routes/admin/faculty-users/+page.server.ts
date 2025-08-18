@@ -45,23 +45,28 @@ export const load: PageServerLoad = async (event) => {
     try {
         // Determine API endpoint based on admin level
         let apiEndpoint: string;
-        let statsEndpoint: string;
+        // Stats endpoints defined in backend routes:
+        //  - /api/admin/user-statistics (SuperAdmin, system-wide)
+        //  - /api/admin/faculty-user-statistics?faculty_id=... (SuperAdmin or FacultyAdmin for scoped faculty)
+        let statsPath: string;
+        let statsParams: Record<string, string> | undefined;
 
         if (adminLevel === AdminLevel.SuperAdmin) {
             // SuperAdmin can view all users or filter by faculty
             apiEndpoint = filters.faculty_id 
                 ? `/api/faculties/${filters.faculty_id}/users`
                 : '/api/admin/system-users';
-            // Use existing proxy routes
-            statsEndpoint = filters.faculty_id 
-                ? `/api/faculties/${filters.faculty_id}/users/stats`
-                : '/api/admin/user-statistics';
+            if (filters.faculty_id) {
+                statsPath = '/api/admin/faculty-user-statistics';
+                statsParams = { faculty_id: filters.faculty_id };
+            } else {
+                statsPath = '/api/admin/user-statistics';
+            }
         } else if (adminLevel === AdminLevel.FacultyAdmin && facultyId) {
             // FacultyAdmin is scoped to their faculty only
             apiEndpoint = `/api/faculties/${facultyId}/users`;
-            // Faculty-scoped stats via existing proxy route
-            statsEndpoint = `/api/faculties/${facultyId}/users/stats`;
-            
+            statsPath = '/api/admin/faculty-user-statistics';
+            statsParams = { faculty_id: facultyId };
             // Override any faculty_id filter to ensure scoping
             filters.faculty_id = facultyId;
         } else {
@@ -86,22 +91,23 @@ export const load: PageServerLoad = async (event) => {
         // Parallel fetch of users and statistics
         const [usersResponse, statsResponse, facultiesResponse, departmentsResponse] = await Promise.all([
             // Fetch users
-            api.get(event, apiEndpoint, paramsObj),
+            api.get(event, apiEndpoint, paramsObj, { throwOnHttpError: false }),
             
             // Fetch statistics
-            api.get(event, statsEndpoint),
+            api.get(event, statsPath, statsParams, { throwOnHttpError: false }),
 
             // Fetch faculties for SuperAdmin filtering
             adminLevel === AdminLevel.SuperAdmin ? 
-                api.get(event, '/api/faculties') : Promise.resolve(null),
+                api.get(event, '/api/faculties', undefined, { throwOnHttpError: false }) : Promise.resolve(null),
 
             // Fetch departments for the relevant faculty
-            api.get(event, `/api/faculties/${facultyId || filters.faculty_id || 'current'}/departments`)
-                .catch(() => null) // Handle case where faculty doesn't have departments endpoint
+            (facultyId || filters.faculty_id)
+                ? api.get(event, `/api/faculties/${facultyId || filters.faculty_id}/departments`, undefined, { throwOnHttpError: false })
+                : Promise.resolve(null)
         ]);
 
         // Process users response
-        if (!usersResponse.success) {
+        if (!usersResponse || !usersResponse.success) {
             console.error('Failed to fetch users:', usersResponse.error);
             error(500, usersResponse.error || 'Failed to fetch users');
         }
@@ -113,15 +119,10 @@ export const load: PageServerLoad = async (event) => {
         }
 
         // Process statistics response
-        if (!statsResponse.success) {
-            console.error('Failed to fetch user statistics:', statsResponse.error);
-            error(500, statsResponse.error || 'Failed to fetch user statistics');
-        }
-
-        const statsData = statsResponse.data;
-        // Check for missing data
-        if (!statsData) {
-            error(500, 'Failed to fetch user statistics');
+        let statsData = statsResponse?.data;
+        if (!statsResponse?.success) {
+            console.warn('Failed to fetch user statistics:', statsResponse?.error);
+            statsData = undefined;
         }
 
         // Process faculties response (for SuperAdmin)
@@ -180,8 +181,8 @@ export const load: PageServerLoad = async (event) => {
         });
 
         // Normalize stats for SuperAdmin (system-wide) vs Faculty-scoped
-        const rawStats = (statsData.data || statsData) as any;
-        let normalizedStats: UserStats;
+        const rawStats = (statsData && ((statsData as any).data || statsData)) as any;
+        let normalizedStats: UserStats | undefined;
         if (rawStats && rawStats.system_stats) {
             normalizedStats = {
                 total_users: rawStats.system_stats.total_users || 0,
@@ -199,7 +200,7 @@ export const load: PageServerLoad = async (event) => {
                       }))
                     : [],
             } as UserStats;
-        } else {
+        } else if (rawStats) {
             normalizedStats = rawStats as UserStats;
         }
 
