@@ -86,10 +86,48 @@ A comprehensive university activity tracking system built with Rust (Axum) backe
 
 ### Production Deployment
 
-1. **Build and run with Docker Compose**
+1. **Prepare env files**
    ```bash
-   docker-compose up --build
+   # Backend
+   cp backend/.env.example backend/.env
+   # Frontend
+   cp frontend/.env.example frontend/.env
    ```
+
+2. **Build and run with Docker Compose**
+   ```bash
+   docker-compose up --build -d
+   ```
+
+3. **Access services**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3000
+   - PostgreSQL: localhost:5432
+   - Redis: localhost:6379
+
+4. **Logs and troubleshooting**
+   ```bash
+   docker-compose logs -f backend
+   docker-compose logs -f frontend
+   ```
+
+### Separate Images (run independently)
+
+- Backend
+  - Build: `docker build -t trackivity-backend ./backend`
+  - Run: `docker run -d --name trackivity-backend -p 3000:3000 --env-file backend/.env trackivity-backend`
+  - Required env: `DATABASE_URL`, `REDIS_URL`, `PORT` (optional; defaults to 3000), `SESSION_SECRET`, `RUST_LOG`.
+
+- Frontend
+  - Build (set API URL at build time):
+    ```bash
+    docker build -t trackivity-frontend \
+      --build-arg PUBLIC_API_URL=https://api.your-domain.com \
+      --build-arg VITE_API_URL=https://api.your-domain.com \
+      ./frontend
+    ```
+  - Run: `docker run -d --name trackivity-frontend -p 5173:5173 trackivity-frontend`
+  - Note: Vite/SvelteKit env vars are baked at build time. Rebuild the image to change API URL.
 
 ## API Endpoints
 
