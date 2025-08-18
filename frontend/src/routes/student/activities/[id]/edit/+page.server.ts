@@ -2,6 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Activity, ActivityUpdateData } from '$lib/types/activity';
 import { api } from '$lib/server/api-client';
+import { convertStatusForBackend, convertStatusFromBackend } from '$lib/utils/activity';
 
 export const load: PageServerLoad = async (event) => {
   const { params, depends } = event;
@@ -19,7 +20,11 @@ export const load: PageServerLoad = async (event) => {
     if (!activityRes.success || !activityRes.data) {
       throw error(500, 'ข้อมูลกิจกรรมไม่ถูกต้อง');
     }
-    const activity: Activity = activityRes.data as any;
+    const rawActivity = activityRes.data as any;
+    const activity: Activity = {
+      ...rawActivity,
+      status: convertStatusFromBackend(rawActivity.status ?? 'Draft')
+    };
 
     // Fetch faculties for dropdown
     let faculties: any[] = [];
@@ -58,6 +63,7 @@ export const actions: Actions = {
     try {
       const formData = await request.formData();
       
+      const statusValue = formData.get('status')?.toString();
       const updateData: ActivityUpdateData = {
         title: formData.get('title')?.toString(),
         description: formData.get('description')?.toString(),
@@ -66,7 +72,7 @@ export const actions: Actions = {
         end_time: formData.get('end_time')?.toString(),
         max_participants: formData.get('max_participants') ? 
           parseInt(formData.get('max_participants')?.toString() || '0') : undefined,
-        status: formData.get('status')?.toString() as any,
+        status: statusValue ? convertStatusForBackend(statusValue as any) as any : undefined,
         faculty_id: formData.get('faculty_id')?.toString() || undefined
       };
 

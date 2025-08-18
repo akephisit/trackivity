@@ -3,6 +3,7 @@ import { error, redirect } from '@sveltejs/kit';
 import type { Activity, Participation, ActivityStatus } from '$lib/types/activity';
 import { requireFacultyAdmin } from '$lib/server/auth';
 import { api } from '$lib/server/api-client';
+import { convertStatusForBackend, convertStatusFromBackend } from '$lib/utils/activity';
 
 export const load: PageServerLoad = async (event) => {
   const { params, fetch, depends } = event;
@@ -46,7 +47,7 @@ export const load: PageServerLoad = async (event) => {
       end_time: endIso ?? rawActivity.end_date,
       max_participants: rawActivity.max_participants ?? undefined,
       current_participants: rawActivity.current_participants ?? 0,
-      status: rawActivity.status ?? 'draft',
+      status: convertStatusFromBackend(rawActivity.status ?? 'Draft'),
       faculty_id: rawActivity.faculty_id ?? undefined,
       faculty_name: rawActivity.faculty_name ?? undefined,
       created_by: rawActivity.created_by,
@@ -135,7 +136,9 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await api.put(event, `/api/activities/${id}`, { status });
+      const response = await api.put(event, `/api/activities/${id}`, { 
+        status: convertStatusForBackend(status)
+      });
 
       if (!response.success) {
         return {

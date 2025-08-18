@@ -1,8 +1,8 @@
 import type { PageServerLoad, Actions } from './$types';
 import { error, redirect } from '@sveltejs/kit';
-import type { Activity, ActivityUpdateData } from '$lib/types/activity';
+import type { Activity, ActivityUpdateData, ActivityStatus } from '$lib/types/activity';
 import { requireFacultyAdmin } from '$lib/server/auth';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { convertStatusForBackend, convertStatusFromBackend } from '$lib/utils/activity';
 
 export const load: PageServerLoad = async (event) => {
   const { params, fetch, depends } = event;
@@ -75,7 +75,7 @@ export const load: PageServerLoad = async (event) => {
       end_time: endIso ?? rawActivity.end_date,
       max_participants: rawActivity.max_participants ?? undefined,
       current_participants: rawActivity.current_participants ?? 0,
-      status: rawActivity.status ?? 'draft',
+      status: convertStatusFromBackend(rawActivity.status ?? 'Draft'),
       faculty_id: rawActivity.faculty_id ?? undefined,
       faculty_name: rawActivity.faculty_name ?? undefined,
       created_by: rawActivity.created_by,
@@ -200,9 +200,15 @@ export const actions: Actions = {
       // Convert local datetime to ISO (UTC)
       start_time: new Date(start_time).toISOString(),
       end_time: new Date(end_time).toISOString(),
-      status: status as any,
+      status: status as ActivityStatus,
       faculty_id: faculty_id || undefined,
       department_id: department_id || undefined
+    };
+
+    // Convert status for backend API
+    const apiData = {
+      ...updateData,
+      status: convertStatusForBackend(status as ActivityStatus)
     };
 
     // Add max_participants if provided
@@ -215,8 +221,10 @@ export const actions: Actions = {
         };
       }
       updateData.max_participants = maxParticipantsNum;
+      apiData.max_participants = maxParticipantsNum;
     } else {
       updateData.max_participants = undefined;
+      apiData.max_participants = undefined;
     }
 
     try {
@@ -227,7 +235,7 @@ export const actions: Actions = {
           'Cookie': `session_id=${sessionId}`,
           'X-Session-ID': sessionId
         },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify(apiData)
       });
 
       const ct = response.headers.get('content-type') || '';

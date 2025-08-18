@@ -15,7 +15,7 @@ export const activityColumns: ColumnDef<Activity>[] = [
 				createRawSnippet(() => ({
 					render: () => `
 						<div class="font-medium">
-							${activity.name}
+							${activity.name || activity.title || 'ไม่ระบุชื่อกิจกรรม'}
 						</div>
 					`
 				}))
@@ -31,8 +31,8 @@ export const activityColumns: ColumnDef<Activity>[] = [
 				createRawSnippet(() => ({
 					render: () => `
 						<div class="max-w-[200px]">
-							<div class="font-medium text-sm">${activity.organizer}</div>
-							<div class="text-xs text-muted-foreground">${activity.organizerType}</div>
+							<div class="font-medium text-sm">${activity.organizer || 'ไม่ระบุผู้จัด'}</div>
+							<div class="text-xs text-muted-foreground">${activity.organizerType || ''}</div>
 						</div>
 					`
 				}))
@@ -48,11 +48,12 @@ export const activityColumns: ColumnDef<Activity>[] = [
 		),
 		cell: ({ row }) => {
 			const count = row.getValue("participantCount") as number;
+			const safeCount = count ?? 0;
 			return renderSnippet(
 				createRawSnippet(() => ({
 					render: () => `
 						<div class="text-center font-medium">
-							${count.toLocaleString('th-TH')}
+							${safeCount.toLocaleString('th-TH')}
 						</div>
 					`
 				}))
@@ -63,19 +64,30 @@ export const activityColumns: ColumnDef<Activity>[] = [
 		accessorKey: "status",
 		header: "สถานะ",
 		cell: ({ row }) => {
-			const status = row.getValue("status") as Activity['status'];
-			const variant = status === 'เสร็จสิ้น' ? 'default' : 
-			              status === 'กำลังดำเนินการ' ? 'secondary' : 'outline';
+			const status = (row.getValue("status") as Activity['status']) || 'draft';
+			const variant = status === 'completed' ? 'default' : 
+			              status === 'ongoing' ? 'secondary' : 'outline';
+			
+			// Map status to Thai labels
+			const statusLabels = {
+				'draft': 'ร่าง',
+				'published': 'เผยแพร่แล้ว',
+				'ongoing': 'กำลังดำเนินการ',
+				'completed': 'เสร็จสิ้น',
+				'cancelled': 'ยกเลิก'
+			};
+			
+			const label = statusLabels[status] || status || 'ไม่ระบุสถานะ';
 			
 			return renderSnippet(
 				createRawSnippet(() => ({
 					render: () => `
 						<div class="flex items-center gap-2">
 							<div class="w-2 h-2 rounded-full ${
-								status === 'เสร็จสิ้น' ? 'bg-green-500' :
-								status === 'กำลังดำเนินการ' ? 'bg-yellow-500' : 'bg-gray-400'
+								status === 'completed' ? 'bg-green-500' :
+								status === 'ongoing' ? 'bg-yellow-500' : 'bg-gray-400'
 							}"></div>
-							<span class="text-sm font-medium">${status}</span>
+							<span class="text-sm font-medium">${label}</span>
 						</div>
 					`
 				}))
@@ -86,12 +98,15 @@ export const activityColumns: ColumnDef<Activity>[] = [
 		accessorKey: "createdAt",
 		header: "วันที่สร้าง",
 		cell: ({ row }) => {
-			const date = new Date(row.getValue("createdAt") as string);
+			const dateValue = row.getValue("createdAt") as string;
+			const activity = row.original;
+			const safeDateValue = dateValue || activity.created_at || new Date().toISOString();
+			const date = new Date(safeDateValue);
 			return renderSnippet(
 				createRawSnippet(() => ({
 					render: () => `
 						<div class="text-sm text-muted-foreground">
-							${date.toLocaleDateString('th-TH', {
+							${isNaN(date.getTime()) ? 'ไม่ระบุวันที่' : date.toLocaleDateString('th-TH', {
 								year: 'numeric',
 								month: 'short',
 								day: 'numeric'
