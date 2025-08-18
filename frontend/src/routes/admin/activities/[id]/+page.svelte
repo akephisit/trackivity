@@ -36,7 +36,11 @@
 		IconEye,
 		IconEyeOff,
 		IconCheck,
-		IconChartBar
+		IconChartBar,
+		IconCategory,
+		IconCalendar,
+		IconClockHour3,
+		IconUserHeart
 	} from '@tabler/icons-svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -399,27 +403,39 @@
 			<!-- Extra admin fields -->
 			<div class="grid gap-4 md:grid-cols-2">
 				{#if activity.activity_type}
-					<div>
-						<p class="font-medium">ประเภทกิจกรรม</p>
-						<p class="text-sm text-muted-foreground">{activity.activity_type}</p>
+					<div class="flex items-start gap-3">
+						<IconCategory class="size-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+						<div>
+							<p class="font-medium">ประเภทกิจกรรม</p>
+							<p class="text-sm text-muted-foreground">{activity.activity_type}</p>
+						</div>
 					</div>
 				{/if}
 				{#if activity.academic_year}
-					<div>
-						<p class="font-medium">ปีการศึกษา</p>
-						<p class="text-sm text-muted-foreground">{activity.academic_year}</p>
+					<div class="flex items-start gap-3">
+						<IconCalendar class="size-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+						<div>
+							<p class="font-medium">ปีการศึกษา</p>
+							<p class="text-sm text-muted-foreground">{activity.academic_year}</p>
+						</div>
 					</div>
 				{/if}
 				{#if activity.hours}
-					<div>
-						<p class="font-medium">ชั่วโมงกิจกรรม</p>
-						<p class="text-sm text-muted-foreground">{activity.hours}</p>
+					<div class="flex items-start gap-3">
+						<IconClockHour3 class="size-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+						<div>
+							<p class="font-medium">ชั่วโมงกิจกรรม</p>
+							<p class="text-sm text-muted-foreground">{activity.hours}</p>
+						</div>
 					</div>
 				{/if}
 				{#if activity.organizer}
-					<div>
-						<p class="font-medium">ผู้จัด</p>
-						<p class="text-sm text-muted-foreground">{activity.organizer}</p>
+					<div class="flex items-start gap-3">
+						<IconUserHeart class="size-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+						<div>
+							<p class="font-medium">ผู้จัด</p>
+							<p class="text-sm text-muted-foreground">{activity.organizer}</p>
+						</div>
 					</div>
 				{/if}
 			</div>
