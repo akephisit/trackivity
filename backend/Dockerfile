@@ -18,6 +18,10 @@ RUN cargo build --release && rm -rf src
 # Copy source code
 COPY src ./src
 COPY migrations ./migrations
+COPY sqlx-data.json ./sqlx-data.json
+
+# Prefer offline SQLx during Docker builds (requires sqlx-data.json)
+ENV SQLX_OFFLINE=true
 
 # Build application
 RUN touch src/main.rs && cargo build --release

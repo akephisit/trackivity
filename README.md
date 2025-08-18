@@ -111,6 +111,25 @@ A comprehensive university activity tracking system built with Rust (Axum) backe
    docker-compose logs -f frontend
    ```
 
+### SQLx offline cache (required for Docker builds)
+
+SQLx query macros validate SQL at compile time. To avoid needing a live database during image builds, generate and commit an offline cache:
+
+1. Ensure Postgres is running and migrations applied:
+   ```bash
+   docker-compose up -d postgres
+   export DATABASE_URL=postgresql://postgres:password@localhost:5432/trackivity
+   cargo install sqlx-cli --no-default-features --features rustls,postgres
+   cd backend
+   sqlx database create || true
+   sqlx migrate run
+   ```
+2. Prepare the cache file in `backend/sqlx-data.json`:
+   ```bash
+   cargo sqlx prepare -- --bin trackivity
+   ```
+3. Commit `backend/sqlx-data.json`. The Dockerfile sets `SQLX_OFFLINE=true` so builds succeed without DB access.
+
 ### Separate Images (run independently)
 
 - Backend
