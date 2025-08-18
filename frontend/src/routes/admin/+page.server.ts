@@ -17,27 +17,32 @@ export const load: PageServerLoad = async (event) => {
 		recent_activities: []
 	};
 
-	try {
-		const response = await api.get(event, '/api/admin/dashboard');
-
-    if (response.success && response.data) {
-        stats = response.data;
+    try {
+        const response = await api.get<AdminDashboardStats>(event, '/api/admin/dashboard', undefined, {
+            throwOnHttpError: false
+        });
+        if (response.success && response.data) {
+            stats = response.data;
+        }
+    } catch (error) {
+        console.warn('Failed to load dashboard stats:', error);
     }
-	} catch (error) {
-		console.error('Failed to load dashboard stats:', error);
-	}
 
 	// โหลดกิจกรรมล่าสุด (optional)
 	let recentActivities: any[] = [];
-	try {
-		const response = await api.get(event, '/api/admin/activities', { limit: '10', recent: 'true' });
-
-    if (response.success && response.data) {
-        recentActivities = response.data || [];
+    try {
+        const response = await api.get<any[]>(
+            event,
+            '/api/admin/activities',
+            { limit: '10', recent: 'true' },
+            { throwOnHttpError: false }
+        );
+        if (response.success && response.data) {
+            recentActivities = response.data || [];
+        }
+    } catch (error) {
+        console.warn('Failed to load recent activities:', error);
     }
-	} catch (error) {
-		console.error('Failed to load recent activities:', error);
-	}
 
 	return {
 		user,

@@ -15,6 +15,13 @@ interface ApiClientConfig {
   timeout?: number;
 }
 
+// Optional behavior for error handling per request
+interface RequestBehaviorOptions {
+  // If true (default), HTTP errors will throw SvelteKit errors for 4xx/5xx.
+  // If false, returns { success: false, error } instead of throwing.
+  throwOnHttpError?: boolean;
+}
+
 // API Client class for SSR
 export class ApiClient {
   private baseUrl: string;
@@ -49,8 +56,10 @@ export class ApiClient {
   private async makeRequest<T>(
     event: RequestEvent,
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    behavior: RequestBehaviorOptions = {}
   ): Promise<ApiResponse<T>> {
+    const { throwOnHttpError = true } = behavior;
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.createHeaders(event, options.headers as Record<string, string>);
 
@@ -80,23 +89,21 @@ export class ApiClient {
       if (!response.ok) {
         // Standard error handling
         const errorMessage = data?.message || data?.error || `HTTP ${response.status}`;
-        
-        // Convert HTTP errors to SvelteKit errors
-        if (response.status === 401) {
-          throw error(401, 'ไม่มีการ authentication');
-        } else if (response.status === 403) {
-          throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
-        } else if (response.status === 404) {
-          throw error(404, 'ไม่พบข้อมูลที่ระบุ');
-        } else if (response.status >= 500) {
-          throw error(500, 'เกิดข้อผิดพลาดของเซิร์ฟเวอร์');
+        if (throwOnHttpError) {
+          // Convert HTTP errors to SvelteKit errors
+          if (response.status === 401) {
+            throw error(401, 'ไม่มีการ authentication');
+          } else if (response.status === 403) {
+            throw error(403, 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+          } else if (response.status === 404) {
+            throw error(404, 'ไม่พบข้อมูลที่ระบุ');
+          } else if (response.status >= 500) {
+            throw error(500, 'เกิดข้อผิดพลาดของเซิร์ฟเวอร์');
+          }
         }
 
-        return {
-          success: false,
-          error: errorMessage,
-          data: undefined
-        };
+        // Non-throwing path
+        return { success: false, error: errorMessage, data: undefined };
       }
 
       // Normalize to unified shape { success, data, error }
@@ -130,6 +137,9 @@ export class ApiClient {
       }
 
       console.error(`API request failed for ${endpoint}:`, err);
+      if ((options as any)?.throwOnHttpError === false || behavior.throwOnHttpError === false) {
+        return { success: false, error: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์' } as ApiResponse<T>;
+      }
       throw error(500, 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
     }
   }
@@ -137,52 +147,81 @@ export class ApiClient {
   /**
    * GET request
    */
-  async get<T = any>(event: RequestEvent, endpoint: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+  async get<T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    params?: Record<string, string>,
+    behavior?: RequestBehaviorOptions
+  ): Promise<ApiResponse<T>> {
     const url = params ? `${endpoint}?${new URLSearchParams(params).toString()}` : endpoint;
-    return this.makeRequest<T>(event, url, { method: 'GET' });
+    return this.makeRequest<T>(event, url, { method: 'GET' }, behavior);
   }
 
   /**
    * POST request
    */
-  async post<T = any>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async post<T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    body?: any,
+    behavior?: RequestBehaviorOptions
+  ): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined
-    });
+    }, behavior);
   }
 
   /**
    * PUT request
    */
-  async put<T = any>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async put<T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    body?: any,
+    behavior?: RequestBehaviorOptions
+  ): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, {
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined
-    });
+    }, behavior);
   }
 
   /**
    * PATCH request
    */
-  async patch<T = any>(event: RequestEvent, endpoint: string, body?: any): Promise<ApiResponse<T>> {
+  async patch<T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    body?: any,
+    behavior?: RequestBehaviorOptions
+  ): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(event, endpoint, {
       method: 'PATCH',
       body: body ? JSON.stringify(body) : undefined
-    });
+    }, behavior);
   }
 
   /**
    * DELETE request
    */
-  async delete<T = any>(event: RequestEvent, endpoint: string): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(event, endpoint, { method: 'DELETE' });
+  async delete<T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    behavior?: RequestBehaviorOptions
+  ): Promise<ApiResponse<T>> {
+    return this.makeRequest<T>(event, endpoint, { method: 'DELETE' }, behavior);
   }
 
   /**
    * Upload file with multipart/form-data
    */
-  async upload<T = any>(event: RequestEvent, endpoint: string, formData: FormData): Promise<ApiResponse<T>> {
+  async upload<T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    formData: FormData,
+    behavior?: RequestBehaviorOptions
+  ): Promise<ApiResponse<T>> {
     const sessionId = event.cookies.get('session_id');
     const headers: Record<string, string> = {};
 
@@ -195,7 +234,7 @@ export class ApiClient {
       method: 'POST',
       headers,
       body: formData
-    });
+    }, behavior);
   }
 }
 
@@ -204,20 +243,39 @@ export const apiClient = new ApiClient();
 
 // Convenience functions
 export const api = {
-  get: <T = any>(event: RequestEvent, endpoint: string, params?: Record<string, string>) => 
-    apiClient.get<T>(event, endpoint, params),
+  get: <T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    params?: Record<string, string>,
+    behavior?: RequestBehaviorOptions
+  ) => apiClient.get<T>(event, endpoint, params, behavior),
   
-  post: <T = any>(event: RequestEvent, endpoint: string, body?: any) => 
-    apiClient.post<T>(event, endpoint, body),
+  post: <T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    body?: any,
+    behavior?: RequestBehaviorOptions
+  ) => apiClient.post<T>(event, endpoint, body, behavior),
   
-  put: <T = any>(event: RequestEvent, endpoint: string, body?: any) => 
-    apiClient.put<T>(event, endpoint, body),
+  put: <T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    body?: any,
+    behavior?: RequestBehaviorOptions
+  ) => apiClient.put<T>(event, endpoint, body, behavior),
   
-  patch: <T = any>(event: RequestEvent, endpoint: string, body?: any) => 
-    apiClient.patch<T>(event, endpoint, body),
+  patch: <T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    body?: any,
+    behavior?: RequestBehaviorOptions
+  ) => apiClient.patch<T>(event, endpoint, body, behavior),
   
-  delete: <T = any>(event: RequestEvent, endpoint: string) => 
-    apiClient.delete<T>(event, endpoint),
+  delete: <T = any>(
+    event: RequestEvent,
+    endpoint: string,
+    behavior?: RequestBehaviorOptions
+  ) => apiClient.delete<T>(event, endpoint, behavior),
   
   upload: <T = any>(event: RequestEvent, endpoint: string, formData: FormData) => 
     apiClient.upload<T>(event, endpoint, formData)
