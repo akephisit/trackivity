@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::middleware::session::{AdminUser, SessionState};
 use crate::models::session::SessionUser;
 use crate::models::{
+    activity::ActivityStatus,
     participation::ParticipationStatus,
     user::User,
 };
@@ -412,7 +413,7 @@ pub async fn get_assigned_activities(
                     "location": row.get::<String, _>("location"),
                     "start_time": row.get::<DateTime<Utc>, _>("start_time"),
                     "end_time": row.get::<DateTime<Utc>, _>("end_time"),
-                    "status": row.get::<String, _>("status"),
+                    "status": row.get::<ActivityStatus, _>("status"),
                     "max_participants": row.get::<Option<i32>, _>("max_participants"),
                     "current_participants": row.get::<i64, _>("current_participants"),
                     "faculty_name": row.get::<Option<String>, _>("faculty_name")
