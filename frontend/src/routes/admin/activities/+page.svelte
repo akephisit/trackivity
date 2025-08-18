@@ -12,7 +12,8 @@
 		IconEdit,
 		IconTrash,
 		IconEye,
-		IconAward
+		IconAward,
+		IconRefresh
 	} from '@tabler/icons-svelte/icons';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
@@ -45,7 +46,7 @@
 		});
 	}
 
-	function formatTime(timeString: string): string {
+	function formatTime(timeString: string | undefined): string {
 		if (!timeString) return '-';
 		return timeString;
 	}
@@ -73,16 +74,36 @@
 	}
 
 	function getActivityStatus(activity: Activity): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
-		const now = new Date();
-		const startDate = new Date(activity.start_date);
-		const endDate = new Date(activity.end_date);
+		// ใช้สถานะจากฐานข้อมูลแทนการคำนวณเอง
+		const status = activity.status;
+		
+		switch (status) {
+			case 'draft':
+				return { label: 'แบบร่าง', variant: 'outline' };
+			case 'published':
+				return { label: 'เผยแพร่แล้ว', variant: 'default' };
+			case 'ongoing':
+				return { label: 'กำลังดำเนินการ', variant: 'default' };
+			case 'completed':
+				return { label: 'เสร็จสิ้น', variant: 'secondary' };
+			case 'cancelled':
+				return { label: 'ยกเลิกแล้ว', variant: 'destructive' };
+			default:
+				// Fallback: คำนวณจากวันที่และเวลาถ้าไม่มีสถานะในฐานข้อมูล
+				if (activity.start_date && activity.end_date) {
+					const now = new Date();
+					const startDate = new Date(activity.start_date);
+					const endDate = new Date(activity.end_date);
 
-		if (now < startDate) {
-			return { label: 'รอดำเนินการ', variant: 'outline' };
-		} else if (now >= startDate && now <= endDate) {
-			return { label: 'กำลังดำเนินการ', variant: 'default' };
-		} else {
-			return { label: 'เสร็จสิ้น', variant: 'secondary' };
+					if (now < startDate) {
+						return { label: 'รอดำเนินการ', variant: 'outline' };
+					} else if (now >= startDate && now <= endDate) {
+						return { label: 'กำลังดำเนินการ', variant: 'default' };
+					} else {
+						return { label: 'เสร็จสิ้น', variant: 'secondary' };
+					}
+				}
+				return { label: 'ไม่ระบุ', variant: 'outline' };
 		}
 	}
 
@@ -97,6 +118,7 @@
 	let deleteDialogOpen = $state(false);
 	let activityToDelete: { id: string; name: string } | null = $state(null);
 	let deleting = $state(false);
+	let updatingStatuses = $state(false);
 
 	function confirmDelete(activityId: string, name: string | undefined) {
 		// Normalize to a non-empty string for the dialog
@@ -129,6 +151,30 @@
 		}
 	}
 
+	async function updateActivityStatuses() {
+		updatingStatuses = true;
+		try {
+			const res = await fetch('/api/admin/activities/update-statuses', { 
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
+			const result = await res.json().catch(() => ({}));
+			
+			if (res.ok && result.status === 'success') {
+				toast.success('อัพเดตสถานะกิจกรรมสำเร็จ');
+				// Refresh list by re-running load
+				await invalidateAll();
+			} else {
+				toast.error(result.message || 'อัพเดตสถานะกิจกรรมไม่สำเร็จ');
+			}
+		} catch (e) {
+			console.error('Error updating activity statuses:', e);
+			toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+		} finally {
+			updatingStatuses = false;
+		}
+	}
+
 </script>
 
 <svelte:head>
@@ -146,12 +192,22 @@
 				จัดการกิจกรรมทั้งหมดในระบบ รวมถึงการสร้าง แก้ไข และลบกิจกรรม
 			</p>
 		</div>
-		{#if data.canCreateActivity}
-			<Button onclick={goToCreate} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
-				<IconPlus class="h-5 w-5 mr-2" />
-				สร้างกิจกรรมใหม่
+		<div class="flex flex-col sm:flex-row gap-3">
+			<Button 
+				onclick={updateActivityStatuses} 
+				disabled={updatingStatuses}
+				class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-base font-medium"
+			>
+				<IconRefresh class="h-5 w-5 mr-2 {updatingStatuses ? 'animate-spin' : ''}" />
+				{updatingStatuses ? 'กำลังอัพเดต...' : 'อัพเดตสถานะ'}
 			</Button>
-		{/if}
+			{#if data.canCreateActivity}
+				<Button onclick={goToCreate} class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 text-base font-medium">
+					<IconPlus class="h-5 w-5 mr-2" />
+					สร้างกิจกรรมใหม่
+				</Button>
+			{/if}
+		</div>
 	</div>
 
 	<!-- Stats Cards -->
@@ -292,7 +348,7 @@
 										<Table.Cell class="py-4">
 											<div class="flex items-center gap-1 text-sm">
 												<IconClock class="h-3 w-3" />
-												<span>{formatTime(activity.start_time)} - {formatTime(activity.end_time)}</span>
+												<span>{formatTime(activity.start_time || activity.start_time_only)} - {formatTime(activity.end_time || activity.end_time_only)}</span>
 											</div>
 										</Table.Cell>
 										<Table.Cell class="py-4">
@@ -341,7 +397,7 @@
 													<Button
 														variant="ghost"
 														size="sm"
-														onclick={() => confirmDelete(activity.id, activity.activity_name || activity.name)}
+														onclick={() => confirmDelete(activity.id, activity.activity_name || activity.name || activity.title)}
 														class="text-red-600 hover:text-red-700 hover:bg-red-50"
 														title="ลบ"
 													>

@@ -5,6 +5,7 @@ use tokio::time::interval;
 use uuid::Uuid;
 
 use crate::middleware::session::SessionState;
+use crate::services::ActivityStatusUpdater;
 
 // Background task manager
 pub struct BackgroundTaskManager {
@@ -41,6 +42,13 @@ impl BackgroundTaskManager {
         let audit_session_state = session_state.clone();
         tokio::spawn(async move {
             admin_session_audit_task(audit_session_state).await;
+        });
+
+        // Activity status updater task
+        let activity_session_state = session_state.clone();
+        tokio::spawn(async move {
+            let activity_updater = ActivityStatusUpdater::new(activity_session_state);
+            activity_updater.start_background_task().await;
         });
 
         tracing::info!("All background tasks started successfully");

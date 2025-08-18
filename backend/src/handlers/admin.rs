@@ -17,6 +17,7 @@ use crate::models::{
     session::AdminSessionInfo,
     user::User,
 };
+use crate::services::ActivityStatusUpdater;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DashboardStats {
@@ -2651,6 +2652,89 @@ pub async fn create_admin_activity(
                 "message": "เกิดข้อผิดพลาดในการสร้างกิจกรรม"
             });
             eprintln!("Database error creating activity: {}", e);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Manual update of activity statuses - Admin only
+pub async fn update_activity_statuses(
+    State(session_state): State<SessionState>,
+    _admin: AdminUser, // Only admins can trigger manual status updates
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let activity_updater = ActivityStatusUpdater::new(session_state);
+    
+    match activity_updater.update_activity_statuses().await {
+        Ok(()) => {
+            // Get updated statistics
+            match activity_updater.get_status_statistics().await {
+                Ok(stats) => {
+                    let response = json!({
+                        "status": "success",
+                        "data": {
+                            "updated": true,
+                            "statistics": {
+                                "total_count": stats.total_count,
+                                "draft_count": stats.draft_count,
+                                "published_count": stats.published_count,
+                                "ongoing_count": stats.ongoing_count,
+                                "completed_count": stats.completed_count,
+                                "cancelled_count": stats.cancelled_count
+                            }
+                        },
+                        "message": "Activity statuses updated successfully"
+                    });
+                    Ok(Json(response))
+                }
+                Err(e) => {
+                    let error_response = json!({
+                        "status": "error",
+                        "message": format!("Status update succeeded but failed to get statistics: {}", e)
+                    });
+                    Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+                }
+            }
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error",
+                "message": format!("Failed to update activity statuses: {}", e)
+            });
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
+        }
+    }
+}
+
+/// Get activity status statistics - Admin only
+pub async fn get_activity_status_statistics(
+    State(session_state): State<SessionState>,
+    _admin: AdminUser,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let activity_updater = ActivityStatusUpdater::new(session_state);
+    
+    match activity_updater.get_status_statistics().await {
+        Ok(stats) => {
+            let response = json!({
+                "status": "success",
+                "data": {
+                    "statistics": {
+                        "total_count": stats.total_count,
+                        "draft_count": stats.draft_count,
+                        "published_count": stats.published_count,
+                        "ongoing_count": stats.ongoing_count,
+                        "completed_count": stats.completed_count,
+                        "cancelled_count": stats.cancelled_count
+                    }
+                },
+                "message": "Activity status statistics retrieved successfully"
+            });
+            Ok(Json(response))
+        }
+        Err(e) => {
+            let error_response = json!({
+                "status": "error", 
+                "message": format!("Failed to get activity status statistics: {}", e)
+            });
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }
     }
