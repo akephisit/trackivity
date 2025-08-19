@@ -51,8 +51,9 @@ export const actions: Actions = {
                 return fail(400, { form });
             }
 
+            // Success case - result.data contains the actual API response
             const payload = result.data as any;
-            if (payload?.success && payload?.session) {
+            if (payload?.session) {
                 cookies.set('session_id', payload.session.session_id, {
                     path: '/',
                     httpOnly: true,
