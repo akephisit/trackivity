@@ -1,4 +1,5 @@
 import { type Handle, type HandleServerError, redirect } from '@sveltejs/kit';
+import { PUBLIC_API_URL as PUBLIC_API_URL_RAW } from '$env/static/public';
 import type { SessionUser, Permission } from '$lib/types';
 import { apiClient } from '$lib/server/api-client';
 
@@ -133,9 +134,14 @@ export const handle: Handle = async ({ event, resolve }) => {
     response.headers.set('X-Frame-Options', 'DENY');
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+    const apiUrl = (PUBLIC_API_URL_RAW || '').trim().replace(/\/$/, '');
+    const connectSrc = ["'self'", 'ws:', 'wss:'];
+    if (apiUrl) connectSrc.push(apiUrl);
+
     response.headers.set(
         'Content-Security-Policy',
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss:;"
+        `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src ${connectSrc.join(' ')};`
     );
 
     return response;

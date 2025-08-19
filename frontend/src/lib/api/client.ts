@@ -4,6 +4,7 @@
  */
 
 import { browser } from '$app/environment';
+import { PUBLIC_API_URL as PUBLIC_API_URL_RAW } from '$env/static/public';
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -24,10 +25,10 @@ import type {
 } from '$lib/types';
 
 // ===== CONFIGURATION =====
-// Use same-origin for browser; SvelteKit proxies /api/* to backend.
-const API_BASE_URL = browser 
-  ? ''
-  : (process.env.PUBLIC_API_URL || 'http://localhost:3000');
+// In the browser, use same-origin so Vite proxy (dev) or reverse-proxy (prod) can route /api.
+// On the server (SSR), fall back to PUBLIC_API_URL or localhost.
+const CLEAN_PUBLIC_API_URL = (PUBLIC_API_URL_RAW || '').trim().replace(/\/$/, '');
+const API_BASE_URL = browser ? '' : (CLEAN_PUBLIC_API_URL || process.env.PUBLIC_API_URL || 'http://localhost:3000');
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 

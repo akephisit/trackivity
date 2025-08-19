@@ -7,7 +7,7 @@ mod routes;
 mod services;
 mod utils;
 
-use axum::{http::{HeaderName, Method}, Router};
+use axum::{http::{HeaderName, HeaderValue, Method}, Router};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -58,6 +58,30 @@ async fn main() -> anyhow::Result<()> {
     let background_task_manager = BackgroundTaskManager::new(session_state.clone());
     background_task_manager.start_all_tasks().await;
 
+    // Build CORS allowed origins from env or defaults
+    let allowed_origins: Vec<HeaderValue> = {
+        let env_val = std::env::var("CORS_ALLOWED_ORIGINS").unwrap_or_default();
+        let mut list: Vec<HeaderValue> = Vec::new();
+        if !env_val.trim().is_empty() {
+            for o in env_val.split(',') {
+                let s = o.trim().trim_end_matches('/');
+                if s.is_empty() { continue; }
+                if let Ok(v) = s.parse() { list.push(v); }
+            }
+        }
+        if list.is_empty() {
+            // defaults for local dev
+            list = vec![
+                "http://localhost:5173".parse().unwrap(),
+                "http://localhost:5174".parse().unwrap(),
+                "http://localhost:3000".parse().unwrap(),
+                "http://127.0.0.1:5173".parse().unwrap(),
+                "http://127.0.0.1:5174".parse().unwrap(),
+            ];
+        }
+        list
+    };
+
     // Build the application with session middleware
     let app = Router::new()
         .merge(create_routes())
@@ -71,13 +95,7 @@ async fn main() -> anyhow::Result<()> {
                 ))
                 .layer(
                     CorsLayer::new()
-                        .allow_origin([
-                            "http://localhost:5173".parse().unwrap(),
-                            "http://localhost:5174".parse().unwrap(),
-                            "http://localhost:3000".parse().unwrap(),
-                            "http://127.0.0.1:5173".parse().unwrap(),
-                            "http://127.0.0.1:5174".parse().unwrap()
-                        ])
+                        .allow_origin(allowed_origins)
                         .allow_methods([
                             Method::GET,
                             Method::POST,
@@ -91,7 +109,9 @@ async fn main() -> anyhow::Result<()> {
                             HeaderName::from_static("x-session-id"),
                             HeaderName::from_static("x-timezone"),
                             HeaderName::from_static("x-screen-resolution"),
-                            HeaderName::from_static("accept-language")
+                            HeaderName::from_static("accept-language"),
+                            HeaderName::from_static("x-device-type"),
+                            HeaderName::from_static("x-device-info")
                         ])
                         .allow_credentials(true),
                 ),
