@@ -46,7 +46,7 @@ ARG SQLX_OFFLINE=auto
 ARG DATABASE_URL
 
 # Build with smart fallback: use offline when sqlx-data.json exists or SQLX_OFFLINE=true, otherwise require DATABASE_URL
-RUN set -euo pipefail; \
+RUN set -eu; \
     mode="${SQLX_OFFLINE}"; \
     if [ "$mode" = "true" ] || { [ "$mode" = "auto" ] && [ -f sqlx-data.json ]; }; then \
       export SQLX_OFFLINE=true; \
