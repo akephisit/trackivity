@@ -133,14 +133,15 @@ Recommended (fast & reliable): generate and commit an offline cache:
 3. Commit `backend/sqlx-data.json`. The Dockerfile will auto-detect it and build with `SQLX_OFFLINE=true`.
 
 Online fallback (when you can't commit the cache):
-- Build with a live DB URL available to the builder (e.g., DO Managed PG):
+- Build with a live DB URL available to the builder (e.g., DO Managed PG). Our Dockerfile will:
+  1) connect to the DB, 2) run migrations, 3) generate `sqlx-data.json`, then 4) compile offline for speed.
   ```bash
   docker build \
-    --build-arg SQLX_OFFLINE=false \
+    --build-arg SQLX_OFFLINE=auto \
     --build-arg DATABASE_URL='postgresql://<user>:<pass>@<host>:<port>/<db>?sslmode=require' \
     -t trackivity-backend ./backend
   ```
-  On DigitalOcean App Platform, set these as Build-time env vars.
+  On DigitalOcean App Platform, set these as Build-time env vars. Note: this applies migrations at build time.
 
 ### Separate Images (run independently)
 
