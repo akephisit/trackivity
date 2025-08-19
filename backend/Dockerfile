@@ -1,48 +1,80 @@
-FROM rust:1.89 as builder
-
+###############################################
+# Base with cargo-chef for better caching
+###############################################
+FROM rust:1.89 AS chef
+RUN cargo install cargo-chef --locked
 WORKDIR /app
 
-# Install dependencies
+###############################################
+# Compute dependency recipe
+###############################################
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY migrations ./migrations
+# Include sqlx-data.json if present (no-op if absent when using COPY . . in builder)
+RUN cargo chef prepare --recipe-path recipe.json
+
+###############################################
+# Build dependencies layer
+###############################################
+FROM chef AS deps
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+###############################################
+# Build application (auto SQLx offline/online)
+###############################################
+FROM rust:1.89 AS builder
+WORKDIR /app
+
+# System deps
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifest files
-COPY Cargo.toml Cargo.lock ./
+# Reuse dependency cache
+COPY --from=deps /app/target /app/target
+COPY --from=deps /usr/local/cargo /usr/local/cargo
 
-# Create dummy source to cache dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release && rm -rf src
+# Copy full source (brings sqlx-data.json if exists)
+COPY . .
 
-# Copy source code
-COPY src ./src
-COPY migrations ./migrations
-COPY sqlx-data.json ./sqlx-data.json
+# Build args for SQLx mode and online DB
+ARG SQLX_OFFLINE=auto
+ARG DATABASE_URL
 
-# Prefer offline SQLx during Docker builds (requires sqlx-data.json)
-ENV SQLX_OFFLINE=true
+# Build with smart fallback: use offline when sqlx-data.json exists or SQLX_OFFLINE=true, otherwise require DATABASE_URL
+RUN set -euo pipefail; \
+    mode="${SQLX_OFFLINE}"; \
+    if [ "$mode" = "true" ] || { [ "$mode" = "auto" ] && [ -f sqlx-data.json ]; }; then \
+      export SQLX_OFFLINE=true; \
+      echo "Building with SQLX_OFFLINE (using sqlx-data.json)"; \
+    else \
+      if [ -z "${DATABASE_URL:-}" ]; then \
+        echo "ERROR: No sqlx-data.json and DATABASE_URL not provided. Set --build-arg DATABASE_URL=... or provide sqlx-data.json." >&2; \
+        exit 1; \
+      fi; \
+      export SQLX_OFFLINE=false; \
+      export DATABASE_URL="$DATABASE_URL"; \
+      echo "Building with SQLx online using DATABASE_URL."; \
+    fi; \
+    cargo build --release
 
-# Build application
-RUN touch src/main.rs && cargo build --release
-
-# Runtime stage
-FROM debian:bookworm-slim
-
+###############################################
+# Runtime image
+###############################################
+FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy binary from builder stage
-COPY --from=builder /app/target/release/trackivity .
+COPY --from=builder /app/target/release/trackivity ./trackivity
 COPY --from=builder /app/migrations ./migrations
 
-# Expose port
 EXPOSE 3000
-
-# Run the binary
 CMD ["./trackivity"]

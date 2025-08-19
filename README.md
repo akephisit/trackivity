@@ -113,7 +113,9 @@ A comprehensive university activity tracking system built with Rust (Axum) backe
 
 ### SQLx offline cache (required for Docker builds)
 
-SQLx query macros validate SQL at compile time. To avoid needing a live database during image builds, generate and commit an offline cache:
+SQLx query macros validate SQL at compile time. Our Dockerfile supports both offline and online builds and uses cargo-chef for fast caching.
+
+Recommended (fast & reliable): generate and commit an offline cache:
 
 1. Ensure Postgres is running and migrations applied:
    ```bash
@@ -128,7 +130,17 @@ SQLx query macros validate SQL at compile time. To avoid needing a live database
    ```bash
    cargo sqlx prepare -- --bin trackivity
    ```
-3. Commit `backend/sqlx-data.json`. The Dockerfile sets `SQLX_OFFLINE=true` so builds succeed without DB access.
+3. Commit `backend/sqlx-data.json`. The Dockerfile will auto-detect it and build with `SQLX_OFFLINE=true`.
+
+Online fallback (when you can't commit the cache):
+- Build with a live DB URL available to the builder (e.g., DO Managed PG):
+  ```bash
+  docker build \
+    --build-arg SQLX_OFFLINE=false \
+    --build-arg DATABASE_URL='postgresql://<user>:<pass>@<host>:<port>/<db>?sslmode=require' \
+    -t trackivity-backend ./backend
+  ```
+  On DigitalOcean App Platform, set these as Build-time env vars.
 
 ### Separate Images (run independently)
 
