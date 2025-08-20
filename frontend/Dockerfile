@@ -20,17 +20,15 @@ RUN npm run build
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Copy only what's needed to run preview server
+# Copy only production dependencies
 COPY --from=builder /app/package.json /app/package-lock.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.svelte-kit ./.svelte-kit
+RUN npm ci --omit=dev --no-audit --no-fund
+
+# Copy the built application
 COPY --from=builder /app/build ./build
-COPY --from=builder /app/src ./src
-COPY --from=builder /app/svelte.config.js ./svelte.config.js
-COPY --from=builder /app/vite.config.ts ./vite.config.ts
 
 ENV NODE_ENV=production
-EXPOSE 5173
+EXPOSE 3000
 
-# Use preview to serve built app
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]
+# Run the Node.js server
+CMD ["node", "build"]
