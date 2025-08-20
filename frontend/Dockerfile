@@ -14,7 +14,7 @@ ENV NODE_ENV=production
 ARG PUBLIC_API_URL
 ENV PUBLIC_API_URL=${PUBLIC_API_URL}
 
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 # Stage 2: Runtime
 FROM node:20-alpine AS runtime

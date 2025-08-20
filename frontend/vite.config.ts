@@ -11,6 +11,20 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [tailwindcss(), sveltekit()],
+    build: {
+      // Optimize build for memory usage
+      rollupOptions: {
+        onwarn(warning, warn) {
+          // Suppress circular dependency warnings from dependencies
+          if (warning.code === 'CIRCULAR_DEPENDENCY') {
+            return;
+          }
+          warn(warning);
+        }
+      },
+      // Reduce chunk size to help with memory
+      chunkSizeWarningLimit: 1000
+    },
     server: {
       proxy: {
         // Forward API calls to Rust backend in dev; target can be external
