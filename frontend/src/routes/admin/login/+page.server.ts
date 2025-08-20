@@ -55,7 +55,8 @@ export const actions: Actions = {
                 return fail(400, { form });
             }
 
-			if (response.data?.success && response.data?.session) {
+			// Backend returns { success: true, session: {...} } directly in response.data
+			if (response.success && response.data?.session) {
 				// Set session cookie
 				event.cookies.set('session_id', response.data.session.session_id, {
 					path: '/',
@@ -67,7 +68,7 @@ export const actions: Actions = {
 
 				throw redirect(303, '/admin');
 			} else {
-				form.errors._errors = [response.data?.message || 'การเข้าสู่ระบบไม่สำเร็จ'];
+				form.errors._errors = [response.data?.message || response.error || 'การเข้าสู่ระบบไม่สำเร็จ'];
 				return fail(400, { form });
 			}
 		} catch (error) {
