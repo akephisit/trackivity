@@ -136,11 +136,21 @@ export class ApiClient {
         throw err; // Re-throw SvelteKit errors
       }
 
-      console.error(`API request failed for ${endpoint}:`, err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`API request failed for ${endpoint}:`, {
+        error: err,
+        message: errorMessage,
+        url: `${this.baseUrl}${endpoint}`,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Return more detailed error information
+      const detailedError = `เกิดข้อผิดพลาดในการเชื่อมต่อ: ${errorMessage}`;
+      
       if ((options as any)?.throwOnHttpError === false || behavior.throwOnHttpError === false) {
-        return { success: false, error: 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์' } as ApiResponse<T>;
+        return { success: false, error: detailedError } as ApiResponse<T>;
       }
-      throw error(500, 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+      throw error(500, detailedError);
     }
   }
 
