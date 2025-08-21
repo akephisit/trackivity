@@ -28,7 +28,9 @@ export class ApiClient {
   private timeout: number;
 
   constructor(config: ApiClientConfig = {}) {
-    this.baseUrl = config.baseUrl || process.env.PUBLIC_API_URL || 'http://localhost:3000';
+    const rawUrl = config.baseUrl || process.env.PUBLIC_API_URL || 'http://localhost:3000';
+    // Remove trailing slash to prevent double slashes
+    this.baseUrl = rawUrl.replace(/\/+$/, '');
     this.timeout = config.timeout || 10000;
   }
 
@@ -62,6 +64,11 @@ export class ApiClient {
     const { throwOnHttpError = true } = behavior;
     const url = `${this.baseUrl}${endpoint}`;
     const headers = this.createHeaders(event, options.headers as Record<string, string>);
+
+    console.log('=== API CLIENT DEBUG ===');
+    console.log('baseUrl:', this.baseUrl);
+    console.log('endpoint:', endpoint);
+    console.log('final URL:', url);
 
     try {
       const controller = new AbortController();
