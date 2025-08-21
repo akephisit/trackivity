@@ -244,32 +244,68 @@ export class QRClient {
     try {
       // Try to generate via API first
       let qrCode: QRCode;
+      let useOfflineMode = false;
+      
       try {
         const response = await apiClient.generateQRCode();
-        // The backend may return either a wrapped shape { status, data } or raw QR payload
-        const payload: any = (response as any)?.data ?? (response as any);
-        if (!payload || !payload.qr_data) {
-          throw new Error('Invalid QR response');
+        console.log('[QR] API Response:', response);
+        
+        // Handle different response formats more robustly
+        let payload: any = null;
+        
+        if (response && typeof response === 'object') {
+          // Check for new API format: { success: true, data: {...} }
+          if ('success' in response && response.success && 'data' in response && response.data) {
+            payload = response.data;
+          }
+          // Check for legacy format: direct object with QR data
+          else if ('qr_data' in response || 'id' in response) {
+            payload = response;
+          }
+          // Check if response itself is the data (another format)
+          else if ((response as any).data && (response as any).data.qr_data) {
+            payload = (response as any).data;
+          }
+        }
+
+        if (!payload) {
+          console.warn('[QR] Invalid API response structure:', response);
+          throw new Error('Invalid QR response structure');
+        }
+
+        // Validate required fields
+        if (!payload.qr_data && !payload.id) {
+          console.warn('[QR] Missing required qr_data or id field:', payload);
+          throw new Error('Missing QR data in API response');
         }
 
         // Normalize expires_at into ISO string
-        let expiresAt: string = payload.expires_at;
-        if (typeof payload.expires_at === 'number') {
-          expiresAt = new Date(payload.expires_at * 1000).toISOString();
+        let expiresAt: string;
+        if (payload.expires_at) {
+          if (typeof payload.expires_at === 'number') {
+            expiresAt = new Date(payload.expires_at * 1000).toISOString();
+          } else {
+            expiresAt = payload.expires_at;
+          }
+        } else {
+          // Default to 3 minutes from now if not provided
+          expiresAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
         }
 
         // Build QRCode object matching app expectations
         qrCode = {
-          id: (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)),
-          user_id: user?.user_id || '',
-          qr_data: payload.qr_data,
+          id: payload.id || (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)),
+          user_id: payload.user_id || user?.user_id || '',
+          qr_data: payload.qr_data || payload.id || JSON.stringify({ user_id: user?.user_id, timestamp: Date.now() }),
           signature: payload.signature || '',
-          created_at: new Date().toISOString(),
+          created_at: payload.created_at || new Date().toISOString(),
           expires_at: expiresAt,
-          is_active: true,
-          usage_count: 0,
-          device_fingerprint: generateDeviceFingerprint()
+          is_active: payload.is_active ?? true,
+          usage_count: payload.usage_count ?? 0,
+          device_fingerprint: payload.device_fingerprint || generateDeviceFingerprint()
         };
+
+        console.log('[QR] Successfully parsed API response:', qrCode);
 
         // If backend supplies SVG, prefer it over placeholder canvas
         if (payload.qr_svg && typeof payload.qr_svg === 'string') {
@@ -282,7 +318,8 @@ export class QRClient {
         }
       } catch (apiError) {
         // Fallback to offline generation
-        console.warn('API generation failed, using offline mode:', apiError);
+        console.warn('[QR] API generation failed, using offline mode:', apiError);
+        useOfflineMode = true;
         const sessionId = this.getSessionId();
         qrCode = await this.generateOfflineQRCode(sessionId || undefined, user);
       }
@@ -298,8 +335,10 @@ export class QRClient {
       // Schedule automatic refresh
       this.scheduleRefresh();
 
+      console.log(`[QR] QR Code generated successfully (${useOfflineMode ? 'offline' : 'online'} mode)`);
+
     } catch (error) {
-      console.error('QR generation failed:', error);
+      console.error('[QR] QR generation failed:', error);
       this.error.set(error instanceof Error ? error.message : 'QR generation failed');
       this.status.set('error');
     } finally {
@@ -309,16 +348,18 @@ export class QRClient {
   }
 
   private async generateOfflineQRCode(sessionId?: string, user?: SessionUser): Promise<QRCode> {
+    console.log('[QR] Generating offline QR code for user:', user?.user_id);
+    
     const qrData: QRData = {
       user_id: user?.user_id || 'unknown',
       timestamp: Date.now(),
-      session_id: sessionId || 'unknown',
+      session_id: sessionId || 'offline-session',
       device_fingerprint: generateDeviceFingerprint()
     };
 
     // Sign the data if possible
     try {
-      if (sessionId) {
+      if (sessionId && sessionId !== 'offline-session') {
         const dataString = JSON.stringify({
           user_id: qrData.user_id,
           timestamp: qrData.timestamp,
@@ -328,13 +369,14 @@ export class QRClient {
         qrData.signature = await CryptoHelper.signData(dataString, sessionId);
       }
     } catch (error) {
-      console.warn('Failed to sign QR data:', error);
+      console.warn('[QR] Failed to sign QR data (non-critical):', error);
     }
 
     const expiresAt = new Date(Date.now() + this.config.refreshInterval * 60 * 1000).toISOString();
+    const qrCodeId = globalThis.crypto?.randomUUID?.() ?? `offline-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    return {
-      id: crypto.randomUUID(),
+    const offlineQRCode = {
+      id: qrCodeId,
       user_id: qrData.user_id,
       qr_data: JSON.stringify(qrData),
       signature: qrData.signature || '',
@@ -344,6 +386,9 @@ export class QRClient {
       usage_count: 0,
       device_fingerprint: qrData.device_fingerprint
     };
+
+    console.log('[QR] Offline QR code generated successfully:', offlineQRCode.id);
+    return offlineQRCode;
   }
 
   // ===== QR CODE SCANNING =====
@@ -564,12 +609,31 @@ export function useQRCode() {
   const status = qrClient.status;
   const error = qrClient.error;
 
+  // Auto-initialize on first use if in browser
+  if (browser && typeof window !== 'undefined') {
+    // Check if we need to initialize
+    const currentStatus = get(status);
+    const currentQR = get(qrCode);
+    
+    if (currentStatus === 'idle' && !currentQR) {
+      // Defer initialization to avoid issues during SSR
+      setTimeout(() => {
+        if (get(status) === 'idle' && !get(qrCode)) {
+          console.log('[QR] Auto-initializing QR client');
+          qrClient.generateQRCode().catch(error => {
+            console.warn('[QR] Auto-initialization failed:', error);
+          });
+        }
+      }, 100);
+    }
+  }
+
   return {
     qrCode,
     qrDataURL,
     status,
     error,
-    generate: () => qrClient.generateQRCode(),
+    generate: (user?: SessionUser) => qrClient.generateQRCode(user),
     download: (filename?: string) => qrClient.downloadQRCode(filename),
     scan: (qrData: string, activityId?: string) => qrClient.scanQRCode(qrData, activityId)
   };

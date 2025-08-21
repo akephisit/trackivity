@@ -5,7 +5,6 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import QRCodeGenerator from '$lib/components/qr/QRCodeGenerator.svelte';
 	import {
@@ -21,6 +20,9 @@
 	import { toast } from 'svelte-sonner';
 
 	const { qrCode, status: qrStatus, generate } = useQRCode();
+	
+	// State for initial loading
+	let initialLoadComplete = $state(false);
 	
 	async function refreshQR() {
 		await generate();
@@ -72,10 +74,12 @@
 	async function handleRefreshQR() {
 		refreshing = true;
 		try {
+			console.log('[QR Page] Manual refresh requested');
 			await refreshQR();
 			toast.success('รีเฟรช QR Code แล้ว');
 		} catch (err) {
-			toast.error('ไม่สามารถรีเฟรช QR Code ได้');
+			console.error('[QR Page] Manual refresh failed:', err);
+			toast.error('ไม่สามารถรีเฟรช QR Code ได้: ' + (err instanceof Error ? err.message : 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'));
 		} finally {
 			refreshing = false;
 		}
@@ -96,6 +100,15 @@
 
 	// Auto-refresh every minute to update time remaining
 	onMount(() => {
+		// Generate QR code when page loads if user is available
+		if ($currentUser && !$qrCode) {
+			console.log('[QR Page] User available, generating QR code on mount');
+			generate().catch(error => {
+				console.error('[QR Page] Failed to generate QR on mount:', error);
+			});
+		}
+		initialLoadComplete = true;
+
 		const interval = setInterval(() => {
 			// Trigger reactivity for time remaining
 			if ($qrCode) {
@@ -104,6 +117,19 @@
 		}, 60000);
 
 		return () => clearInterval(interval);
+	});
+
+	// Watch for user authentication changes using $effect
+	let lastUserCheck = $state('');
+	$effect(() => {
+		const userKey = $currentUser?.user_id || '';
+		if (userKey && userKey !== lastUserCheck && initialLoadComplete && !$qrCode && $qrStatus === 'idle') {
+			lastUserCheck = userKey;
+			console.log('[QR Page] User authenticated, generating QR code');
+			generate().catch(error => {
+				console.error('[QR Page] Failed to generate QR after user auth:', error);
+			});
+		}
 	});
 </script>
 

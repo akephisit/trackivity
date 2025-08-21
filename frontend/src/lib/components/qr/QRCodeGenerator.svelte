@@ -25,14 +25,23 @@
   const { qrCode, qrDataURL, status, error, generate, download } = useQRCode();
   
   // Component props
-  export let autoRefresh = true;
-  export let showDownload = true;
-  export let showStatus = true;
-  export let size: 'small' | 'medium' | 'large' = 'medium';
+  interface Props {
+    autoRefresh?: boolean;
+    showDownload?: boolean;
+    showStatus?: boolean;
+    size?: 'small' | 'medium' | 'large';
+  }
+  
+  const { 
+    autoRefresh = true,
+    showDownload = true, 
+    showStatus = true,
+    size = 'medium'
+  }: Props = $props();
   
   // Reactive variables
   let refreshTimer: NodeJS.Timeout | null = null;
-  let timeUntilExpiry = 0;
+  let timeUntilExpiry = $state(0);
   let expiryTimer: NodeJS.Timeout | null = null;
   
   // Size configurations - responsive classes
@@ -53,9 +62,14 @@
 
   // Initialize QR code
   onMount(async () => {
+    console.log('[QRGenerator] Component mounted, user:', $currentUser ? 'available' : 'not available');
     if ($currentUser) {
-      await generate();
-      startTimers();
+      try {
+        await generate();
+        startTimers();
+      } catch (error) {
+        console.error('[QRGenerator] Failed to generate QR on mount:', error);
+      }
     }
   });
 
@@ -65,14 +79,21 @@
   });
 
   // Watch for user changes
-  $: if ($currentUser && $status === 'idle') {
-    generate();
-  }
+  $effect(() => {
+    if ($currentUser && ($status === 'idle' || !$qrCode)) {
+      console.log('[QRGenerator] User available and QR needed, generating...');
+      generate().catch(error => {
+        console.error('[QRGenerator] Failed to generate QR for user:', error);
+      });
+    }
+  });
 
   // Watch for QR code changes to update timers
-  $: if ($qrCode) {
-    updateExpiryTimer();
-  }
+  $effect(() => {
+    if ($qrCode) {
+      updateExpiryTimer();
+    }
+  });
 
   function startTimers() {
     if (!autoRefresh) return;
@@ -118,7 +139,10 @@
   }
 
   function handleRefresh() {
-    generate();
+    console.log('[QRGenerator] Manual refresh triggered');
+    generate().catch(error => {
+      console.error('[QRGenerator] Manual refresh failed:', error);
+    });
   }
 
   function handleDownload() {
@@ -147,8 +171,8 @@
     return Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
   }
 
-  $: currentStatusConfig = statusConfig[$status];
-  $: isExpiringSoon = timeUntilExpiry > 0 && timeUntilExpiry <= 60; // Less than 1 minute
+  const currentStatusConfig = $derived(statusConfig[$status]);
+  const isExpiringSoon = $derived(timeUntilExpiry > 0 && timeUntilExpiry <= 60); // Less than 1 minute
 </script>
 
 <Card class="w-full max-w-sm mx-auto md:max-w-md">
@@ -161,8 +185,8 @@
     {#if showStatus}
       <div class="flex items-center justify-center gap-2 mt-2">
         <Badge variant={currentStatusConfig.color} class="flex items-center gap-1">
-          <svelte:component 
-            this={currentStatusConfig.icon} 
+          {@const IconComponent = currentStatusConfig.icon}
+          <IconComponent 
             class="size-3 {$status === 'generating' ? 'animate-spin' : ''}" 
           />
           {currentStatusConfig.text}
