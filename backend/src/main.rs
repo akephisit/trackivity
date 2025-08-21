@@ -7,7 +7,12 @@ mod routes;
 mod services;
 mod utils;
 
-use axum::{http::{HeaderName, HeaderValue, Method}, Router};
+use axum::{
+    http::{HeaderName, HeaderValue, Method, Request, Uri},
+    middleware::Next,
+    response::Response,
+    Router,
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -20,6 +25,32 @@ use crate::config::Config;
 use crate::database::Database;
 use crate::routes::create_routes;
 use crate::services::background_tasks::BackgroundTaskManager;
+
+// Middleware to normalize URIs and fix double slash issues
+async fn normalize_uri_middleware(
+    mut request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let original_uri = request.uri().clone();
+    let path = original_uri.path();
+    
+    // Normalize double slashes in path
+    if path.contains("//") {
+        let normalized_path = if path.starts_with("//") {
+            // For paths like //api/admin/auth/me -> /api/admin/auth/me
+            path.chars().skip(1).collect::<String>()
+        } else {
+            // For paths like /api//admin/auth/me -> /api/admin/auth/me
+            path.replace("//", "/")
+        };
+        
+        if let Ok(new_uri) = normalized_path.parse::<Uri>() {
+            *request.uri_mut() = new_uri;
+        }
+    }
+    
+    next.run(request).await
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -85,6 +116,7 @@ async fn main() -> anyhow::Result<()> {
     // Build the application with session middleware
     let app = Router::new()
         .merge(create_routes())
+        .layer(axum::middleware::from_fn(normalize_uri_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
