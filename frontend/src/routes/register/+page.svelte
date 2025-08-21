@@ -114,7 +114,7 @@
 	<meta name="description" content="สมัครสมาชิกสำหรับนักศึกษา" />
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 overflow-y-auto register-container">
 	<div class="flex flex-col lg:flex-row min-h-screen">
 		<!-- Left Side - Logo/Branding Section -->
 		<div class="lg:w-2/5 bg-gradient-to-br from-green-600 to-green-700 dark:from-green-700 dark:to-green-800 flex items-center justify-center p-8 lg:p-12">
@@ -135,7 +135,7 @@
 		</div>
 
 		<!-- Right Side - Registration Form -->
-		<div class="lg:w-3/5 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+		<div class="lg:w-3/5 flex items-start lg:items-center justify-center p-4 sm:p-6 lg:p-8 overflow-y-auto mobile-spacing">
 			<div class="w-full max-w-2xl">
 				<div class="mb-6 text-center lg:text-left">
 					<h2 class="text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white mb-2">
@@ -443,5 +443,32 @@
 	}
 	:global(.dark body) {
 		background-color: rgb(17 24 39);
+	}
+	
+	/* Ensure proper scrolling on mobile */
+	@media (max-width: 768px) {
+		:global(html, body) {
+			overflow-x: hidden;
+			overflow-y: auto;
+			height: 100%;
+		}
+		
+		/* Optimize form scrolling on mobile */
+		.register-container {
+			max-height: 100vh;
+			overflow-y: auto;
+			-webkit-overflow-scrolling: touch;
+		}
+		
+		/* Better spacing for mobile */
+		.mobile-spacing {
+			padding-top: 2rem;
+			padding-bottom: 2rem;
+		}
+		
+		/* Prevent zoom on form inputs */
+		:global(input, select, textarea) {
+			font-size: 16px;
+		}
 	}
 </style>

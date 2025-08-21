@@ -115,7 +115,7 @@
     if (!viewport) {
       const meta = document.createElement('meta');
       meta.name = 'viewport';
-      meta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0';
+      meta.content = 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes';
       document.head.appendChild(meta);
     }
   });
@@ -230,8 +230,8 @@
       </header>
 
       <!-- Mobile Content -->
-      <main class="flex-1 overflow-auto">
-        <div class="container mx-auto px-4 py-6">
+      <main class="flex-1 overflow-y-auto overflow-x-hidden">
+        <div class="container mx-auto px-4 py-6 min-h-fit">
           {@render children()}
         </div>
       </main>
@@ -294,9 +294,10 @@
       scroll-behavior: smooth;
     }
 
-    /* Prevent horizontal scrolling */
+    /* Prevent horizontal scrolling but allow vertical */
     :global(html, body) {
       overflow-x: hidden;
+      overflow-y: auto;
     }
 
     /* Better form inputs on mobile */
