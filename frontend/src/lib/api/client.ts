@@ -108,6 +108,8 @@ export class ApiClient {
 
   // ===== PRIVATE HELPERS =====
   // Browser no longer needs to read session; proxy attaches httpOnly cookie.
+  // Keeping this method for potential future use or debugging
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private getSessionId(): string | null { return null; }
 
   private getDeviceInfo(): DeviceInfo {
@@ -246,7 +248,7 @@ export class ApiClient {
       );
     }
 
-    // Handle both old format (direct data) and new format (with success flag)
+    // Handle different error response formats
     if (data.success === false) {
       // New format with explicit error handling
       const errorCode = data.error?.code;
@@ -262,9 +264,26 @@ export class ApiClient {
       );
     }
 
-    // Normalize legacy responses (without success flag) into ApiResponse shape
-    if (typeof data === 'object' && data !== null && !('success' in data)) {
-      return { success: true, data } as ApiResponse<T>;
+    // Handle backend error format: { status: "error", message: "..." }
+    if ('status' in data && data.status === 'error') {
+      throw new ApiClientError(
+        data.code || 'API_ERROR',
+        data.message || 'Request failed',
+        response.status,
+        data.details
+      );
+    }
+
+    // Normalize different response formats to ApiResponse shape
+    if (typeof data === 'object' && data !== null) {
+      // Handle backend format: { status: "success", data: {...} }
+      if ('status' in data && data.status === 'success' && 'data' in data) {
+        return { success: true, data: data.data } as ApiResponse<T>;
+      }
+      // Handle legacy format: direct data object (without success flag)
+      else if (!('success' in data)) {
+        return { success: true, data } as ApiResponse<T>;
+      }
     }
 
     return data as ApiResponse<T>;

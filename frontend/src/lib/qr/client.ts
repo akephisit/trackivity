@@ -258,6 +258,10 @@ export class QRClient {
           if ('success' in response && response.success && 'data' in response && response.data) {
             payload = response.data;
           }
+          // Check for backend format: { status: "success", data: {...} }
+          else if ('status' in response && response.status === 'success' && 'data' in response && response.data) {
+            payload = response.data;
+          }
           // Check for legacy format: direct object with QR data
           else if ('qr_data' in response || 'id' in response) {
             payload = response;
