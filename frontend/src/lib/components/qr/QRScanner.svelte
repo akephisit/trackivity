@@ -186,13 +186,33 @@
           await videoElement.play();
         }
 
+        // Set mobile-specific attributes
+        videoElement.setAttribute('webkit-playsinline', 'true');
+        videoElement.setAttribute('data-webkit-playsinline', 'true');
+        
         // Force video visibility and correct sizing
         videoElement.style.visibility = 'visible';
         videoElement.style.opacity = '1';
         videoElement.style.display = 'block';
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'cover';
+        videoElement.style.zIndex = '1';
         
         // Force a reflow to ensure proper sizing
         videoElement.offsetHeight;
+        
+        // Additional checks for video display
+        console.log('Video element computed styles:', {
+          display: window.getComputedStyle(videoElement).display,
+          visibility: window.getComputedStyle(videoElement).visibility,
+          opacity: window.getComputedStyle(videoElement).opacity,
+          position: window.getComputedStyle(videoElement).position,
+          width: window.getComputedStyle(videoElement).width,
+          height: window.getComputedStyle(videoElement).height,
+          objectFit: window.getComputedStyle(videoElement).objectFit,
+          transform: window.getComputedStyle(videoElement).transform
+        });
         
         // Additional debugging for video display
         setTimeout(() => {
@@ -501,22 +521,37 @@
       <div class="relative">
         <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed relative">
           {#if cameraStatus === 'active'}
+            <!-- svelte-ignore a11y-media-has-caption -->
             <video
               bind:this={videoElement}
               class="absolute inset-0 w-full h-full object-cover bg-black"
-              playsinline
-              data-webkit-playsinline="true"
-              muted
-              autoplay
+              playsinline={true}
+              muted={true}
+              autoplay={true}
               controls={false}
               preload="auto"
-              style="transform: scaleX(-1); width: 100% !important; height: 100% !important;"
+              style="transform: scaleX(-1); width: 100% !important; height: 100% !important; object-fit: cover !important; background-color: black !important;"
               onloadstart={() => console.log('Video load start')}
               onloadeddata={() => console.log('Video data loaded')}
-              onloadedmetadata={() => console.log('Video metadata loaded')}
-              oncanplay={() => console.log('Video can play')}
+              onloadedmetadata={() => {
+                console.log('Video metadata loaded - size:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+                // Force video to be visible after metadata loads
+                videoElement.style.opacity = '1';
+                videoElement.style.visibility = 'visible';
+              }}
+              oncanplay={() => {
+                console.log('Video can play');
+                // Ensure video is visible when it can play
+                videoElement.style.opacity = '1';
+                videoElement.style.visibility = 'visible';
+              }}
               oncanplaythrough={() => console.log('Video can play through')}
-              onplaying={() => console.log('Video playing')}
+              onplaying={() => {
+                console.log('Video playing');
+                // Final check to make sure video is visible
+                videoElement.style.opacity = '1';
+                videoElement.style.visibility = 'visible';
+              }}
               onerror={(e) => console.error('Video element error:', e)}
             ></video>
             
