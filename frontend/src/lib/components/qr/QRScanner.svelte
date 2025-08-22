@@ -42,43 +42,58 @@
   }
 
   // Props
-  export let activity_id: string = '';
-  export let isActive = false;
-  export let showHistory = true;
-  export let maxHistoryItems = 10;
+  let {
+    activity_id = '',
+    isActive = false,
+    showHistory = true,
+    maxHistoryItems = 10,
+    onScan = undefined,
+    onError = undefined,
+    onStatusChange = undefined
+  }: {
+    activity_id?: string;
+    isActive?: boolean;
+    showHistory?: boolean;
+    maxHistoryItems?: number;
+    onScan?: ((result: ScanResult, qrData: string) => void) | undefined;
+    onError?: ((message: string) => void) | undefined;
+    onStatusChange?: ((status: 'idle' | 'requesting' | 'active' | 'error') => void) | undefined;
+  } = $props();
   
   // Component state
-  let videoElement: HTMLVideoElement;
-  let stream: MediaStream | null = null;
-  let isScanning = false;
-  let error: string | null = null;
+  let videoElement = $state<HTMLVideoElement>();
+  let stream = $state<MediaStream | null>(null);
+  let isScanning = $state(false);
+  let error = $state<string | null>(null);
   let lastScanTime = 0;
   let scanCooldown = 2000; // 2 seconds between scans
-  let debugInfo = {
+  let debugInfo = $state({
     hasCamera: false,
     cameraPermission: 'unknown',
     videoReady: false,
     streamActive: false
-  };
+  });
   
   // Scanner state
-  let cameraStatus: 'idle' | 'requesting' | 'active' | 'error' = 'idle';
-  let scanHistory: ScannedUser[] = [];
-  let isProcessingScan = false;
+  let cameraStatus = $state<'idle' | 'requesting' | 'active' | 'error'>('idle');
+  let scanHistory = $state<ScannedUser[]>([]);
+  let isProcessingScan = $state(false);
   
-  // Event callbacks
-  export let onScan: ((result: ScanResult, qrData: string) => void) | undefined = undefined;
-  export let onError: ((message: string) => void) | undefined = undefined;
-  export let onStatusChange: ((status: typeof cameraStatus) => void) | undefined = undefined;
 
-  // Reactive statements
-  $: if (browser && isActive && activity_id) {
-    startCamera();
-  } else if (browser && !isActive) {
-    stopCamera();
-  }
+  // Reactive effect
+  $effect(() => {
+    if (browser && isActive && activity_id && cameraStatus === 'idle') {
+      console.log('Effect: Starting camera due to state change');
+      startCamera();
+    } else if (browser && !isActive && cameraStatus !== 'idle') {
+      console.log('Effect: Stopping camera due to state change');
+      stopCamera();
+    }
+  });
 
   onMount(async () => {
+    console.log('onMount: Component mounted', { isActive, activity_id, cameraStatus });
+    
     if (browser) {
       // Check camera availability
       debugInfo.hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
@@ -88,13 +103,13 @@
         try {
           const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
           debugInfo.cameraPermission = permissionStatus.state;
-          debugInfo = debugInfo;
         } catch (e) {
           console.log('Cannot check camera permission:', e);
         }
       }
       
-      if (isActive && activity_id) {
+      if (isActive && activity_id && cameraStatus === 'idle') {
+        console.log('onMount: Starting camera');
         startCamera();
       }
     }
@@ -105,7 +120,18 @@
   });
 
   async function startCamera() {
-    if (!browser || !activity_id) return;
+    if (!browser || !activity_id) {
+      console.log('startCamera: browser or activity_id not available');
+      return;
+    }
+    
+    // Prevent multiple simultaneous calls
+    if (cameraStatus === 'requesting' || cameraStatus === 'active') {
+      console.log('startCamera: Camera already starting/active, skipping');
+      return;
+    }
+    
+    console.log('startCamera: Starting camera...');
     
     // Check if getUserMedia is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -141,16 +167,21 @@
         
         // Wait for video metadata to load
         await new Promise((resolve, reject) => {
+          if (!videoElement) {
+            reject(new Error('Video element not available'));
+            return;
+          }
+          
           const timeoutId = setTimeout(() => reject(new Error('Video load timeout')), 10000);
           
           const onLoadedMetadata = () => {
+            if (!videoElement) return;
             clearTimeout(timeoutId);
             console.log('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
             console.log('Video element dimensions:', videoElement.offsetWidth, 'x', videoElement.offsetHeight);
             console.log('Video element styles:', window.getComputedStyle(videoElement));
             debugInfo.videoReady = true;
             debugInfo.streamActive = true;
-            debugInfo = debugInfo; // Trigger reactivity
             resolve(true);
           };
           
@@ -167,13 +198,16 @@
           videoElement.addEventListener('canplay', () => {
             console.log('Video can start playing');
             debugInfo.videoReady = true;
-            debugInfo = debugInfo;
           }, { once: true });
         });
         
         // Play video with error handling for mobile
         console.log('Starting video playback');
         
+        if (!videoElement) {
+          throw new Error('Video element not available for playback');
+        }
+
         try {
           const playPromise = videoElement.play();
           if (playPromise !== undefined) {
@@ -183,75 +217,82 @@
           console.warn('Video play failed, trying again:', playError);
           // Sometimes the first play fails, try again after a short delay
           await new Promise(resolve => setTimeout(resolve, 100));
-          await videoElement.play();
+          if (videoElement) {
+            await videoElement.play();
+          }
         }
 
         // Set mobile-specific attributes
-        videoElement.setAttribute('webkit-playsinline', 'true');
-        videoElement.setAttribute('data-webkit-playsinline', 'true');
-        
-        // Force video visibility and correct sizing
-        videoElement.style.visibility = 'visible';
-        videoElement.style.opacity = '1';
-        videoElement.style.display = 'block';
-        videoElement.style.width = '100%';
-        videoElement.style.height = '100%';
-        videoElement.style.objectFit = 'cover';
-        videoElement.style.zIndex = '1';
-        
-        // Force a reflow to ensure proper sizing
-        videoElement.offsetHeight;
+        if (videoElement) {
+          videoElement.setAttribute('webkit-playsinline', 'true');
+          videoElement.setAttribute('data-webkit-playsinline', 'true');
+          
+          // Force video visibility and correct sizing
+          videoElement.style.visibility = 'visible';
+          videoElement.style.opacity = '1';
+          videoElement.style.display = 'block';
+          videoElement.style.width = '100%';
+          videoElement.style.height = '100%';
+          videoElement.style.objectFit = 'cover';
+          videoElement.style.zIndex = '1';
+          
+          // Force a reflow to ensure proper sizing
+          videoElement.offsetHeight;
+        }
         
         // Additional checks for video display
-        console.log('Video element computed styles:', {
-          display: window.getComputedStyle(videoElement).display,
-          visibility: window.getComputedStyle(videoElement).visibility,
-          opacity: window.getComputedStyle(videoElement).opacity,
-          position: window.getComputedStyle(videoElement).position,
-          width: window.getComputedStyle(videoElement).width,
-          height: window.getComputedStyle(videoElement).height,
-          objectFit: window.getComputedStyle(videoElement).objectFit,
-          transform: window.getComputedStyle(videoElement).transform
-        });
+        if (videoElement) {
+          console.log('Video element computed styles:', {
+            display: window.getComputedStyle(videoElement).display,
+            visibility: window.getComputedStyle(videoElement).visibility,
+            opacity: window.getComputedStyle(videoElement).opacity,
+            position: window.getComputedStyle(videoElement).position,
+            width: window.getComputedStyle(videoElement).width,
+            height: window.getComputedStyle(videoElement).height,
+            objectFit: window.getComputedStyle(videoElement).objectFit,
+            transform: window.getComputedStyle(videoElement).transform
+          });
+        }
         
         // Additional debugging for video display
         setTimeout(() => {
-          console.log('Video final check:', {
-            videoWidth: videoElement.videoWidth,
-            videoHeight: videoElement.videoHeight,
-            offsetWidth: videoElement.offsetWidth,
-            offsetHeight: videoElement.offsetHeight,
-            clientWidth: videoElement.clientWidth,
-            clientHeight: videoElement.clientHeight,
-            readyState: videoElement.readyState,
-            paused: videoElement.paused,
-            srcObject: !!videoElement.srcObject,
-            parentElement: !!videoElement.parentElement,
-            isConnected: videoElement.isConnected,
-            style: videoElement.style.cssText
-          });
-          
-          // Try to force repaint
-          const parent = videoElement.parentElement;
-          if (parent) {
-            console.log('Parent element info:', {
-              offsetWidth: parent.offsetWidth,
-              offsetHeight: parent.offsetHeight,
-              className: parent.className,
-              computedStyle: window.getComputedStyle(parent).cssText
+          if (videoElement) {
+            console.log('Video final check:', {
+              videoWidth: videoElement.videoWidth,
+              videoHeight: videoElement.videoHeight,
+              offsetWidth: videoElement.offsetWidth,
+              offsetHeight: videoElement.offsetHeight,
+              clientWidth: videoElement.clientWidth,
+              clientHeight: videoElement.clientHeight,
+              readyState: videoElement.readyState,
+              paused: videoElement.paused,
+              srcObject: !!videoElement.srcObject,
+              parentElement: !!videoElement.parentElement,
+              isConnected: videoElement.isConnected,
+              style: videoElement.style.cssText
             });
             
-            // Force repaint by temporarily hiding and showing
-            parent.style.display = 'none';
-            parent.offsetHeight; // Force reflow
-            parent.style.display = '';
+            // Try to force repaint
+            const parent = videoElement.parentElement;
+            if (parent) {
+              console.log('Parent element info:', {
+                offsetWidth: parent.offsetWidth,
+                offsetHeight: parent.offsetHeight,
+                className: parent.className,
+                computedStyle: window.getComputedStyle(parent).cssText
+              });
+              
+              // Force repaint by temporarily hiding and showing
+              parent.style.display = 'none';
+              parent.offsetHeight; // Force reflow
+              parent.style.display = '';
+            }
           }
         }, 1000);
         
         cameraStatus = 'active';
         isScanning = true;
         debugInfo.streamActive = true;
-        debugInfo = debugInfo;
         console.log('Camera started successfully');
         
         // Start QR detection after a short delay to ensure video is rendering
@@ -540,7 +581,7 @@
       <div class="relative">
         <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed relative" id="video-container">
           {#if cameraStatus === 'active'}
-            <!-- svelte-ignore a11y-media-has-caption -->
+            <!-- svelte-ignore a11y_media_has_caption -->
             <video
               bind:this={videoElement}
               class="absolute inset-0 w-full h-full object-cover bg-black"
@@ -553,29 +594,45 @@
               onloadstart={() => console.log('Video load start')}
               onloadeddata={() => console.log('Video data loaded')}
               onloadedmetadata={() => {
-                console.log('Video metadata loaded - size:', videoElement.videoWidth, 'x', videoElement.videoHeight);
-                // Force video to be visible after metadata loads
-                videoElement.style.opacity = '1';
-                videoElement.style.visibility = 'visible';
-                videoElement.style.display = 'block';
+                if (videoElement) {
+                  console.log('Video metadata loaded - size:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+                  // Force video to be visible after metadata loads
+                  videoElement.style.opacity = '1';
+                  videoElement.style.visibility = 'visible';
+                  videoElement.style.display = 'block';
+                }
               }}
               oncanplay={() => {
-                console.log('Video can play');
-                // Ensure video is visible when it can play
-                videoElement.style.opacity = '1';
-                videoElement.style.visibility = 'visible';
-                videoElement.style.display = 'block';
+                if (videoElement) {
+                  console.log('Video can play');
+                  // Ensure video is visible when it can play
+                  videoElement.style.opacity = '1';
+                  videoElement.style.visibility = 'visible';
+                  videoElement.style.display = 'block';
+                }
               }}
               oncanplaythrough={() => console.log('Video can play through')}
               onplaying={() => {
-                console.log('Video playing');
-                // Final check to make sure video is visible
-                videoElement.style.opacity = '1';
-                videoElement.style.visibility = 'visible';
-                videoElement.style.display = 'block';
+                if (videoElement) {
+                  console.log('Video playing');
+                  // Final check to make sure video is visible
+                  videoElement.style.opacity = '1';
+                  videoElement.style.visibility = 'visible';
+                  videoElement.style.display = 'block';
+                }
               }}
               onerror={(e) => console.error('Video element error:', e)}
             ></video>
+            
+            <!-- Debug overlay -->
+            {#if import.meta.env.DEV}
+              <div class="absolute top-2 left-2 bg-black/70 text-white text-xs p-2 rounded z-30">
+                Status: {cameraStatus}<br>
+                Stream: {debugInfo.streamActive ? 'Yes' : 'No'}<br>
+                Video: {videoElement?.videoWidth || 0}x{videoElement?.videoHeight || 0}<br>
+                Element: {videoElement?.offsetWidth || 0}x{videoElement?.offsetHeight || 0}
+              </div>
+            {/if}
             
             <!-- Fallback debug overlay -->
             {#if debugInfo.streamActive && videoElement?.videoWidth === 0}
