@@ -2443,7 +2443,7 @@ pub async fn bulk_admin_operations(
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateAdminActivityRequest {
     pub activity_name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub start_date: String,
     pub end_date: String,
     pub start_time: String,
@@ -2600,7 +2600,7 @@ pub async fn create_admin_activity(
         "#
     )
     .bind(&request.activity_name)  // title
-    .bind(request.description.unwrap_or_default())  // description
+    .bind(&request.description)  // description
     .bind(&request.location)  // location
     .bind(request.max_participants)  // max_participants
     .bind(faculty_id)  // faculty_id
@@ -2647,11 +2647,21 @@ pub async fn create_admin_activity(
             Ok(Json(response))
         }
         Err(e) => {
+            eprintln!("Database error creating activity: {}", e);
+            eprintln!("Request data: {:?}", request);
+            
+            let error_message = match e {
+                sqlx::Error::Database(db_err) => {
+                    eprintln!("Database constraint error: {}", db_err);
+                    format!("เกิดข้อผิดพลาดในการสร้างกิจกรรม: {}", db_err)
+                }
+                _ => "เกิดข้อผิดพลาดในการสร้างกิจกรรม".to_string()
+            };
+            
             let error_response = json!({
                 "status": "error",
-                "message": "เกิดข้อผิดพลาดในการสร้างกิจกรรม"
+                "message": error_message
             });
-            eprintln!("Database error creating activity: {}", e);
             Err((StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)))
         }
     }

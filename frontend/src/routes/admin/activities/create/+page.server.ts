@@ -134,20 +134,25 @@ export const actions: Actions = {
 		}
 
 		try {
+			// แปลง eligible_faculties จาก string เป็น array of UUIDs
+			const eligibleFacultiesArray = form.data.eligible_faculties 
+				? form.data.eligible_faculties.split(',').filter(f => f.trim() !== '') 
+				: [];
+
 			// เตรียมข้อมูลสำหรับส่งไป API
 			const activityData: any = {
 				activity_name: form.data.activity_name,
-				description: form.data.description && form.data.description.trim() !== '' ? form.data.description : null,
+				description: form.data.description && form.data.description.trim() !== '' ? form.data.description : '',
 				start_date: form.data.start_date,
 				end_date: form.data.end_date,
 				start_time: form.data.start_time,
 				end_time: form.data.end_time,
 				activity_type: form.data.activity_type,
 				location: form.data.location,
-				max_participants: form.data.max_participants ? parseInt(form.data.max_participants) : undefined,
-				hours: form.data.hours ? parseInt(form.data.hours) : undefined,
+				max_participants: form.data.max_participants ? parseInt(form.data.max_participants) : null,
+				hours: form.data.hours ? parseInt(form.data.hours) : 1,
 				organizer: form.data.organizer,
-				eligible_faculties: form.data.eligible_faculties,
+				eligible_faculties: eligibleFacultiesArray,
 				academic_year: form.data.academic_year
 			};
 
