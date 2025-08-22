@@ -57,9 +57,13 @@ impl BackgroundTaskManager {
 
 // Task 1: Clean up expired sessions from Redis
 async fn session_cleanup_task(session_state: SessionState) {
-    let mut interval = interval(Duration::from_secs(300)); // Every 5 minutes
+    use crate::services::redis_session::SessionConfig;
+    let config = SessionConfig::default();
+    let interval_seconds = config.cleanup_interval_minutes * 60; // Convert minutes to seconds
+    let mut interval = interval(Duration::from_secs(interval_seconds as u64));
 
-    tracing::info!("Started session cleanup task (every 5 minutes for 2-hour inactivity timeout)");
+    tracing::info!("Started session cleanup task (every {} hours for 24-hour session timeout)", 
+                  config.cleanup_interval_minutes / 60);
 
     loop {
         interval.tick().await;
