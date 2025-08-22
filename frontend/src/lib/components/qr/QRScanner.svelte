@@ -54,6 +54,12 @@
   let error: string | null = null;
   let lastScanTime = 0;
   let scanCooldown = 2000; // 2 seconds between scans
+  let debugInfo = {
+    hasCamera: false,
+    cameraPermission: 'unknown',
+    videoReady: false,
+    streamActive: false
+  };
   
   // Scanner state
   let cameraStatus: 'idle' | 'requesting' | 'active' | 'error' = 'idle';
@@ -72,9 +78,25 @@
     stopCamera();
   }
 
-  onMount(() => {
-    if (browser && isActive && activity_id) {
-      startCamera();
+  onMount(async () => {
+    if (browser) {
+      // Check camera availability
+      debugInfo.hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      
+      // Check camera permission if available
+      if (navigator.permissions) {
+        try {
+          const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          debugInfo.cameraPermission = permissionStatus.state;
+          debugInfo = debugInfo;
+        } catch (e) {
+          console.log('Cannot check camera permission:', e);
+        }
+      }
+      
+      if (isActive && activity_id) {
+        startCamera();
+      }
     }
   });
 
@@ -85,30 +107,111 @@
   async function startCamera() {
     if (!browser || !activity_id) return;
     
+    // Check if getUserMedia is supported
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      error = 'เบราว์เซอร์นี้ไม่รองรับการเข้าถึงกล้อง';
+      cameraStatus = 'error';
+      onStatusChange?.(cameraStatus);
+      onError?.(error);
+      return;
+    }
+    
     cameraStatus = 'requesting';
     error = null;
     onStatusChange?.(cameraStatus);
     
     try {
-      // Request camera permissions
-      stream = await navigator.mediaDevices.getUserMedia({ 
+      // Request camera permissions with mobile-optimized constraints
+      const constraints = {
         video: { 
-          facingMode: 'environment', // Prefer back camera
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
+          facingMode: { ideal: 'environment' }, // Prefer back camera but allow front if needed
+          width: { min: 320, ideal: 1280, max: 1920 },
+          height: { min: 240, ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 60 }
+        },
+        audio: false
+      };
       
-      if (videoElement) {
+      console.log('Requesting camera with constraints:', constraints);
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      if (videoElement && stream) {
+        console.log('Setting video stream');
         videoElement.srcObject = stream;
-        await videoElement.play();
+        
+        // Wait for video metadata to load
+        await new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => reject(new Error('Video load timeout')), 10000);
+          
+          const onLoadedMetadata = () => {
+            clearTimeout(timeoutId);
+            console.log('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+            debugInfo.videoReady = true;
+            debugInfo.streamActive = true;
+            debugInfo = debugInfo; // Trigger reactivity
+            resolve(true);
+          };
+          
+          const onVideoError = (e: Event) => {
+            clearTimeout(timeoutId);
+            console.error('Video error:', e);
+            reject(new Error('Video element error'));
+          };
+          
+          videoElement.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+          videoElement.addEventListener('error', onVideoError, { once: true });
+          
+          // Also listen for canplay event as backup
+          videoElement.addEventListener('canplay', () => {
+            console.log('Video can start playing');
+            debugInfo.videoReady = true;
+            debugInfo = debugInfo;
+          }, { once: true });
+        });
+        
+        // Play video with error handling for mobile
+        console.log('Starting video playback');
+        
+        try {
+          const playPromise = videoElement.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+          }
+        } catch (playError) {
+          console.warn('Video play failed, trying again:', playError);
+          // Sometimes the first play fails, try again after a short delay
+          await new Promise(resolve => setTimeout(resolve, 100));
+          await videoElement.play();
+        }
+        
         cameraStatus = 'active';
         isScanning = true;
-        startQRDetection();
+        debugInfo.streamActive = true;
+        debugInfo = debugInfo;
+        console.log('Camera started successfully');
+        
+        // Start QR detection after a short delay to ensure video is rendering
+        setTimeout(() => {
+          startQRDetection();
+        }, 500);
       }
     } catch (err) {
       console.error('Failed to start camera:', err);
-      error = 'ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตการใช้งานกล้อง';
+      
+      // Provide more specific error messages
+      const error_obj = err as Error & { name?: string };
+      if (error_obj.name === 'NotAllowedError') {
+        error = 'กรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์';
+      } else if (error_obj.name === 'NotFoundError') {
+        error = 'ไม่พบกล้องในอุปกรณ์';
+      } else if (error_obj.name === 'NotReadableError') {
+        error = 'กล้องถูกใช้งานโดยแอปพลิเคชันอื่น';
+      } else if (error_obj.name === 'OverconstrainedError') {
+        error = 'กล้องไม่รองรับการตั้งค่าที่ต้องการ';
+      } else {
+        error = `ไม่สามารถเข้าถึงกล้องได้: ${error_obj.message || 'ข้อผิดพลาดไม่ทราบสาเหตุ'}`;
+      }
+      
       cameraStatus = 'error';
       onError?.(error);
     }
@@ -117,12 +220,18 @@
   }
 
   function stopCamera() {
+    console.log('Stopping camera');
+    
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        console.log('Stopping track:', track.label);
+        track.stop();
+      });
       stream = null;
     }
     
     if (videoElement) {
+      videoElement.pause();
       videoElement.srcObject = null;
     }
     
@@ -149,6 +258,11 @@
 
   async function detectQRCode() {
     if (!videoElement || isProcessingScan) return;
+    
+    // Check if video is ready
+    if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+      return; // Video not ready yet
+    }
 
     // Create canvas to capture video frame
     const canvas = document.createElement('canvas');
@@ -159,16 +273,17 @@
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
     
-    // Draw current video frame to canvas
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+    // Handle mirrored video (since we flipped it with CSS)
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
     
     // Get image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
-    // Use jsQR library for QR code detection (needs to be installed)
+    // Use jsQR library for QR code detection
     try {
-      // This would use a QR code detection library
-      // For now, we'll simulate QR detection with manual input
       await handleQRDetection(imageData);
     } catch (err) {
       console.error('QR Code detection error:', err);
@@ -363,10 +478,18 @@
           {#if cameraStatus === 'active'}
             <video
               bind:this={videoElement}
-              class="w-full h-full object-cover"
+              class="w-full h-full object-cover bg-black"
               playsinline
               muted
               autoplay
+              data-webkit-playsinline="true"
+              controls={false}
+              preload="auto"
+              style="transform: scaleX(-1); display: block;"
+              onloadstart={() => console.log('Video load start')}
+              onloadeddata={() => console.log('Video data loaded')}
+              oncanplay={() => console.log('Video can play')}
+              onplaying={() => console.log('Video playing')}
             ></video>
             
             <!-- Scanning overlay -->
@@ -452,6 +575,21 @@
         {:else}
           <p>วาง QR Code ของนักศึกษาให้อยู่ในกรอบเพื่อสแกน</p>
           <p>ระบบจะประมวลผลอัตโนมัติเมื่อตรวจพบ QR Code</p>
+        {/if}
+        
+        <!-- Debug Information (development only) -->
+        {#if import.meta.env.DEV}
+          <div class="mt-4 p-2 bg-muted/50 rounded text-left">
+            <p class="font-semibold text-xs mb-1">Debug Info:</p>
+            <div class="text-xs space-y-1">
+              <p>Camera Status: {cameraStatus}</p>
+              <p>Video Ready: {debugInfo.videoReady}</p>
+              <p>Stream Active: {debugInfo.streamActive}</p>
+              {#if videoElement}
+                <p>Video Size: {videoElement.videoWidth}x{videoElement.videoHeight}</p>
+              {/if}
+            </div>
+          </div>
         {/if}
       </div>
     </CardContent>
