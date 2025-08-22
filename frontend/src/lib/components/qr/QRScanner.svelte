@@ -225,8 +225,27 @@
             clientHeight: videoElement.clientHeight,
             readyState: videoElement.readyState,
             paused: videoElement.paused,
-            srcObject: !!videoElement.srcObject
+            srcObject: !!videoElement.srcObject,
+            parentElement: !!videoElement.parentElement,
+            isConnected: videoElement.isConnected,
+            style: videoElement.style.cssText
           });
+          
+          // Try to force repaint
+          const parent = videoElement.parentElement;
+          if (parent) {
+            console.log('Parent element info:', {
+              offsetWidth: parent.offsetWidth,
+              offsetHeight: parent.offsetHeight,
+              className: parent.className,
+              computedStyle: window.getComputedStyle(parent).cssText
+            });
+            
+            // Force repaint by temporarily hiding and showing
+            parent.style.display = 'none';
+            parent.offsetHeight; // Force reflow
+            parent.style.display = '';
+          }
         }, 1000);
         
         cameraStatus = 'active';
@@ -519,7 +538,7 @@
     <CardContent class="space-y-4">
       <!-- Camera Preview -->
       <div class="relative">
-        <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed relative">
+        <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed relative" id="video-container">
           {#if cameraStatus === 'active'}
             <!-- svelte-ignore a11y-media-has-caption -->
             <video
@@ -530,7 +549,7 @@
               autoplay={true}
               controls={false}
               preload="auto"
-              style="transform: scaleX(-1); width: 100% !important; height: 100% !important; object-fit: cover !important; background-color: black !important;"
+              style="transform: scaleX(-1); width: 100% !important; height: 100% !important; object-fit: cover !important; background-color: black !important; z-index: 10;"
               onloadstart={() => console.log('Video load start')}
               onloadeddata={() => console.log('Video data loaded')}
               onloadedmetadata={() => {
@@ -538,12 +557,14 @@
                 // Force video to be visible after metadata loads
                 videoElement.style.opacity = '1';
                 videoElement.style.visibility = 'visible';
+                videoElement.style.display = 'block';
               }}
               oncanplay={() => {
                 console.log('Video can play');
                 // Ensure video is visible when it can play
                 videoElement.style.opacity = '1';
                 videoElement.style.visibility = 'visible';
+                videoElement.style.display = 'block';
               }}
               oncanplaythrough={() => console.log('Video can play through')}
               onplaying={() => {
@@ -551,9 +572,19 @@
                 // Final check to make sure video is visible
                 videoElement.style.opacity = '1';
                 videoElement.style.visibility = 'visible';
+                videoElement.style.display = 'block';
               }}
               onerror={(e) => console.error('Video element error:', e)}
             ></video>
+            
+            <!-- Fallback debug overlay -->
+            {#if debugInfo.streamActive && videoElement?.videoWidth === 0}
+              <div class="absolute inset-0 bg-red-500/20 flex items-center justify-center text-white text-sm z-20">
+                กล้องเชื่อมต่อแล้ว แต่ไม่มีภาพ
+                <br>
+                กรุณาตรวจสอบ Console
+              </div>
+            {/if}
             
             <!-- Scanning overlay -->
             <div class="absolute inset-0 pointer-events-none">
