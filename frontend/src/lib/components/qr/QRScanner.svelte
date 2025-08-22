@@ -146,6 +146,8 @@
           const onLoadedMetadata = () => {
             clearTimeout(timeoutId);
             console.log('Video metadata loaded:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+            console.log('Video element dimensions:', videoElement.offsetWidth, 'x', videoElement.offsetHeight);
+            console.log('Video element styles:', window.getComputedStyle(videoElement));
             debugInfo.videoReady = true;
             debugInfo.streamActive = true;
             debugInfo = debugInfo; // Trigger reactivity
@@ -183,6 +185,29 @@
           await new Promise(resolve => setTimeout(resolve, 100));
           await videoElement.play();
         }
+
+        // Force video visibility and correct sizing
+        videoElement.style.visibility = 'visible';
+        videoElement.style.opacity = '1';
+        videoElement.style.display = 'block';
+        
+        // Force a reflow to ensure proper sizing
+        videoElement.offsetHeight;
+        
+        // Additional debugging for video display
+        setTimeout(() => {
+          console.log('Video final check:', {
+            videoWidth: videoElement.videoWidth,
+            videoHeight: videoElement.videoHeight,
+            offsetWidth: videoElement.offsetWidth,
+            offsetHeight: videoElement.offsetHeight,
+            clientWidth: videoElement.clientWidth,
+            clientHeight: videoElement.clientHeight,
+            readyState: videoElement.readyState,
+            paused: videoElement.paused,
+            srcObject: !!videoElement.srcObject
+          });
+        }, 1000);
         
         cameraStatus = 'active';
         isScanning = true;
@@ -474,22 +499,25 @@
     <CardContent class="space-y-4">
       <!-- Camera Preview -->
       <div class="relative">
-        <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed flex items-center justify-center">
+        <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed relative">
           {#if cameraStatus === 'active'}
             <video
               bind:this={videoElement}
-              class="w-full h-full object-cover bg-black"
+              class="absolute inset-0 w-full h-full object-cover bg-black"
               playsinline
+              webkit-playsinline
               muted
               autoplay
-              data-webkit-playsinline="true"
               controls={false}
               preload="auto"
-              style="transform: scaleX(-1); display: block;"
+              style="transform: scaleX(-1); width: 100% !important; height: 100% !important;"
               onloadstart={() => console.log('Video load start')}
               onloadeddata={() => console.log('Video data loaded')}
+              onloadedmetadata={() => console.log('Video metadata loaded')}
               oncanplay={() => console.log('Video can play')}
+              oncanplaythrough={() => console.log('Video can play through')}
               onplaying={() => console.log('Video playing')}
+              onerror={(e) => console.error('Video element error:', e)}
             ></video>
             
             <!-- Scanning overlay -->
@@ -510,27 +538,33 @@
               </div>
             </div>
           {:else if cameraStatus === 'requesting'}
-            <div class="text-center space-y-4">
-              <Skeleton class="w-16 h-16 rounded-full mx-auto" />
-              <div class="space-y-2">
-                <Skeleton class="h-4 w-32 mx-auto" />
-                <Skeleton class="h-3 w-24 mx-auto" />
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="text-center space-y-4">
+                <Skeleton class="w-16 h-16 rounded-full mx-auto" />
+                <div class="space-y-2">
+                  <Skeleton class="h-4 w-32 mx-auto" />
+                  <Skeleton class="h-3 w-24 mx-auto" />
+                </div>
               </div>
             </div>
           {:else if cameraStatus === 'error'}
-            <div class="text-center space-y-3 text-muted-foreground">
-              <IconCameraOff class="size-12 mx-auto text-destructive" />
-              <div>
-                <p class="font-medium text-destructive">ไม่สามารถเข้าถึงกล้องได้</p>
-                <p class="text-sm">กรุณาอนุญาตการใช้งานกล้องและรีเฟรชหน้า</p>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="text-center space-y-3 text-muted-foreground">
+                <IconCameraOff class="size-12 mx-auto text-destructive" />
+                <div>
+                  <p class="font-medium text-destructive">ไม่สามารถเข้าถึงกล้องได้</p>
+                  <p class="text-sm">กรุณาอนุญาตการใช้งานกล้องและรีเฟรชหน้า</p>
+                </div>
               </div>
             </div>
           {:else}
-            <div class="text-center space-y-3 text-muted-foreground">
-              <IconCamera class="size-12 mx-auto" />
-              <div>
-                <p class="font-medium">เริ่มต้นการสแกน</p>
-                <p class="text-sm">กดปุ่มเพื่อเปิดกล้อง</p>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="text-center space-y-3 text-muted-foreground">
+                <IconCamera class="size-12 mx-auto" />
+                <div>
+                  <p class="font-medium">เริ่มต้นการสแกน</p>
+                  <p class="text-sm">กดปุ่มเพื่อเปิดกล้อง</p>
+                </div>
               </div>
             </div>
           {/if}
