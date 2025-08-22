@@ -159,7 +159,13 @@
       };
       
       console.log('Requesting camera with constraints:', constraints);
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log('Camera stream obtained successfully:', stream);
+      } catch (getUserMediaError) {
+        console.error('getUserMedia failed:', getUserMediaError);
+        throw getUserMediaError;
+      }
       
       if (videoElement && stream) {
         console.log('Setting video stream');
@@ -624,15 +630,14 @@
               onerror={(e) => console.error('Video element error:', e)}
             ></video>
             
-            <!-- Debug overlay -->
-            {#if import.meta.env.DEV}
-              <div class="absolute top-2 left-2 bg-black/70 text-white text-xs p-2 rounded z-30">
-                Status: {cameraStatus}<br>
-                Stream: {debugInfo.streamActive ? 'Yes' : 'No'}<br>
-                Video: {videoElement?.videoWidth || 0}x{videoElement?.videoHeight || 0}<br>
-                Element: {videoElement?.offsetWidth || 0}x{videoElement?.offsetHeight || 0}
-              </div>
-            {/if}
+            <!-- Debug overlay - show in production for troubleshooting -->
+            <div class="absolute top-2 left-2 bg-black/70 text-white text-xs p-2 rounded z-30">
+              Status: {cameraStatus}<br>
+              Stream: {debugInfo.streamActive ? 'Yes' : 'No'}<br>
+              Video: {videoElement?.videoWidth || 0}x{videoElement?.videoHeight || 0}<br>
+              Element: {videoElement?.offsetWidth || 0}x{videoElement?.offsetHeight || 0}<br>
+              Ready: {debugInfo.videoReady ? 'Yes' : 'No'}
+            </div>
             
             <!-- Fallback debug overlay -->
             {#if debugInfo.streamActive && videoElement?.videoWidth === 0}
