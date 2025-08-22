@@ -424,11 +424,8 @@
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
     
-    // Handle mirrored video (since we flipped it with CSS)
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.drawImage(videoElement, -canvas.width, 0, canvas.width, canvas.height);
-    ctx.restore();
+    // Draw video frame normally (no flipping)
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
     
     // Get image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -636,7 +633,7 @@
               autoplay={true}
               controls={false}
               preload="auto"
-              style="transform: scaleX(-1); width: 100% !important; height: 100% !important; object-fit: cover !important; background-color: black !important; z-index: 10;"
+              style="width: 100% !important; height: 100% !important; object-fit: cover !important; background-color: black !important; z-index: 10;"
               onloadstart={() => console.log('Video load start')}
               onloadeddata={() => console.log('Video data loaded')}
               onloadedmetadata={() => {
