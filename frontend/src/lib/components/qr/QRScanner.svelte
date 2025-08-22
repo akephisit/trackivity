@@ -8,7 +8,6 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Alert, AlertDescription } from '$lib/components/ui/alert';
-  import { Skeleton } from '$lib/components/ui/skeleton';
   import { Separator } from '$lib/components/ui/separator';
   
   import { 
@@ -671,14 +670,16 @@
               onerror={(e) => console.error('Video element error:', e)}
             ></video>
             
-            <!-- Debug overlay - show in production for troubleshooting -->
-            <div class="absolute top-2 left-2 bg-black/70 text-white text-xs p-2 rounded z-30">
-              Status: {cameraStatus}<br>
-              Stream: {debugInfo.streamActive ? 'Yes' : 'No'}<br>
-              Video: {videoElement?.videoWidth || 0}x{videoElement?.videoHeight || 0}<br>
-              Element: {videoElement?.offsetWidth || 0}x{videoElement?.offsetHeight || 0}<br>
-              Ready: {debugInfo.videoReady ? 'Yes' : 'No'}
-            </div>
+            <!-- Debug overlay -->
+            {#if import.meta.env.DEV}
+              <div class="absolute top-2 left-2 bg-black/70 text-white text-xs p-2 rounded z-30">
+                Status: {cameraStatus}<br>
+                Stream: {debugInfo.streamActive ? 'Yes' : 'No'}<br>
+                Video: {videoElement?.videoWidth || 0}x{videoElement?.videoHeight || 0}<br>
+                Element: {videoElement?.offsetWidth || 0}x{videoElement?.offsetHeight || 0}<br>
+                Ready: {debugInfo.videoReady ? 'Yes' : 'No'}
+              </div>
+            {/if}
             
             <!-- Fallback debug overlay -->
             {#if debugInfo.streamActive && videoElement?.videoWidth === 0}
