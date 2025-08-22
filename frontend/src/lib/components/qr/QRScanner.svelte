@@ -167,6 +167,29 @@
         throw getUserMediaError;
       }
       
+      console.log('Checking video element and stream:', { 
+        hasVideoElement: !!videoElement, 
+        hasStream: !!stream,
+        videoElementTagName: videoElement?.tagName,
+        streamId: stream?.id
+      });
+      
+      if (!videoElement) {
+        console.error('Video element not available, waiting for DOM...');
+        // Wait for video element to be available
+        await new Promise(resolve => {
+          const checkElement = () => {
+            if (videoElement) {
+              console.log('Video element now available');
+              resolve(true);
+            } else {
+              setTimeout(checkElement, 100);
+            }
+          };
+          checkElement();
+        });
+      }
+      
       if (videoElement && stream) {
         console.log('Setting video stream');
         videoElement.srcObject = stream;
