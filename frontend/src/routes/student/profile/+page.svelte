@@ -92,14 +92,13 @@
 		try {
 			// TODO: Implement API endpoint for updating profile
 			// const response = await apiClient.updateProfile(formData);
-			
+
 			// Mock success for now
 			toast.success('บันทึกข้อมูลส่วนตัวสำเร็จ');
 			editing = false;
-			
+
 			// Refresh user data
 			await auth.refreshUser();
-			
 		} catch (err) {
 			console.error('Failed to update profile:', err);
 			error = 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองอีกครั้ง';
@@ -127,19 +126,17 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 </svelte:head>
 
-<div class="space-y-6 max-w-4xl">
+<div class="max-w-4xl space-y-6">
 	<!-- Header -->
-	<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+	<div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
 		<div>
-			<h1 class="text-2xl lg:text-3xl font-bold">โปรไฟล์ของฉัน</h1>
-			<p class="text-muted-foreground">
-				จัดการข้อมูลส่วนตัวและการตั้งค่าบัญชี
-			</p>
+			<h1 class="text-2xl font-bold lg:text-3xl">โปรไฟล์ของฉัน</h1>
+			<p class="text-muted-foreground">จัดการข้อมูลส่วนตัวและการตั้งค่าบัญชี</p>
 		</div>
-		
+
 		{#if !editing}
 			<Button onclick={startEdit} variant="outline" class="w-full sm:w-auto">
-				<IconEdit class="size-4 mr-2" />
+				<IconEdit class="mr-2 size-4" />
 				แก้ไขข้อมูล
 			</Button>
 		{/if}
@@ -160,22 +157,14 @@
 					{#if editing}
 						<!-- Edit Mode -->
 						<div class="space-y-4">
-							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+							<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 								<div class="space-y-2">
 									<Label for="first_name">ชื่อ</Label>
-									<Input
-										id="first_name"
-										bind:value={formData.first_name}
-										placeholder="กรอกชื่อ"
-									/>
+									<Input id="first_name" bind:value={formData.first_name} placeholder="กรอกชื่อ" />
 								</div>
 								<div class="space-y-2">
 									<Label for="last_name">นามสกุล</Label>
-									<Input
-										id="last_name"
-										bind:value={formData.last_name}
-										placeholder="กรอกนามสกุล"
-									/>
+									<Input id="last_name" bind:value={formData.last_name} placeholder="กรอกนามสกุล" />
 								</div>
 							</div>
 
@@ -216,20 +205,16 @@
 							{/if}
 
 							<div class="flex gap-2">
-								<Button 
-									onclick={saveProfile} 
-									disabled={loading || !isFormValid()}
-									class="flex-1"
-								>
+								<Button onclick={saveProfile} disabled={loading || !isFormValid()} class="flex-1">
 									{#if loading}
 										กำลังบันทึก...
 									{:else}
-										<IconCheck class="size-4 mr-2" />
+										<IconCheck class="mr-2 size-4" />
 										บันทึก
 									{/if}
 								</Button>
 								<Button variant="outline" onclick={cancelEdit} class="flex-1">
-									<IconX class="size-4 mr-2" />
+									<IconX class="mr-2 size-4" />
 									ยกเลิก
 								</Button>
 							</div>
@@ -237,19 +222,19 @@
 					{:else}
 						<!-- View Mode -->
 						<div class="space-y-4">
-							<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+							<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 								<div>
-									<span class="text-sm text-muted-foreground">ชื่อ</span>
+									<span class="text-muted-foreground text-sm">ชื่อ</span>
 									<p class="font-medium">{$currentUser.first_name}</p>
 								</div>
 								<div>
-									<span class="text-sm text-muted-foreground">นามสกุล</span>
+									<span class="text-muted-foreground text-sm">นามสกุล</span>
 									<p class="font-medium">{$currentUser.last_name}</p>
 								</div>
 							</div>
 
 							<div>
-								<span class="text-sm text-muted-foreground flex items-center gap-1 mb-1">
+								<span class="text-muted-foreground mb-1 flex items-center gap-1 text-sm">
 									<IconMail class="size-3" />
 									อีเมล
 								</span>
@@ -257,7 +242,7 @@
 							</div>
 
 							<div>
-								<span class="text-sm text-muted-foreground flex items-center gap-1 mb-1">
+								<span class="text-muted-foreground mb-1 flex items-center gap-1 text-sm">
 									<IconPhone class="size-3" />
 									เบอร์โทรศัพท์
 								</span>
@@ -265,7 +250,7 @@
 							</div>
 
 							<div>
-								<span class="text-sm text-muted-foreground flex items-center gap-1 mb-1">
+								<span class="text-muted-foreground mb-1 flex items-center gap-1 text-sm">
 									<IconMapPin class="size-3" />
 									ที่อยู่
 								</span>
@@ -286,20 +271,20 @@
 				</CardHeader>
 				<CardContent class="space-y-4">
 					<div>
-						<span class="text-sm text-muted-foreground">รหัสนักศึกษา</span>
-						<p class="font-mono font-medium text-lg">{$currentUser.student_id}</p>
+						<span class="text-muted-foreground text-sm">รหัสนักศึกษา</span>
+						<p class="text-lg font-medium">{$currentUser.student_id}</p>
 					</div>
 
 					{#if $currentUser.faculty_name}
 						<div>
-							<span class="text-sm text-muted-foreground">คณะ</span>
+							<span class="text-muted-foreground text-sm">คณะ</span>
 							<p class="font-medium">{$currentUser.faculty_name}</p>
 						</div>
 					{/if}
 
 					{#if $currentUser.department_name}
 						<div>
-							<span class="text-sm text-muted-foreground">ภาควิชา</span>
+							<span class="text-muted-foreground text-sm">ภาควิชา</span>
 							<p class="font-medium">{$currentUser.department_name}</p>
 						</div>
 					{/if}
@@ -307,7 +292,7 @@
 					<Separator />
 
 					<div>
-						<span class="text-sm text-muted-foreground flex items-center gap-1 mb-1">
+						<span class="text-muted-foreground mb-1 flex items-center gap-1 text-sm">
 							<IconCalendar class="size-3" />
 							วันที่สมัครสมาชิก
 						</span>
@@ -316,7 +301,7 @@
 
 					{#if $currentUser.updated_at}
 						<div>
-							<span class="text-sm text-muted-foreground">อัพเดตล่าสุด</span>
+							<span class="text-muted-foreground text-sm">อัพเดตล่าสุด</span>
 							<p class="text-sm">{formatDate($currentUser.updated_at)}</p>
 						</div>
 					{/if}
@@ -333,33 +318,27 @@
 				</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-					<div class="text-center p-4 border rounded-lg">
-						<Badge variant="default" class="mb-2">
-							ใช้งานปกติ
-						</Badge>
-						<p class="text-sm text-muted-foreground">สถานะบัญชี</p>
+				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					<div class="rounded-lg border p-4 text-center">
+						<Badge variant="default" class="mb-2">ใช้งานปกติ</Badge>
+						<p class="text-muted-foreground text-sm">สถานะบัญชี</p>
 					</div>
 
-					<div class="text-center p-4 border rounded-lg">
-						<Badge variant="secondary" class="mb-2">
-							นักศึกษา
-						</Badge>
-						<p class="text-sm text-muted-foreground">ระดับผู้ใช้</p>
+					<div class="rounded-lg border p-4 text-center">
+						<Badge variant="secondary" class="mb-2">นักศึกษา</Badge>
+						<p class="text-muted-foreground text-sm">ระดับผู้ใช้</p>
 					</div>
 
-					<div class="text-center p-4 border rounded-lg">
+					<div class="rounded-lg border p-4 text-center">
 						<Badge variant="outline" class="mb-2">
 							{$currentUser.permissions?.length || 0}
 						</Badge>
-						<p class="text-sm text-muted-foreground">สิทธิ์การใช้งาน</p>
+						<p class="text-muted-foreground text-sm">สิทธิ์การใช้งาน</p>
 					</div>
 
-					<div class="text-center p-4 border rounded-lg">
-						<Badge variant="outline" class="mb-2">
-							เข้ารหัสแล้ว
-						</Badge>
-						<p class="text-sm text-muted-foreground">ความปลอดภัย</p>
+					<div class="rounded-lg border p-4 text-center">
+						<Badge variant="outline" class="mb-2">เข้ารหัสแล้ว</Badge>
+						<p class="text-muted-foreground text-sm">ความปลอดภัย</p>
 					</div>
 				</div>
 			</CardContent>
@@ -369,10 +348,10 @@
 		<Card class="border-muted bg-muted/30">
 			<CardContent class="p-4">
 				<div class="flex items-start gap-3">
-					<IconShield class="size-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+					<IconShield class="text-muted-foreground mt-0.5 size-5 flex-shrink-0" />
 					<div class="space-y-1">
-						<h3 class="font-medium text-sm">ข้อมูลส่วนบุคคล</h3>
-						<p class="text-xs text-muted-foreground">
+						<h3 class="text-sm font-medium">ข้อมูลส่วนบุคคล</h3>
+						<p class="text-muted-foreground text-xs">
 							ข้อมูลส่วนบุคคลของคุณได้รับการป้องกันตามนีสยประปิสย์ของมหาวิทยาลัย
 							เราจะไม่เปิดเผยข้อมูลของคุณให้บุคคลที่สามโดยไม่ได้รับความยินยอมจากคุณ
 						</p>
