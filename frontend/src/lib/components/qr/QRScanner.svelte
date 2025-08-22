@@ -186,6 +186,12 @@
           const checkElement = () => {
             // Try to find video element in DOM
             const domVideoElement = document.querySelector('#video-container video');
+            console.log('Checking for video element in DOM:', {
+              domVideoElement: !!domVideoElement,
+              bindVideoElement: !!videoElement,
+              domElementTag: domVideoElement?.tagName
+            });
+            
             if (domVideoElement) {
               console.log('Video element found in DOM, binding...');
               videoElement = domVideoElement as HTMLVideoElement;
@@ -194,6 +200,7 @@
               console.log('Video element now available via binding');
               resolve(true);
             } else {
+              console.log('Video element still not found, retrying...');
               setTimeout(checkElement, 100);
             }
           };
@@ -620,7 +627,7 @@
       <!-- Camera Preview -->
       <div class="relative">
         <div class="aspect-video bg-muted rounded-lg overflow-hidden border-2 border-dashed relative" id="video-container">
-          {#if cameraStatus === 'active'}
+          {#if cameraStatus === 'active' || cameraStatus === 'requesting'}
             <!-- svelte-ignore a11y_media_has_caption -->
             <video
               bind:this={videoElement}
@@ -699,16 +706,6 @@
                 วางกรอบให้อยู่บน QR Code
               </div>
             </div>
-          {:else if cameraStatus === 'requesting'}
-            <div class="absolute inset-0 flex items-center justify-center">
-              <div class="text-center space-y-4">
-                <Skeleton class="w-16 h-16 rounded-full mx-auto" />
-                <div class="space-y-2">
-                  <Skeleton class="h-4 w-32 mx-auto" />
-                  <Skeleton class="h-3 w-24 mx-auto" />
-                </div>
-              </div>
-            </div>
           {:else if cameraStatus === 'error'}
             <div class="absolute inset-0 flex items-center justify-center">
               <div class="text-center space-y-3 text-muted-foreground">
@@ -748,7 +745,7 @@
             <IconCamera class="size-4 mr-2" />
             เริ่มสแกน
           </Button>
-        {:else if cameraStatus === 'active'}
+        {:else if cameraStatus === 'active' || cameraStatus === 'requesting'}
           <Button onclick={stopCamera} variant="outline">
             <IconCameraOff class="size-4 mr-2" />
             หยุดสแกน
