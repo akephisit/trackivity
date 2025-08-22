@@ -505,7 +505,7 @@
               bind:this={videoElement}
               class="absolute inset-0 w-full h-full object-cover bg-black"
               playsinline
-              webkit-playsinline
+              data-webkit-playsinline="true"
               muted
               autoplay
               controls={false}
