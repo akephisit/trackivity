@@ -84,7 +84,12 @@
   $effect(() => {
     if (browser && isActive && activity_id && cameraStatus === 'idle') {
       console.log('Effect: Starting camera due to state change');
-      startCamera();
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (cameraStatus === 'idle') { // Check again in case status changed
+          startCamera();
+        }
+      }, 100);
     } else if (browser && !isActive && cameraStatus !== 'idle') {
       console.log('Effect: Stopping camera due to state change');
       stopCamera();
@@ -176,11 +181,17 @@
       
       if (!videoElement) {
         console.error('Video element not available, waiting for DOM...');
-        // Wait for video element to be available
+        // Wait for video element to be available in DOM
         await new Promise(resolve => {
           const checkElement = () => {
-            if (videoElement) {
-              console.log('Video element now available');
+            // Try to find video element in DOM
+            const domVideoElement = document.querySelector('#video-container video');
+            if (domVideoElement) {
+              console.log('Video element found in DOM, binding...');
+              videoElement = domVideoElement as HTMLVideoElement;
+              resolve(true);
+            } else if (videoElement) {
+              console.log('Video element now available via binding');
               resolve(true);
             } else {
               setTimeout(checkElement, 100);
