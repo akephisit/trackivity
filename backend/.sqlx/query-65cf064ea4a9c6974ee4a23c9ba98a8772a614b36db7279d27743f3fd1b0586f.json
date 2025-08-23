@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            s.id, s.user_id, s.subscription_type as \"subscription_type: SubscriptionType\", s.expires_at, s.is_active,\n            u.first_name, u.last_name, u.email, u.student_id,\n            d.name as department_name, f.name as faculty_name\n        FROM subscriptions s\n        JOIN users u ON s.user_id = u.id\n        LEFT JOIN departments d ON u.department_id = d.id\n        LEFT JOIN faculties f ON d.faculty_id = f.id\n        WHERE s.is_active = true \n        AND s.expires_at > NOW() \n        AND s.expires_at <= NOW() + INTERVAL '7 days'\n        ORDER BY s.expires_at ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "subscription_type: SubscriptionType",
+        "type_info": {
+          "Custom": {
+            "name": "subscription_type",
+            "kind": {
+              "Enum": [
+                "basic",
+                "premium",
+                "enterprise"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "student_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "department_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "faculty_name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "65cf064ea4a9c6974ee4a23c9ba98a8772a614b36db7279d27743f3fd1b0586f"
+}

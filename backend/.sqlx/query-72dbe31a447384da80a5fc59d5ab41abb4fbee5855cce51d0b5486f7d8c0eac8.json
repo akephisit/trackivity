@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            'activity_created' as activity_type,\n            CONCAT('Activity \"', title, '\" was created') as description,\n            created_at as timestamp,\n            created_by as user_id,\n            faculty_id,\n            json_build_object('activity_id', id, 'status', status) as metadata\n        FROM activities\n        WHERE created_at >= NOW() - make_interval(days => $1)\n        ORDER BY created_at DESC\n        LIMIT 50\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "activity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "faculty_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "metadata",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "72dbe31a447384da80a5fc59d5ab41abb4fbee5855cce51d0b5486f7d8c0eac8"
+}

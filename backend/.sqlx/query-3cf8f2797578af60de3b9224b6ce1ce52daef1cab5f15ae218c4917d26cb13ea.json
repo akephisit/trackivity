@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            COUNT(*) as total_notifications,\n            COUNT(*) FILTER (WHERE status = 'pending') as pending_notifications,\n            COUNT(*) FILTER (WHERE status = 'failed') as failed_notifications,\n            COUNT(*) FILTER (WHERE notification_type = 'subscription_expiry') as subscription_alerts,\n            COUNT(*) FILTER (WHERE days_until_expiry <= 1 AND status = 'pending') as critical_alerts\n        FROM subscription_notifications\n        WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_notifications",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "pending_notifications",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "failed_notifications",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "subscription_alerts",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "critical_alerts",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3cf8f2797578af60de3b9224b6ce1ce52daef1cab5f15ae218c4917d26cb13ea"
+}

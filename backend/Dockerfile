@@ -41,36 +41,9 @@ COPY --from=deps /usr/local/cargo /usr/local/cargo
 # Copy full source (brings sqlx-data.json if exists)
 COPY . .
 
-# Build args for SQLx mode and online DB
-ARG SQLX_OFFLINE=auto
-ARG DATABASE_URL
-
-# Build with smart fallback: if offline cache exists/use requested, build offline.
-# Otherwise, connect to DB, run migrations, prepare cache, then build offline for speed/reliability.
-RUN set -eu; \
-    mode="${SQLX_OFFLINE}"; \
-    if [ "$mode" = "true" ] || { [ "$mode" = "auto" ] && [ -f sqlx-data.json ]; }; then \
-      export SQLX_OFFLINE=true; \
-      echo "Building with SQLX_OFFLINE (using existing sqlx-data.json)"; \
-      cargo build --release; \
-    else \
-      if [ -z "${DATABASE_URL:-}" ]; then \
-        echo "ERROR: No sqlx-data.json and DATABASE_URL not provided. Set --build-arg DATABASE_URL=... or provide sqlx-data.json." >&2; \
-        exit 1; \
-      fi; \
-      echo "Preparing SQLx offline cache using online DB..."; \
-      export DATABASE_URL="$DATABASE_URL"; \
-      # Install sqlx-cli (cached by cargo-chef layers as much as possible)
-      cargo install sqlx-cli --locked --no-default-features --features rustls,postgres; \
-      # Ensure database exists and apply migrations so schema is available
-      sqlx database create || true; \
-      sqlx migrate run --source ./migrations; \
-      # Prepare offline cache for compile-time verification
-      cargo sqlx prepare -- --bin trackivity; \
-      export SQLX_OFFLINE=true; \
-      echo "Offline cache prepared. Building with SQLX_OFFLINE."; \
-      cargo build --release; \
-    fi
+# Build with SQLx offline cache (much faster)
+ENV SQLX_OFFLINE=true
+RUN cargo build --release
 
 ###############################################
 # Runtime image

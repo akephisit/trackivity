@@ -49,5 +49,5 @@ docker-compose.override.yml
 tmp/
 temp/
 
-# SQLx
-.sqlx/
+# SQLx (commented out to include offline cache for faster builds)
+# .sqlx/

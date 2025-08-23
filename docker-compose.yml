@@ -4,9 +4,9 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: trackivity
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      # Don't create database - let backend handle it
     ports:
       - "5432:5432"
     volumes:

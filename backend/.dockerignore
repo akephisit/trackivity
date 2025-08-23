@@ -6,4 +6,7 @@ backend.log
 server.log
 docs
 **/*.rs.bk
+Dockerfile
+.dockerignore
+*.md
 

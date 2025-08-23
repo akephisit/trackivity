@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            COUNT(*) FILTER (WHERE expires_at <= NOW() + INTERVAL '7 days' AND expires_at > NOW()) as expiring_7d,\n            COUNT(*) FILTER (WHERE expires_at <= NOW() + INTERVAL '1 day' AND expires_at > NOW()) as expiring_1d,\n            COUNT(*) FILTER (WHERE expires_at <= NOW()) as expired_today,\n            COUNT(*) FILTER (WHERE is_active = true AND expires_at > NOW()) as total_active,\n            COUNT(*) FILTER (WHERE expires_at <= NOW() + INTERVAL '1 day' AND expires_at > NOW()) as critical_alerts\n        FROM subscriptions\n        WHERE is_active = true\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expiring_7d",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "expiring_1d",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "expired_today",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "total_active",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "critical_alerts",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "662fa12d2f0b0fa30fd9fe0e9edbf28ebc41f76597bcf15ab4fa0c1775b52851"
+}

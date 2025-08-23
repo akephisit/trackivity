@@ -58,6 +58,56 @@ impl Database {
         Ok(result > 0)
     }
 
+    /// Create database if it doesn't exist, then run migrations
+    pub async fn create_and_migrate(&self, database_url: &str) -> Result<()> {
+        // Extract database name from URL for creation
+        let db_name = Self::extract_database_name(database_url)?;
+        
+        // Connect to default postgres database to create our database
+        let base_url = database_url.rsplit_once('/').map(|(base, _)| base).unwrap_or(database_url);
+        let postgres_url = format!("{}/postgres", base_url);
+        
+        match PgPool::connect(&postgres_url).await {
+            Ok(admin_pool) => {
+                // Check if database exists
+                let db_exists = sqlx::query_scalar::<_, i64>(
+                    "SELECT COUNT(*) FROM pg_database WHERE datname = $1"
+                )
+                .bind(&db_name)
+                .fetch_one(&admin_pool)
+                .await?;
+
+                if db_exists == 0 {
+                    tracing::info!("Creating database '{}'...", db_name);
+                    let create_db_query = format!("CREATE DATABASE \"{}\"", db_name);
+                    sqlx::query(&create_db_query)
+                        .execute(&admin_pool)
+                        .await?;
+                    tracing::info!("Database '{}' created successfully", db_name);
+                } else {
+                    tracing::info!("Database '{}' already exists", db_name);
+                }
+                admin_pool.close().await;
+            }
+            Err(e) => {
+                tracing::warn!("Could not connect to postgres database for creation: {}. Assuming database exists.", e);
+            }
+        }
+
+        // Now run migrations on our database
+        self.migrate_if_needed().await
+    }
+
+    /// Extract database name from connection URL
+    fn extract_database_name(database_url: &str) -> Result<String> {
+        let db_name = database_url
+            .split('/')
+            .last()
+            .and_then(|s| s.split('?').next())
+            .unwrap_or("trackivity");
+        Ok(db_name.to_string())
+    }
+
     /// Run migrations only if not already migrated
     pub async fn migrate_if_needed(&self) -> Result<()> {
         if !self.is_migrated().await? {

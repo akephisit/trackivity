@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                COUNT(*) FILTER (WHERE DATE(created_at) = CURRENT_DATE) as emails_sent_today,\n                COUNT(*) FILTER (WHERE status = 'pending') as emails_pending,\n                COUNT(*) FILTER (WHERE status = 'failed') as emails_failed,\n                AVG(EXTRACT(EPOCH FROM (sent_at - created_at)) * 1000) FILTER (WHERE sent_at IS NOT NULL) as avg_send_time_ms,\n                MAX(sent_at) as last_successful_send\n            FROM email_queue\n            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "emails_sent_today",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "emails_pending",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "emails_failed",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "avg_send_time_ms",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_successful_send",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c90c095a6bd4d0e9d3b04578ef2f6d7cd819023f6480b4cf3ca22137496fefea"
+}
