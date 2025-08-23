@@ -210,7 +210,7 @@
 						<Table.Row>
 							<Table.Cell class="font-medium">
 								<div class="flex flex-col">
-									<span>{`${user.first_name} ${user.last_name}`}</span>
+									<span>{user.first_name} {user.last_name}</span>
 									{#if user.student_id}
 									<span class="text-sm text-muted-foreground">{user.student_id}</span>
 									{/if}

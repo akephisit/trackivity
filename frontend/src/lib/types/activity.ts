@@ -64,18 +64,13 @@ export interface ActivityUpdateData {
 	department_id?: string;
 }
 
-// User prefix type for participation
-export type UserPrefix = 'Mr' | 'Mrs' | 'Miss' | 'Dr' | 'Professor' | 'AssociateProfessor' | 'AssistantProfessor' | 'Lecturer' | 'Generic';
-
 // Participation data
 export interface Participation {
 	id: string;
 	user_id: string;
 	user_name: string;
-	user_name_with_prefix: string;
 	student_id: string;
 	email: string;
-	prefix: UserPrefix;
 	department_name?: string;
 	status: ParticipationStatus;
 	registered_at: string;

@@ -93,8 +93,7 @@
     
     if (result.success) {
       sessionStats.successful++;
-      const displayName = result.user_name_with_prefix || result.user_name || 'ไม่ระบุชื่อ';
-      toast.success(`สแกนสำเร็จ: ${displayName}`);
+      toast.success(`สแกนสำเร็จ: ${result.user_name}`);
     } else {
       sessionStats.failed++;
       toast.error(`สแกนไม่สำเร็จ: ${result.message}`);
