@@ -112,21 +112,22 @@
 
 	function getActivityBadgeVariant(type: string): 'default' | 'secondary' | 'outline' {
 		switch (type) {
-			case 'lecture': return 'default';
-			case 'workshop': return 'secondary';
-			case 'exam': return 'outline';
+			case 'Academic': return 'default';
+			case 'Sports': return 'secondary';
+			case 'Cultural': return 'outline';
+			case 'Social': return 'secondary';
+			case 'Other': return 'outline';
 			default: return 'outline';
 		}
 	}
 
 	function getActivityTypeText(type: string): string {
 		const types: Record<string, string> = {
-			'lecture': 'บรรยาย',
-			'workshop': 'ปฏิบัติการ',
-			'seminar': 'สัมมนา',
-			'exam': 'สอบ',
-			'meeting': 'ประชุม',
-			'event': 'งาน'
+			'Academic': 'วิชาการ',
+			'Sports': 'กีฬา',
+			'Cultural': 'วัฒนธรรม',
+			'Social': 'สังคม',
+			'Other': 'อื่นๆ'
 		};
 		return types[type] || type;
 	}

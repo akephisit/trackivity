@@ -53,6 +53,7 @@ pub struct ActivityWithDetails {
     pub max_participants: Option<i32>,
     pub current_participants: i64,
     pub status: ActivityStatus,
+    pub activity_type: Option<String>,
     pub faculty_id: Option<Uuid>,
     pub faculty_name: Option<String>,
     pub created_by: Uuid,
@@ -125,6 +126,7 @@ pub async fn get_activities(
             ((a.end_date::timestamp + a.end_time_only) AT TIME ZONE 'UTC') as end_time,
             a.max_participants,
             a.status,
+            a.activity_type,
             a.faculty_id,
             a.created_by,
             a.created_at,
@@ -226,6 +228,7 @@ pub async fn get_activities(
                         .get::<Option<i64>, _>("current_participants")
                         .unwrap_or(0),
                     status: row.get::<ActivityStatus, _>("status"),
+                    activity_type: row.get::<Option<String>, _>("activity_type"),
                     faculty_id: row.get::<Option<Uuid>, _>("faculty_id"),
                     faculty_name: row.get::<Option<String>, _>("faculty_name"),
                     created_by: row.get("created_by"),
@@ -280,6 +283,7 @@ pub async fn get_activity(
             ((a.end_date::timestamp + a.end_time_only) AT TIME ZONE 'UTC') as end_time,
             a.max_participants,
             a.status,
+            a.activity_type,
             a.faculty_id,
             a.created_by,
             a.created_at,
@@ -295,7 +299,7 @@ pub async fn get_activity(
         LEFT JOIN participations p ON a.id = p.activity_id
         LEFT JOIN participations up ON a.id = up.activity_id AND up.user_id = $2
         WHERE a.id = $1
-        GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.max_participants, a.status, a.faculty_id, a.created_by, a.created_at, a.updated_at, f.name, u.first_name, u.last_name, up.id, up.status
+        GROUP BY a.id, a.title, a.description, a.location, a.start_date, a.end_date, a.start_time_only, a.end_time_only, a.max_participants, a.status, a.activity_type, a.faculty_id, a.created_by, a.created_at, a.updated_at, f.name, u.first_name, u.last_name, up.id, up.status
         "#
     )
     .bind(&activity_id)
@@ -315,6 +319,7 @@ pub async fn get_activity(
                 max_participants: row.get("max_participants"),
                 current_participants: row.get::<i64, _>("current_participants"),
                 status: row.get("status"),
+                activity_type: row.get::<Option<String>, _>("activity_type"),
                 faculty_id: row.get("faculty_id"),
                 faculty_name: row
                     .get::<Option<String>, _>("faculty_name")

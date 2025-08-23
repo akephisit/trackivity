@@ -95,6 +95,28 @@
 		}
 	}
 
+	function getActivityTypeText(type: string): string {
+		const types: Record<string, string> = {
+			'Academic': 'วิชาการ',
+			'Sports': 'กีฬา',
+			'Cultural': 'วัฒนธรรม',
+			'Social': 'สังคม',
+			'Other': 'อื่นๆ'
+		};
+		return types[type] || type;
+	}
+
+	function getActivityBadgeVariant(type: string): 'default' | 'secondary' | 'outline' {
+		switch (type) {
+			case 'Academic': return 'default';
+			case 'Sports': return 'secondary';
+			case 'Cultural': return 'outline';
+			case 'Social': return 'secondary';
+			case 'Other': return 'outline';
+			default: return 'outline';
+		}
+	}
+
 	async function registerForActivity() {
 		registering = true;
 		try {
@@ -217,6 +239,19 @@
 						</p>
 					</div>
 				</div>
+
+				<!-- Activity Type -->
+				{#if activity.activity_type}
+					<div class="flex items-start gap-3">
+						<IconInfoCircle class="size-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+						<div>
+							<p class="font-medium">ประเภทกิจกรรม</p>
+							<Badge variant={getActivityBadgeVariant(activity.activity_type)} class="text-xs">
+								{getActivityTypeText(activity.activity_type)}
+							</Badge>
+						</div>
+					</div>
+				{/if}
 
 				<!-- Faculty -->
 				{#if activity.faculty_name}
