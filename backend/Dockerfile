@@ -10,13 +10,11 @@ WORKDIR /app
 ###############################################
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-COPY src ./src
-COPY migrations ./migrations
-# Include sqlx-data.json if present (no-op if absent when using COPY . . in builder)
+# Only copy essential files for dependency planning
 RUN cargo chef prepare --recipe-path recipe.json
 
 ###############################################
-# Build dependencies layer
+# Build dependencies layer (cached when dependencies unchanged)
 ###############################################
 FROM chef AS deps
 COPY --from=planner /app/recipe.json recipe.json
