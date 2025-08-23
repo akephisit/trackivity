@@ -18,7 +18,7 @@ use crate::middleware::session::{AdminUser, SessionState};
 use crate::models::session::SessionUser;
 use crate::models::{
     admin_role::AdminRole,
-    user::{User, UserResponse},
+    user::{User, UserResponse, UserPrefix},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,6 +26,7 @@ pub struct CreateUserRequest {
     pub student_id: String,
     pub email: String,
     pub password: String,
+    pub prefix: UserPrefix,
     pub first_name: String,
     pub last_name: String,
     pub department_id: Option<Uuid>,
@@ -34,6 +35,7 @@ pub struct CreateUserRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateUserRequest {
     pub email: Option<String>,
+    pub prefix: Option<UserPrefix>,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
     pub department_id: Option<Uuid>,
@@ -45,8 +47,10 @@ pub struct UserWithDetails {
     pub id: Uuid,
     pub student_id: String,
     pub email: String,
+    pub prefix: UserPrefix,
     pub first_name: String,
     pub last_name: String,
+    pub full_name_with_prefix: String,
     pub department_id: Option<Uuid>,
     pub department_name: Option<String>,
     pub faculty_name: Option<String>,
@@ -91,6 +95,7 @@ pub async fn get_users(
             u.id,
             u.student_id,
             u.email,
+            u.prefix,
             u.first_name,
             u.last_name,
             u.department_id,
@@ -139,7 +144,7 @@ pub async fn get_users(
         count_query.push_str(&where_clause);
     }
 
-    query.push_str(" GROUP BY u.id, u.student_id, u.email, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, f.name, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.created_at, ar.updated_at");
+    query.push_str(" GROUP BY u.id, u.student_id, u.email, u.prefix, u.first_name, u.last_name, u.department_id, u.created_at, u.updated_at, d.name, f.name, ar.id, ar.admin_level, ar.faculty_id, ar.permissions, ar.created_at, ar.updated_at");
     query.push_str(" ORDER BY u.created_at DESC LIMIT $1 OFFSET $2");
 
     let mut query_builder = sqlx::query(&query).bind(limit).bind(offset);
@@ -183,12 +188,23 @@ pub async fn get_users(
                     None => None,
                 };
 
+                let prefix: UserPrefix = row.get("prefix");
+                let first_name: String = row.get("first_name");
+                let last_name: String = row.get("last_name");
+                let full_name_with_prefix = format!("{}{} {}", 
+                    prefix.to_thai_string(), 
+                    first_name, 
+                    last_name
+                );
+
                 let user_detail = UserWithDetails {
                     id: row.get("id"),
                     student_id: row.get("student_id"),
                     email: row.get("email"),
-                    first_name: row.get("first_name"),
-                    last_name: row.get("last_name"),
+                    prefix,
+                    first_name,
+                    last_name,
+                    full_name_with_prefix,
                     department_id: row.get::<Option<Uuid>, _>("department_id"),
                     department_name: row.get::<Option<String>, _>("department_name"),
                     faculty_name: row.get::<Option<String>, _>("faculty_name"),
@@ -239,19 +255,10 @@ pub async fn get_user(
 
     match query_result {
         Ok(Some(row)) => {
-            // Simple response for now, will add detailed info later
+            let user_response = UserResponse::from(row);
             let response = json!({
                 "status": "success",
-                "data": {
-                    "id": row.id,
-                    "student_id": row.student_id,
-                    "email": row.email,
-                    "first_name": row.first_name,
-                    "last_name": row.last_name,
-                    "department_id": row.department_id,
-                    "created_at": row.created_at,
-                    "updated_at": row.updated_at
-                },
+                "data": user_response,
                 "message": "User retrieved successfully"
             });
 
@@ -332,14 +339,15 @@ pub async fn create_user(
     // Create user
     let create_result = sqlx::query_as::<_, User>(
         r#"
-        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        INSERT INTO users (student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at
         "#
     )
     .bind(&request.student_id)
     .bind(&request.email)
     .bind(&password_hash)
+    .bind(&request.prefix)
     .bind(&request.first_name)
     .bind(&request.last_name)
     .bind(&qr_secret)
@@ -409,6 +417,12 @@ pub async fn update_user(
         param_count += 1;
     }
 
+    if let Some(prefix) = &request.prefix {
+        query.push_str(&format!(", prefix = ${}", param_count));
+        params.push(Box::new(prefix.to_thai_string()));
+        param_count += 1;
+    }
+
     if let Some(first_name) = &request.first_name {
         query.push_str(&format!(", first_name = ${}", param_count));
         params.push(Box::new(first_name.clone()));
@@ -443,13 +457,16 @@ pub async fn update_user(
         param_count += 1;
     }
 
-    query.push_str(&format!(" WHERE id = ${} RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at", param_count));
+    query.push_str(&format!(" WHERE id = ${} RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at", param_count));
 
     // Execute query with proper parameter binding
     let mut query_builder = sqlx::query_as::<_, User>(&query);
 
     if let Some(email) = &request.email {
         query_builder = query_builder.bind(email);
+    }
+    if let Some(prefix) = &request.prefix {
+        query_builder = query_builder.bind(prefix.to_thai_string());
     }
     if let Some(first_name) = &request.first_name {
         query_builder = query_builder.bind(first_name);

@@ -15,6 +15,7 @@ use crate::models::session::SessionUser;
 use crate::models::{
     activity::{ActivityStatus},
     participation::{Participation, ParticipationStatus},
+    user::UserPrefix,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,8 +70,10 @@ pub struct ParticipationWithUser {
     pub id: Uuid,
     pub user_id: Uuid,
     pub user_name: String,
+    pub user_name_with_prefix: String,
     pub student_id: String,
     pub email: String,
+    pub prefix: UserPrefix,
     pub department_name: Option<String>,
     pub status: ParticipationStatus,
     pub registered_at: DateTime<Utc>,
@@ -90,6 +93,7 @@ pub struct QrScanResponse {
     pub message: String,
     pub participation_status: Option<ParticipationStatus>,
     pub user_name: Option<String>,
+    pub user_name_with_prefix: Option<String>,
     pub student_id: Option<String>,
 }
 
@@ -753,8 +757,10 @@ pub async fn get_activity_participations(
             p.checked_out_at,
             p.notes,
             u.first_name || ' ' || u.last_name as user_name,
+            u.prefix::text || u.first_name || ' ' || u.last_name as user_name_with_prefix,
             u.student_id,
             u.email,
+            u.prefix,
             d.name as department_name
         FROM participations p
         JOIN users u ON p.user_id = u.id
@@ -791,8 +797,10 @@ pub async fn get_activity_participations(
                     id: row.get("id"),
                     user_id: row.get("user_id"),
                     user_name: row.get("user_name"),
+                    user_name_with_prefix: row.get("user_name_with_prefix"),
                     student_id: row.get("student_id"),
                     email: row.get("email"),
+                    prefix: row.get::<UserPrefix, _>("prefix"),
                     department_name: row.get::<Option<String>, _>("department_name"),
                     status: row.get::<ParticipationStatus, _>("status"),
                     registered_at: row.get("registered_at"),
@@ -992,7 +1000,7 @@ pub async fn scan_qr(
 
     // Verify QR secret
     let user_check =
-        sqlx::query("SELECT student_id, first_name, last_name, qr_secret FROM users WHERE id = $1")
+        sqlx::query("SELECT student_id, first_name, last_name, prefix, qr_secret FROM users WHERE id = $1")
             .bind(&user_id)
             .fetch_one(&session_state.db_pool)
             .await;
@@ -1095,6 +1103,12 @@ pub async fn scan_qr(
                 }),
                 user_name: Some(format!(
                     "{} {}",
+                    user_data.get::<String, _>("first_name"),
+                    user_data.get::<String, _>("last_name")
+                )),
+                user_name_with_prefix: Some(format!(
+                    "{}{} {}",
+                    user_data.get::<UserPrefix, _>("prefix").to_thai_string(),
                     user_data.get::<String, _>("first_name"),
                     user_data.get::<String, _>("last_name")
                 )),
