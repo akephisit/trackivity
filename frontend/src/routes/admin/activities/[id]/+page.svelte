@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Activity, Participation, ParticipationStatus, ActivityStatus } from '$lib/types/activity';
+	import { formatFullNameWithPrefix, prefixToThai } from '$lib/utils';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -184,7 +185,7 @@
 		const csv = [
 			['ชื่อ', 'รหัสนักศึกษา', 'อีเมล', 'สาขา', 'สถานะ', 'ลงทะเบียนเมื่อ', 'เช็คอินเมื่อ', 'เช็คเอาต์เมื่อ', 'หมายเหตุ'],
 			...participations.map((p: Participation) => [
-				p.user_name,
+				p.user_name_with_prefix || p.user_name,
 				p.student_id,
 				p.email,
 				p.department_name || '-',
@@ -536,7 +537,7 @@
 									<TableRow>
 										<TableCell class="font-medium">
 											<div>
-												<div class="font-semibold">{participation.user_name}</div>
+												<div class="font-semibold">{participation.user_name_with_prefix || participation.user_name}</div>
 												<div class="text-sm text-muted-foreground">{participation.email}</div>
 											</div>
 										</TableCell>
@@ -605,7 +606,7 @@
 			<Dialog.Title>แก้ไขสถานะผู้เข้าร่วม</Dialog.Title>
 			<Dialog.Description>
 				{#if editingParticipant}
-					แก้ไขสถานะของ {editingParticipant.user_name}
+					แก้ไขสถานะของ {editingParticipant.user_name_with_prefix || editingParticipant.user_name}
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>

@@ -7,13 +7,17 @@
 export type UUID = string;
 export type Timestamp = string; // ISO 8601 format
 
-// ===== USER & SESSION TYPES =====
+// ===== USER TYPES =====
+export type UserPrefix = 'Mr' | 'Mrs' | 'Miss' | 'Dr' | 'Professor' | 'AssociateProfessor' | 'AssistantProfessor' | 'Lecturer' | 'Generic';
+
 export interface User {
   user_id: UUID;
   student_id: string;
   email: string;
+  prefix: UserPrefix;
   first_name: string;
   last_name: string;
+  full_name_with_prefix: string;
   department_id?: UUID;
   faculty_id?: UUID;
   created_at: Timestamp;
@@ -65,8 +69,10 @@ export interface SessionUser {
   user_id: UUID;
   student_id: string;
   email: string;
+  prefix: UserPrefix;
   first_name: string;
   last_name: string;
+  full_name_with_prefix: string;
   phone?: string;
   address?: string;
   avatar_url?: string;
@@ -243,6 +249,7 @@ export interface LoginResponse {
 export interface RegisterRequest {
   email: string;
   password: string;
+  prefix: UserPrefix;
   first_name: string;
   last_name: string;
   student_id: string;

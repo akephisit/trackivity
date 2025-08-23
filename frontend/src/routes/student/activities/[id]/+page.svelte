@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Activity, Participation } from '$lib/types/activity';
+	import { formatFullNameWithPrefix, prefixToThai } from '$lib/utils';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
@@ -366,7 +367,7 @@
 									{#each participations as participation}
 										<TableRow>
 											<TableCell class="font-medium">
-												{participation.user_name}
+												{participation.user_name_with_prefix || participation.user_name}
 											</TableCell>
 											<TableCell>{participation.student_id}</TableCell>
 											<TableCell>{participation.department_name || '-'}</TableCell>
