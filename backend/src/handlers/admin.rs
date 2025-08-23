@@ -1757,6 +1757,8 @@ pub async fn create_faculty_admin(
     admin: FacultyAdminUser,
     Json(mut request): Json<CreateAdminRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Log the incoming request for debugging
+    println!("Creating faculty admin with request: {:?}", request);
     // Verify faculty exists
     let faculty_exists = sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS(SELECT 1 FROM faculties WHERE id = $1)"

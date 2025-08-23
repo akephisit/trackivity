@@ -44,7 +44,7 @@
 	const adminCreateSchema = z.object({
 		name: z.string().min(1, 'กรุณากรอกชื่อ'),
 		email: z.string().email('รูปแบบอีเมลไม่ถูกต้อง'),
-		password: z.string().min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร').optional(),
+		password: z.string().min(6, 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'),
 		faculty_id: z.string().min(1, 'กรุณาเลือกคณะ'),
 		admin_level: z.nativeEnum(AdminLevel).default(AdminLevel.FacultyAdmin),
 		permissions: z.array(z.string()).default([])
@@ -200,11 +200,20 @@
 
 	function openEditDialog(admin: ExtendedAdminRole) {
 		editingAdmin = admin;
+		// Map user status to supported form status values
+		const mapUserStatus = (userStatus?: string): 'active' | 'inactive' | 'suspended' => {
+			if (!userStatus) return 'active';
+			if (['online', 'active'].includes(userStatus)) return 'active';
+			if (['offline', 'disabled'].includes(userStatus)) return 'inactive';
+			if (userStatus === 'suspended') return 'suspended';
+			return 'active'; // fallback
+		};
+		
 		editFormData = {
 			first_name: admin.user?.first_name || '',
 			last_name: admin.user?.last_name || '',
 			email: admin.user?.email || '',
-			status: admin.user?.status || 'active',
+			status: mapUserStatus(admin.user?.status),
 			faculty_id: admin.faculty_id || '',
 			permissions: admin.permissions || []
 		};
@@ -928,6 +937,22 @@
 					<Form.FieldErrors />
 				</Form.Field>
 			</div>
+
+			<Form.Field form={createForm} name="password">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>รหัสผ่าน</Label>
+						<Input
+							{...props}
+							type="password"
+							bind:value={$createFormData.password}
+							placeholder="กรุณาใส่รหัสผ่าน"
+							disabled={$createSubmitting}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
 
 			<Form.Field form={createForm} name="faculty_id">
 				<Form.Control>
