@@ -1,5 +1,5 @@
 import { requireFacultyAdmin } from '$lib/server/auth';
-import { fail } from '@sveltejs/kit';
+import { redirect, fail } from '@sveltejs/kit';
 import { superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { adminCreateSchema } from '$lib/schemas/auth';
@@ -218,20 +218,6 @@ export const actions: Actions = {
 				}
 			}
 
-			// Transform AdminLevel to backend format (snake_case)
-			const transformAdminLevel = (adminLevel: AdminLevel): string => {
-				switch (adminLevel) {
-					case AdminLevel.SuperAdmin:
-						return 'super_admin';
-					case AdminLevel.FacultyAdmin:
-						return 'faculty_admin';
-					case AdminLevel.RegularAdmin:
-						return 'regular_admin';
-					default:
-						return 'regular_admin';
-				}
-			};
-
 			// Define default permissions based on admin level
 			const getDefaultPermissions = (adminLevel: string) => {
 				if (adminLevel === AdminLevel.FacultyAdmin) {
@@ -257,11 +243,11 @@ export const actions: Actions = {
 			const transformedData = {
 				student_id: `${adminPrefix}${Date.now()}`, // Generate admin ID with appropriate prefix
 				email: form.data.email,
-				password: form.data.password || defaultPassword, // Use provided password or default
+				password: form.data.password || defaultPassword,
 				first_name: form.data.name.split(' ')[0] || form.data.name,
 				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
 				department_id: null,
-				admin_level: transformAdminLevel(form.data.admin_level), // Transform to snake_case
+				admin_level: form.data.admin_level, // Use the provided admin level
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,
 				permissions: getDefaultPermissions(form.data.admin_level)
 			};
@@ -288,24 +274,12 @@ export const actions: Actions = {
 		} catch (error) {
 			console.error('Create faculty admin error:', error);
 			
-			// Provide more helpful error messages based on error type
 			if (error instanceof TypeError && error.message.includes('fetch')) {
-				form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง'];
+				form.errors._errors = ['เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์'];
 			} else if (error instanceof Error) {
-				// Check for common error patterns and provide user-friendly messages
-				if (error.message.includes('email') || error.message.includes('duplicate')) {
-					form.errors._errors = ['อีเมลนี้ถูกใช้แล้ว กรุณาใช้อีเมลอื่น'];
-				} else if (error.message.includes('student_id')) {
-					form.errors._errors = ['รหัสนักศึกษาไม่ถูกต้องหรือถูกใช้แล้ว'];
-				} else if (error.message.includes('admin_level')) {
-					form.errors._errors = ['ข้อมูลระดับแอดมินไม่ถูกต้อง กรุณาลองใหม่'];
-				} else if (error.message.includes('faculty')) {
-					form.errors._errors = ['ไม่พบข้อมูลคณะที่เลือก กรุณาเลือกคณะใหม่'];
-				} else {
-					form.errors._errors = [`เกิดข้อผิดพลาด: ${error.message}`];
-				}
+				form.errors._errors = [`เกิดข้อผิดพลาด: ${error.message}`];
 			} else {
-				form.errors._errors = ['เกิดข้อผิดพลาดไม่ทราบสาเหตุในการสร้างแอดมินคณะ กรุณาติดต่อผู้ดูแลระบบ'];
+				form.errors._errors = ['เกิดข้อผิดพลาดไม่ทราบสาเหตุในการสร้างแอดมินคณะ'];
 			}
 			return fail(500, { form });
 		}
@@ -441,6 +415,8 @@ export const actions: Actions = {
             }
             
             const response = await api.delete(event, `/api/users/${adminId}`);
+
+            const result = response;
 
             if (!response.success) {
                 return fail(400, { error: response.error || 'เกิดข้อผิดพลาดในการลบแอดมินคณะ' });
