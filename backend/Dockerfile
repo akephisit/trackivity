@@ -10,7 +10,8 @@ WORKDIR /app
 ###############################################
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-# Only copy essential files for dependency planning
+COPY migrations ./migrations
+# Need migrations folder for sqlx::migrate! macro
 RUN cargo chef prepare --recipe-path recipe.json
 
 ###############################################
