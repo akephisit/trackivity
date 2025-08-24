@@ -36,6 +36,7 @@
 	import { invalidateAll, invalidate } from '$app/navigation';
 	import type { ExtendedAdminRole, FacultyAdminUpdateRequest } from '$lib/types/admin';
 	import { AdminLevel, ADMIN_PERMISSIONS } from '$lib/types/admin';
+	import { PrefixOptions } from '$lib/schemas/auth';
 
 	let { data } = $props();
 	let refreshing = $state(false);
@@ -172,7 +173,9 @@
 
 	function openCreateDialog() {
 		$createFormData = {
-			name: '',
+			prefix: '',
+			first_name: '',
+			last_name: '',
 			email: '',
 			password: '',
 			faculty_id: data.isSuperAdmin ? '' : (data.userFacultyId || ''),
@@ -896,21 +899,61 @@
 				</Alert>
 			{/if}
 
+			<Form.Field form={createForm} name="prefix">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>คำนำหน้า</Label>
+						<Select.Root type="single" bind:value={$createFormData.prefix} disabled={$createSubmitting}>
+							<Select.Trigger>
+								{PrefixOptions.find(opt => opt.value === $createFormData.prefix)?.label ?? "เลือกคำนำหน้า"}
+							</Select.Trigger>
+							<Select.Content>
+								{#each PrefixOptions as option}
+									<Select.Item value={option.value}>
+										{option.label}
+									</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+						<input type="hidden" {...props} bind:value={$createFormData.prefix} />
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
 			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-				<Form.Field form={createForm} name="name">
+				<Form.Field form={createForm} name="first_name">
 					<Form.Control>
 						{#snippet children({ props })}
-							<Label for={props.id}>ชื่อ-นามสกุล</Label>
+							<Label for={props.id}>ชื่อจริง</Label>
 							<Input
 								{...props}
-								bind:value={$createFormData.name}
-								placeholder="เช่น รศ.ดร. สมชาย ใจดี"
+								bind:value={$createFormData.first_name}
+								placeholder="เช่น สมชาย"
 								disabled={$createSubmitting}
 							/>
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />
 				</Form.Field>
+
+				<Form.Field form={createForm} name="last_name">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Label for={props.id}>นามสกุล</Label>
+							<Input
+								{...props}
+								bind:value={$createFormData.last_name}
+								placeholder="เช่น ใจดี"
+								disabled={$createSubmitting}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
 				<Form.Field form={createForm} name="email">
 					<Form.Control>

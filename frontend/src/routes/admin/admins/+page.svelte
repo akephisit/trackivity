@@ -181,9 +181,10 @@
 		selectedFaculty = undefined;
 		selectedPrefix = undefined;
 		$formData = {
-			email: '',
-			name: '',
 			prefix: '',
+			first_name: '',
+			last_name: '',
+			email: '',
 			password: '',
 			admin_level: AdminLevel.RegularAdmin, // This will be overridden when user selects
 			faculty_id: undefined,
@@ -816,21 +817,6 @@
 				</Alert>
 			{/if}
 
-			<Form.Field {form} name="name">
-				<Form.Control>
-					{#snippet children({ props })}
-						<Label for={props.id}>ชื่อ-นามสกุล</Label>
-						<Input
-							{...props}
-							bind:value={$formData.name}
-							placeholder="กรอกชื่อ-นามสกุล"
-							disabled={$submitting}
-						/>
-					{/snippet}
-				</Form.Control>
-				<Form.FieldErrors />
-			</Form.Field>
-
 			<Form.Field {form} name="prefix">
 				<Form.Control>
 					{#snippet children({ props })}
@@ -859,6 +845,38 @@
 				</Form.Control>
 				<Form.FieldErrors />
 			</Form.Field>
+
+			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+				<Form.Field {form} name="first_name">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Label for={props.id}>ชื่อจริง</Label>
+							<Input
+								{...props}
+								bind:value={$formData.first_name}
+								placeholder="กรอกชื่อจริง"
+								disabled={$submitting}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+
+				<Form.Field {form} name="last_name">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Label for={props.id}>นามสกุล</Label>
+							<Input
+								{...props}
+								bind:value={$formData.last_name}
+								placeholder="กรอกนามสกุล"
+								disabled={$submitting}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
+			</div>
 
 			<Form.Field {form} name="email">
 				<Form.Control>
@@ -988,6 +1006,8 @@
 			<!-- Hidden inputs to ensure form data is sent correctly -->
 			<input type="hidden" name="admin_level" bind:value={$formData.admin_level} />
 			<input type="hidden" name="prefix" bind:value={$formData.prefix} />
+			<input type="hidden" name="first_name" bind:value={$formData.first_name} />
+			<input type="hidden" name="last_name" bind:value={$formData.last_name} />
 			{#if $formData.faculty_id}
 				<input type="hidden" name="faculty_id" bind:value={$formData.faculty_id} />
 			{/if}
@@ -1001,6 +1021,8 @@
 				<div>Form Data Admin Level: {$formData.admin_level}</div>
 				<div>Form Data Faculty ID: {$formData.faculty_id}</div>
 				<div>Form Data Prefix: {$formData.prefix}</div>
+				<div>Form Data First Name: {$formData.first_name}</div>
+				<div>Form Data Last Name: {$formData.last_name}</div>
 			</div>
 
 			<Dialog.Footer>
@@ -1019,6 +1041,8 @@
 						console.log('admin_level in formData:', $formData.admin_level);
 						console.log('faculty_id in formData:', $formData.faculty_id);
 						console.log('prefix in formData:', $formData.prefix);
+						console.log('first_name in formData:', $formData.first_name);
+						console.log('last_name in formData:', $formData.last_name);
 						console.log('===============================');
 					}}
 				>

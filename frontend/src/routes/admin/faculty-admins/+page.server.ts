@@ -244,8 +244,8 @@ export const actions: Actions = {
 				student_id: `${adminPrefix}${Date.now()}`, // Generate admin ID with appropriate prefix
 				email: form.data.email,
 				password: form.data.password || defaultPassword,
-				first_name: form.data.name.split(' ')[0] || form.data.name,
-				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
+				first_name: form.data.first_name,
+				last_name: form.data.last_name,
 				department_id: null,
 				admin_level: form.data.admin_level, // Use the provided admin level
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,

@@ -141,7 +141,7 @@ export const actions: Actions = {
 
 		try {
 			// Define default permissions based on admin level
-			const getDefaultPermissions = (adminLevel: string, facultyId?: string) => {
+			const getDefaultPermissions = (adminLevel: string, _facultyId?: string) => {
 				switch (adminLevel) {
 					case 'SuperAdmin':
 						return [
@@ -173,8 +173,8 @@ export const actions: Actions = {
 				email: form.data.email,
 				password: form.data.password || 'TempPass123!', // Use provided password or temp password
 				prefix: form.data.prefix, // Add prefix field
-				first_name: form.data.name.split(' ')[0] || form.data.name,
-				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
+				first_name: form.data.first_name,
+				last_name: form.data.last_name,
 				department_id: null,
 				admin_level: form.data.admin_level, // ใช้ admin_level ที่ส่งมาจาก form โดยตรง
 				faculty_id: form.data.faculty_id && form.data.faculty_id !== '' ? form.data.faculty_id : null,

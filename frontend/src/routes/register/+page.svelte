@@ -12,7 +12,7 @@
 	import { IconLoader, IconEye, IconEyeOff, IconUser, IconMail, IconLock, IconAlertTriangle, IconWifi, IconWifiOff } from '@tabler/icons-svelte/icons';
 	import { toast } from 'svelte-sonner';
 	import type { Department } from '$lib/types/admin';
-	import { PrefixOptions } from '$lib/schemas/auth';
+	import { BasicPrefixOptions } from '$lib/schemas/auth';
 
 	let { data } = $props();
 
@@ -163,52 +163,6 @@
 						</Alert>
 					{/if}
 
-					<!-- ข้อมูลส่วนตัว - จัดเป็นแถวเพื่อประหยัดพื้นที่ -->
-					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-						<!-- รหัสนักศึกษา -->
-						<Form.Field {form} name="student_id">
-							<Form.Control>
-								{#snippet children({ props })}
-									<Label for={props.id} class="flex items-center gap-2">
-										<IconUser class="h-4 w-4" />
-										รหัสนักศึกษา
-									</Label>
-									<Input
-										{...props}
-										type="text"
-										bind:value={$formData.student_id}
-										placeholder="64123456789"
-										disabled={$submitting}
-										class="w-full"
-										maxlength={12}
-									/>
-								{/snippet}
-							</Form.Control>
-							<Form.FieldErrors />
-						</Form.Field>
-
-						<!-- อีเมล -->
-						<Form.Field {form} name="email">
-							<Form.Control>
-								{#snippet children({ props })}
-									<Label for={props.id} class="flex items-center gap-2">
-										<IconMail class="h-4 w-4" />
-										อีเมล
-									</Label>
-									<Input
-										{...props}
-										type="email"
-										bind:value={$formData.email}
-										placeholder="your@email.com"
-										disabled={$submitting}
-										class="w-full"
-									/>
-								{/snippet}
-							</Form.Control>
-							<Form.FieldErrors />
-						</Form.Field>
-					</div>
-
 					<!-- คำนำหน้า -->
 					<Form.Field {form} name="prefix">
 						<Form.Control>
@@ -217,18 +171,19 @@
 									<IconUser class="h-4 w-4" />
 									คำนำหน้า
 								</Label>
-								<Select.Root bind:selected={$formData.prefix}>
-									<Select.Trigger {...props} disabled={$submitting} class="w-full">
-										<Select.Value placeholder="เลือกคำนำหน้า" />
+								<Select.Root type="single" bind:value={$formData.prefix} disabled={$submitting}>
+									<Select.Trigger class="w-full">
+										{BasicPrefixOptions.find(opt => opt.value === $formData.prefix)?.label ?? "เลือกคำนำหน้า"}
 									</Select.Trigger>
 									<Select.Content>
-										{#each PrefixOptions as option}
-											<Select.Item value={option.value} label={option.label}>
+										{#each BasicPrefixOptions as option}
+											<Select.Item value={option.value}>
 												{option.label}
 											</Select.Item>
 										{/each}
 									</Select.Content>
 								</Select.Root>
+								<input type="hidden" {...props} bind:value={$formData.prefix} />
 							{/snippet}
 						</Form.Control>
 						<Form.FieldErrors />
@@ -268,6 +223,52 @@
 										type="text"
 										bind:value={$formData.last_name}
 										placeholder="นามสกุลของคุณ"
+										disabled={$submitting}
+										class="w-full"
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+					</div>
+
+					<!-- รหัสนักศึกษาและอีเมล - 2 คอลัมน์ -->
+					<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+						<!-- รหัสนักศึกษา -->
+						<Form.Field {form} name="student_id">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconUser class="h-4 w-4" />
+										รหัสนักศึกษา
+									</Label>
+									<Input
+										{...props}
+										type="text"
+										bind:value={$formData.student_id}
+										placeholder="64123456789"
+										disabled={$submitting}
+										class="w-full"
+										maxlength={12}
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<!-- อีเมล -->
+						<Form.Field {form} name="email">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Label for={props.id} class="flex items-center gap-2">
+										<IconMail class="h-4 w-4" />
+										อีเมล
+									</Label>
+									<Input
+										{...props}
+										type="email"
+										bind:value={$formData.email}
+										placeholder="your@email.com"
 										disabled={$submitting}
 										class="w-full"
 									/>

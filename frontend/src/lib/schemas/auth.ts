@@ -33,7 +33,7 @@ export const adminLoginSchema = z.object({
 		.default(false)
 });
 
-// Define Thai prefix options
+// Define Thai prefix options (all 9 options for admin)
 export const PrefixOptions = [
 	{ value: 'Mr', label: 'นาย' },
 	{ value: 'Mrs', label: 'นาง' },
@@ -46,8 +46,31 @@ export const PrefixOptions = [
 	{ value: 'Generic', label: 'คุณ' }
 ] as const;
 
+// Basic prefix options for student registration (only 3 basic ones)
+export const BasicPrefixOptions = [
+	{ value: 'Mr', label: 'นาย' },
+	{ value: 'Mrs', label: 'นาง' },
+	{ value: 'Miss', label: 'นางสาว' }
+] as const;
+
 // Student registration schema with prefix support
 export const registerSchema = z.object({
+	prefix: z
+		.string()
+		.min(1, 'กรุณาเลือกคำนำหน้า')
+		.refine(val => BasicPrefixOptions.some(option => option.value === val), {
+			message: 'กรุณาเลือกคำนำหน้าที่ถูกต้อง'
+		}),
+	first_name: z
+		.string()
+		.min(1, 'กรุณาใส่ชื่อจริง')
+		.min(2, 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร')
+		.max(50, 'ชื่อต้องไม่เกิน 50 ตัวอักษร'),
+	last_name: z
+		.string()
+		.min(1, 'กรุณาใส่นามสกุล')
+		.min(2, 'นามสกุลต้องมีอย่างน้อย 2 ตัวอักษร')
+		.max(50, 'นามสกุลต้องไม่เกิน 50 ตัวอักษร'),
 	student_id: z
 		.string()
 		.min(1, 'กรุณาใส่รหัสนักเรียน')
@@ -64,6 +87,18 @@ export const registerSchema = z.object({
 	confirmPassword: z
 		.string()
 		.min(1, 'กรุณายืนยันรหัสผ่าน'),
+	faculty_id: z
+		.string()
+		.min(1, 'กรุณาเลือกคณะ'),
+	department_id: z
+		.string()
+		.min(1, 'กรุณาเลือกสาขาวิชา')
+}).refine(data => data.password === data.confirmPassword, {
+	message: 'รหัสผ่านไม่ตรงกัน',
+	path: ['confirmPassword']
+});
+
+export const adminCreateSchema = z.object({
 	prefix: z
 		.string()
 		.min(1, 'กรุณาเลือกคำนำหน้า')
@@ -80,33 +115,10 @@ export const registerSchema = z.object({
 		.min(1, 'กรุณาใส่นามสกุล')
 		.min(2, 'นามสกุลต้องมีอย่างน้อย 2 ตัวอักษร')
 		.max(50, 'นามสกุลต้องไม่เกิน 50 ตัวอักษร'),
-	faculty_id: z
-		.string()
-		.min(1, 'กรุณาเลือกคณะ'),
-	department_id: z
-		.string()
-		.min(1, 'กรุณาเลือกสาขาวิชา')
-}).refine(data => data.password === data.confirmPassword, {
-	message: 'รหัสผ่านไม่ตรงกัน',
-	path: ['confirmPassword']
-});
-
-export const adminCreateSchema = z.object({
 	email: z
 		.string()
 		.min(1, 'กรุณาใส่อีเมล')
 		.email('รูปแบบอีเมลไม่ถูกต้อง'),
-	name: z
-		.string()
-		.min(1, 'กรุณาใส่ชื่อ')
-		.min(2, 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร')
-		.max(100, 'ชื่อต้องไม่เกิน 100 ตัวอักษร'),
-	prefix: z
-		.string()
-		.min(1, 'กรุณาเลือกคำนำหน้า')
-		.refine(val => PrefixOptions.some(option => option.value === val), {
-			message: 'กรุณาเลือกคำนำหน้าที่ถูกต้อง'
-		}),
 	password: z
 		.string()
 		.min(1, 'กรุณาใส่รหัสผ่าน')
