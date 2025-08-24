@@ -36,6 +36,7 @@ pub struct RegisterRequest {
     pub student_id: String,
     pub email: String,
     pub password: String,
+    pub prefix: Option<String>, // Allow frontend to send prefix as string
     pub first_name: String,
     pub last_name: String,
     pub department_id: Option<Uuid>,
@@ -461,17 +462,38 @@ pub async fn student_register(
     // Generate QR secret
     let qr_secret = Uuid::new_v4().to_string();
 
+    // Parse and validate prefix if provided
+    use crate::models::user::UserPrefix;
+    let prefix = if let Some(prefix_str) = &register_req.prefix {
+        // Try to parse the prefix string to UserPrefix enum
+        match prefix_str.as_str() {
+            "Mr" => UserPrefix::Mr,
+            "Mrs" => UserPrefix::Mrs,
+            "Miss" => UserPrefix::Miss,
+            "Dr" => UserPrefix::Dr,
+            "Professor" => UserPrefix::Professor,
+            "AssociateProfessor" => UserPrefix::AssociateProfessor,
+            "AssistantProfessor" => UserPrefix::AssistantProfessor,
+            "Lecturer" => UserPrefix::Lecturer,
+            "Generic" => UserPrefix::Generic,
+            _ => UserPrefix::Mr, // Default fallback
+        }
+    } else {
+        UserPrefix::Mr // Default if not provided
+    };
+
     // Create user
     let user_id = sqlx::query_scalar::<_, Uuid>(
         r#"
-        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO users (student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
         "#
     )
     .bind(&register_req.student_id)
     .bind(&register_req.email)
     .bind(&password_hash)
+    .bind(&prefix)
     .bind(&register_req.first_name)
     .bind(&register_req.last_name)
     .bind(&qr_secret)

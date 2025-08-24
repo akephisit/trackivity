@@ -33,7 +33,20 @@ export const adminLoginSchema = z.object({
 		.default(false)
 });
 
-// Student registration schema (no admin fields)
+// Define Thai prefix options
+export const PrefixOptions = [
+	{ value: 'Mr', label: 'นาย' },
+	{ value: 'Mrs', label: 'นาง' },
+	{ value: 'Miss', label: 'นางสาว' },
+	{ value: 'Dr', label: 'ดร.' },
+	{ value: 'Professor', label: 'ศาสตราจารย์' },
+	{ value: 'AssociateProfessor', label: 'รองศาสตราจารย์' },
+	{ value: 'AssistantProfessor', label: 'ผู้ช่วยศาสตราจารย์' },
+	{ value: 'Lecturer', label: 'อาจารย์' },
+	{ value: 'Generic', label: 'คุณ' }
+] as const;
+
+// Student registration schema with prefix support
 export const registerSchema = z.object({
 	student_id: z
 		.string()
@@ -51,6 +64,12 @@ export const registerSchema = z.object({
 	confirmPassword: z
 		.string()
 		.min(1, 'กรุณายืนยันรหัสผ่าน'),
+	prefix: z
+		.string()
+		.min(1, 'กรุณาเลือกคำนำหน้า')
+		.refine(val => PrefixOptions.some(option => option.value === val), {
+			message: 'กรุณาเลือกคำนำหน้าที่ถูกต้อง'
+		}),
 	first_name: z
 		.string()
 		.min(1, 'กรุณาใส่ชื่อจริง')

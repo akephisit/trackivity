@@ -15,9 +15,29 @@ use crate::models::{
     activity::ActivityStatus,
     admin_role::{AdminLevel, AdminRole},
     session::AdminSessionInfo,
-    user::User,
+    user::{User, UserPrefix},
 };
 use crate::services::ActivityStatusUpdater;
+
+// Helper function to parse prefix from string
+fn parse_user_prefix(prefix_str: Option<&String>) -> UserPrefix {
+    if let Some(prefix) = prefix_str {
+        match prefix.as_str() {
+            "Mr" => UserPrefix::Mr,
+            "Mrs" => UserPrefix::Mrs,
+            "Miss" => UserPrefix::Miss,
+            "Dr" => UserPrefix::Dr,
+            "Professor" => UserPrefix::Professor,
+            "AssociateProfessor" => UserPrefix::AssociateProfessor,
+            "AssistantProfessor" => UserPrefix::AssistantProfessor,
+            "Lecturer" => UserPrefix::Lecturer,
+            "Generic" => UserPrefix::Generic,
+            _ => UserPrefix::Generic, // Default fallback
+        }
+    } else {
+        UserPrefix::Generic // Default if not provided
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DashboardStats {
@@ -943,6 +963,7 @@ pub struct CreateAdminRequest {
     pub student_id: String,
     pub email: String,
     pub password: String,
+    pub prefix: Option<String>, // Allow frontend to send prefix as string
     pub first_name: String,
     pub last_name: String,
     pub department_id: Option<Uuid>,

@@ -72,6 +72,7 @@ export const actions: Actions = {
 				student_id: form.data.student_id,
 				email: form.data.email,
 				password: form.data.password,
+				prefix: form.data.prefix,
 				first_name: form.data.first_name,
 				last_name: form.data.last_name,
 				department_id: form.data.department_id
