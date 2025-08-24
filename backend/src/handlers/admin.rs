@@ -1016,7 +1016,7 @@ pub async fn create_admin(
         r#"
         INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at
         "#
     )
     .bind(&request.student_id)
@@ -1287,7 +1287,7 @@ pub async fn bootstrap_admin(
         r#"
         INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
         VALUES ($1, $2, $3, $4, $5, $6, NULL)
-        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at
         "#
     )
     .bind(&request.student_id)
@@ -1882,7 +1882,7 @@ pub async fn create_faculty_admin(
         r#"
         INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+        RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at
         "#
     )
     .bind(&request.student_id)

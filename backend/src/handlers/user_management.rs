@@ -296,7 +296,7 @@ pub async fn bulk_user_operations(
                     UPDATE users 
                     SET department_id = $2, updated_at = NOW()
                     WHERE id = $1
-                    RETURNING id, student_id, email, password_hash, first_name, last_name, qr_secret, department_id, created_at, updated_at
+                    RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at
                     "#
                 )
                 .bind(user_id)
