@@ -20,12 +20,11 @@ use crate::models::{
 use crate::services::ActivityStatusUpdater;
 
 // Helper function to parse prefix from string
-fn parse_user_prefix(prefix_str: Option<&String>) -> UserPrefix {
-    if let Some(prefix) = prefix_str {
-        match prefix.as_str() {
-            "Mr" => UserPrefix::Mr,
-            "Mrs" => UserPrefix::Mrs,
-            "Miss" => UserPrefix::Miss,
+fn parse_user_prefix(prefix_str: &String) -> UserPrefix {
+    match prefix_str.as_str() {
+        "Mr" => UserPrefix::Mr,
+        "Mrs" => UserPrefix::Mrs,
+        "Miss" => UserPrefix::Miss,
             "Dr" => UserPrefix::Dr,
             "Professor" => UserPrefix::Professor,
             "AssociateProfessor" => UserPrefix::AssociateProfessor,
@@ -34,9 +33,6 @@ fn parse_user_prefix(prefix_str: Option<&String>) -> UserPrefix {
             "Generic" => UserPrefix::Generic,
             _ => UserPrefix::Generic, // Default fallback
         }
-    } else {
-        UserPrefix::Generic // Default if not provided
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -963,7 +959,7 @@ pub struct CreateAdminRequest {
     pub student_id: String,
     pub email: String,
     pub password: String,
-    pub prefix: Option<String>, // Allow frontend to send prefix as string
+    pub prefix: String, // Required prefix field
     pub first_name: String,
     pub last_name: String,
     pub department_id: Option<Uuid>,
@@ -1019,6 +1015,9 @@ pub async fn create_admin(
 
     // Generate QR secret
     let qr_secret = Uuid::new_v4().to_string();
+    
+    // Parse prefix
+    let user_prefix = parse_user_prefix(&request.prefix);
 
     // Start transaction
     let mut tx = match session_state.db_pool.begin().await {
@@ -1035,14 +1034,15 @@ pub async fn create_admin(
     // Create user
     let user_result = sqlx::query_as::<_, User>(
         r#"
-        INSERT INTO users (student_id, email, password_hash, first_name, last_name, qr_secret, department_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO users (student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, student_id, email, password_hash, prefix, first_name, last_name, qr_secret, department_id, created_at, updated_at
         "#
     )
     .bind(&request.student_id)
     .bind(&request.email)
     .bind(&password_hash)
+    .bind(user_prefix)
     .bind(&request.first_name)
     .bind(&request.last_name)
     .bind(&qr_secret)

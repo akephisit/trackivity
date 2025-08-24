@@ -172,6 +172,7 @@ export const actions: Actions = {
 				student_id: `A${Date.now()}`, // Generate temporary student_id for admin with prefix
 				email: form.data.email,
 				password: form.data.password || 'TempPass123!', // Use provided password or temp password
+				prefix: form.data.prefix, // Add prefix field
 				first_name: form.data.name.split(' ')[0] || form.data.name,
 				last_name: form.data.name.split(' ').slice(1).join(' ') || 'Admin',
 				department_id: null,

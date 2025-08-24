@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
 	import { zodClient } from 'sveltekit-superforms/adapters';
-	import { adminCreateSchema } from '$lib/schemas/auth';
+	import { adminCreateSchema, PrefixOptions } from '$lib/schemas/auth';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -55,6 +55,7 @@
 	let editDialogOpen = $state(false);
 	let selectedAdminLevel = $state<AdminLevel | undefined>(undefined);
 	let selectedFaculty = $state<string | undefined>(undefined);
+	let selectedPrefix = $state<string | undefined>(undefined);
 	let editingAdmin = $state<AdminRole | null>(null);
 	let editSelectedAdminLevel = $state<AdminLevel | undefined>(undefined);
 	let editSelectedFaculty = $state<string | undefined>(undefined);
@@ -101,6 +102,14 @@
 			// Update faculty_id when we have both FacultyAdmin level and selected faculty
 			$formData.faculty_id = selectedFaculty;
 			console.log('Updated formData.faculty_id to:', selectedFaculty, 'for FacultyAdmin');
+		}
+	});
+
+	// Effect for prefix changes
+	$effect(() => {
+		if (selectedPrefix !== undefined) {
+			$formData.prefix = selectedPrefix;
+			console.log('Updated formData.prefix to:', selectedPrefix);
 		}
 	});
 
@@ -170,9 +179,11 @@
 	function resetForm() {
 		selectedAdminLevel = undefined;
 		selectedFaculty = undefined;
+		selectedPrefix = undefined;
 		$formData = {
 			email: '',
 			name: '',
+			prefix: '',
 			password: '',
 			admin_level: AdminLevel.RegularAdmin, // This will be overridden when user selects
 			faculty_id: undefined,
@@ -820,6 +831,35 @@
 				<Form.FieldErrors />
 			</Form.Field>
 
+			<Form.Field {form} name="prefix">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Label for={props.id}>คำนำหน้า</Label>
+						<Select.Root 
+							type="single" 
+							bind:value={selectedPrefix} 
+							disabled={$submitting}
+							onValueChange={(value) => {
+								console.log('Prefix changed to:', value);
+								selectedPrefix = value as string;
+							}}
+						>
+							<Select.Trigger>
+								{PrefixOptions.find(opt => opt.value === selectedPrefix)?.label ?? "เลือกคำนำหน้า"}
+							</Select.Trigger>
+							<Select.Content>
+								{#each PrefixOptions as option}
+									<Select.Item value={option.value}>
+										{option.label}
+									</Select.Item>
+								{/each}
+							</Select.Content>
+						</Select.Root>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
 			<Form.Field {form} name="email">
 				<Form.Control>
 					{#snippet children({ props })}
@@ -947,6 +987,7 @@
 
 			<!-- Hidden inputs to ensure form data is sent correctly -->
 			<input type="hidden" name="admin_level" bind:value={$formData.admin_level} />
+			<input type="hidden" name="prefix" bind:value={$formData.prefix} />
 			{#if $formData.faculty_id}
 				<input type="hidden" name="faculty_id" bind:value={$formData.faculty_id} />
 			{/if}
@@ -956,8 +997,10 @@
 				<div><strong>Debug Information:</strong></div>
 				<div>Selected Admin Level: {selectedAdminLevel}</div>
 				<div>Selected Faculty: {selectedFaculty}</div>
+				<div>Selected Prefix: {selectedPrefix}</div>
 				<div>Form Data Admin Level: {$formData.admin_level}</div>
 				<div>Form Data Faculty ID: {$formData.faculty_id}</div>
+				<div>Form Data Prefix: {$formData.prefix}</div>
 			</div>
 
 			<Dialog.Footer>
@@ -971,9 +1014,11 @@
 						console.log('=== FORM SUBMISSION DEBUG ===');
 						console.log('selectedAdminLevel:', selectedAdminLevel);
 						console.log('selectedFaculty:', selectedFaculty);
+						console.log('selectedPrefix:', selectedPrefix);
 						console.log('$formData:', $formData);
 						console.log('admin_level in formData:', $formData.admin_level);
 						console.log('faculty_id in formData:', $formData.faculty_id);
+						console.log('prefix in formData:', $formData.prefix);
 						console.log('===============================');
 					}}
 				>

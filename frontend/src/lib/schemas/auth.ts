@@ -101,6 +101,12 @@ export const adminCreateSchema = z.object({
 		.min(1, 'กรุณาใส่ชื่อ')
 		.min(2, 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร')
 		.max(100, 'ชื่อต้องไม่เกิน 100 ตัวอักษร'),
+	prefix: z
+		.string()
+		.min(1, 'กรุณาเลือกคำนำหน้า')
+		.refine(val => PrefixOptions.some(option => option.value === val), {
+			message: 'กรุณาเลือกคำนำหน้าที่ถูกต้อง'
+		}),
 	password: z
 		.string()
 		.min(1, 'กรุณาใส่รหัสผ่าน')
